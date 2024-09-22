@@ -1,0 +1,47 @@
+Start testing: Sep 22 14:11 CEST
+----------------------------------------------------------
+1/1 Testing: restartTests
+1/1 Test: restartTests
+Command: "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/bin/restartTests"
+Directory: /Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/build/network/tests
+"restartTests" start time: Sep 22 14:11 CEST
+Output:
+----------------------------------------------------------
+Randomness seeded to: 2559559500
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+restartTests is a Catch2 v3.7.1 host application.
+Run with -? for options
+
+-------------------------------------------------------------------------------
+Test Node
+  Constructor 1
+-------------------------------------------------------------------------------
+/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network/tests/test_node.cpp:9
+...............................................................................
+
+/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network/tests/test_node.cpp:13: FAILED:
+  REQUIRE( node.getCommDelay() == 0.0 )
+with expansion:
+  1.0f == 0.0
+
+2
+2
+2
+2
+2
+2
+2
+===============================================================================
+test cases:  2 |  1 passed | 1 failed
+assertions: 24 | 23 passed | 1 failed
+
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Failed.
+"restartTests" end time: Sep 22 14:11 CEST
+"restartTests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Sep 22 14:11 CEST

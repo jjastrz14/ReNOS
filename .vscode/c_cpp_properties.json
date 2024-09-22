@@ -1,0 +1,46 @@
+
+{
+
+    "configurations": [
+
+        {
+
+            "name": "Mac",
+
+            "includePath": [
+
+                "${workspaceFolder}/**",
+
+                "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network",
+
+                "/usr/local/include",
+
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+
+            ],
+
+            "defines": [],
+
+            "macFrameworkPath": [
+
+                "/System/Library/Frameworks",
+
+                "/Library/Frameworks"
+
+            ],
+
+            "compilerPath": "/usr/bin/clang++ -v",
+
+            "cStandard": "c11",
+
+            "cppStandard": "c++17",
+
+            "intelliSenseMode": "macos-clang-x64"
+
+        }
+
+    ],
+
+    "version": 4
+
+}
