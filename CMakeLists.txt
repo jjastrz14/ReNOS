@@ -17,12 +17,25 @@ endfunction()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 
-add_subdirectory(network/src)
+
+# reach the oter CMakeLists.txt files
+add_subdirectory(src)
+add_subdirectory(src/routers)
+add_subdirectory(src/arbiters)
+add_subdirectory(src/allocators)
+add_subdirectory(src/power)
+add_subdirectory(src/networks)
+
+
 
 if(BUILD_TESTING)
-    add_subdirectory(network/tests)
+    add_subdirectory(tests)
 endif()
+# find the header file for json parsing
+find_path(nlohmann_json_INCLUDE_DIR nlohmann/json.hpp)
 
-add_library(restart STATIC ${network_SRC} ${network_INC})
+add_library(restart STATIC ${network_SRC} ${routers_SRC} ${arbiters_SRC} ${allocators_SRC} ${power_SRC} ${topologies_SRC}   ${network_INC} ${routers_INC} ${arbiters_INC} ${allocators_INC} ${power_INC} ${topologies_INC})
+target_include_directories(restart PUBLIC src src/routers src/arbiters src/allocators src/power src/networks ${nlohmann_json_INCLUDE_DIR}) 
 
-target_include_directories(restart PUBLIC network/src)
+add_executable(run_restart src/main.cpp)
+target_link_libraries(run_restart PUBLIC restart)

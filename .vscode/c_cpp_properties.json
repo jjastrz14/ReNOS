@@ -11,7 +11,13 @@
 
                 "${workspaceFolder}/**",
 
-                "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network",
+                "${workspaceFolder}/network/",
+
+                "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network/src/networks",
+
+                "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network/src/routers",
+
+                "/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart/network/src",
 
                 "/usr/local/include",
 

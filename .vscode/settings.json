@@ -2,6 +2,8 @@
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
     "files.associations": {
         "*.cypher": "cypher",
+        "*.cpp": "cpp",
+        "*.c": "c",
         "__bit_reference": "cpp",
         "__hash_table": "cpp",
         "__locale": "cpp",
@@ -71,6 +73,26 @@
         "span": "cpp",
         "text_encoding": "cpp",
         "cinttypes": "cpp",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "__tree": "cpp",
+        "codecvt": "cpp",
+        "complex": "cpp",
+        "condition_variable": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "semaphore": "cpp",
+        "shared_mutex": "cpp",
+        "sstream": "cpp",
+        "any": "cpp",
+        "cfenv": "cpp",
+        "typeindex": "cpp",
+        "valarray": "cpp",
+        "stdfloat": "cpp",
+        "cassert": "cpp",
+        "list": "cpp",
+        "ranges": "cpp"
     }
 }
