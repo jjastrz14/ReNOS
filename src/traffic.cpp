@@ -32,7 +32,7 @@
 #include "traffic.hpp"
 
 TrafficPattern::TrafficPattern(int nodes)
-: _nodes(nodes), reached_end(false)
+: _nodes(nodes), reached_end_packets(false), reached_end_workloads(false)
 {
   if(nodes <= 0) {
     cout << "Error: Traffic patterns require at least one node." << endl;
@@ -194,7 +194,8 @@ TrafficPattern * TrafficPattern::New(string const & pattern, int nodes,
   } else if (pattern_name == "user_defined") {
     if(config) {
       const vector<Packet> * packets = &(config->getPackets());
-      result = new UserDefinedTrafficPattern(nodes, packets);
+      const vector<ComputingWorkload> * workloads = &(config->getComputingWorkloads());
+      result = new UserDefinedTrafficPattern(nodes, packets, workloads);
     } else {
       cout << "Error: Missing configuration for user defined traffic pattern: " << pattern << endl;
       exit(-1);
@@ -536,25 +537,28 @@ int HotSpotTrafficPattern::dest(int source)
 
 // ============================================================================================================
 
-UserDefinedTrafficPattern::UserDefinedTrafficPattern(int nodes, const vector<Packet> * packets)
-  : TrafficPattern(nodes), _packets(packets)
+UserDefinedTrafficPattern::UserDefinedTrafficPattern(int nodes, const vector<Packet> * packets, const vector<ComputingWorkload> * workloads)
+  : TrafficPattern(nodes), _packets(packets), _workloads(workloads)
 {
-  reached_end = false;
+  reached_end_packets = false;
+  reached_end_workloads = false;
   assert(_packets); // verify null pointer
-  assert(!_packets->empty()); // verify empty vector
+  assert(_workloads); // verify null pointer
+  assert(!_packets->empty() || !_workloads->empty()); // verify empty vectors
   reset();
 }
 
 void UserDefinedTrafficPattern::reset()
 {
-  next_in_list = _packets->begin();
-  _cur_packet = &(*next_in_list);
+  _next_in_packet_list = _packets->begin();
+  _next_in_workload_list = _workloads->begin();
 }
 
 int UserDefinedTrafficPattern::dest(int source)
 {
   assert((source >= 0) && (source < _nodes));
-  int result = _cur_packet->dst; // return the destination of the current pointed packet
+  assert(cur_packet);
+  int result = this->cur_packet->dst; // return the destination of the current pointed packet
   assert((result >= 0) && (result < _nodes));
   return result;
 }
@@ -564,6 +568,14 @@ const Packet * UserDefinedTrafficPattern::packetByID(int id) const {
   auto match = std::find_if(_packets->begin(), _packets->end(), [id](const Packet& obj) {return obj.id == id;});
   // assert that the packet is found
   assert(match != _packets->end());
+  return &(*match);
+}
+
+const ComputingWorkload * UserDefinedTrafficPattern::workloadByID(int id) const {
+  // find the object in the vector by id
+  auto match = std::find_if(_workloads->begin(), _workloads->end(), [id](const ComputingWorkload& obj) {return obj.id == id;});
+  // assert that the packet is found
+  assert(match != _workloads->end());
   return &(*match);
 }
 

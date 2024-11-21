@@ -97,10 +97,34 @@ void Configuration::assignArch(std::string const &field, double value){
     }
 }
 
-void Configuration::addPacket(int src, int dst, int size, int id, int dep, int cl, int type, int pt_required){
+void Configuration::addPacket(int src, int dst, int size, int id, const std::vector<int> & dep, const std::string & type, int cl, int pt_required){
     // generate a new packet
-    const Packet newPacket = Packet{src, dst, size, id, dep, cl, type, pt_required};
+    int tp = 0;
+    if (type == "READ_REQ") {
+        tp = 1;
+    } else if (type == "READ_ACK") {
+        tp = 3;
+    } else if (type == "READ") {
+        tp = 5;
+    } else if (type == "WRITE_REQ") {
+        tp = 2;
+    } else if (type == "WRITE_ACK") {
+        tp = 4;
+    } else if (type == "WRITE") {
+        tp = 6;
+    } else {
+        parseError("Invalid packet type");
+        exit(-1);
+    }
+    const Packet newPacket = Packet{ id, src, dst, size, dep, cl, tp, pt_required, 0};
     _packets.push_back(newPacket);
+}
+
+void Configuration::addComputingWorkload(int node, int id, const std::vector<int> & dep, int ct_required, const std::string & type){
+     
+    int tp = -1;
+    const ComputingWorkload newWorkload = ComputingWorkload{id, node, dep, ct_required, tp};
+    _workloads.push_back(newWorkload);
 }
 
 std::string Configuration::getStrField(std::string const &field) const {
@@ -178,6 +202,16 @@ Packet Configuration::getPacket(int index) const {
     }
     else{
         parseError("Packet index out of range");
+        exit(-1);
+    }
+}
+
+ComputingWorkload Configuration::getComputingWorkload(int index) const {
+    if(index < _workloads.size()){
+        return _workloads[index];
+    }
+    else{
+        parseError("Computing workload index out of range");
         exit(-1);
     }
 }
@@ -389,19 +423,38 @@ void Configuration::parseJSONFile(const std::string & filename){
         }
 
 
-        if (j.find("packets") != j.end()){
-            nlohmann::json packets = j.at("packets");
-            // parse the "packets" field: each packet is a document with 5 fields
-            for (nlohmann::json::iterator it = packets.begin(); it != packets.end(); ++it){
-                if(it->size() != 8){
-                    parseError("Invalid number of fields in the packet document");
-                }
-                if(it->at("src").is_number_integer() && it->at("dst").is_number_integer() && it->at("size").is_number_integer() && it->at("id").is_number_integer() && it->at("dep").is_number_integer() && it->at("cl").is_number_integer() && it->at("type").is_number_integer() && it->at("pt_required").is_number_integer()){
-                    addPacket(it->at("src"), it->at("dst"), it->at("size"), it->at("id"), it->at("dep"), it->at("cl"), it->at("type"), it-> at("pt_required"));
-                }
-                else{
-                    parseError("Invalid type in the packet document");
-                }
+        if (j.find("workload") != j.end()){
+            nlohmann::json units = j.at("workload");
+            // parse the "workload" field: it comprises of both packets and computing workloads
+            for (nlohmann::json::iterator it = units.begin(); it != units.end(); ++it){
+                if(it->at("type") == "COMP_OP"){
+                    if(it->at("node").is_number_integer() && it->at("id").is_number_integer() && it->at("dep").is_array() && it->at("ct_required").is_number_integer() && it->at("type").is_string()){
+                        // check that the depencies are valid intergers
+                        for (auto & dep : it->at("dep")){
+                            if(!dep.is_number_integer()){
+                                parseError("Invalid dependency in the workload document");
+                            }
+                        }
+                        addComputingWorkload(it->at("node"), it->at("id"), it->at("dep"), it->at("ct_required"), it->at("type"));
+                    }
+                    else{
+                        parseError("Invalid workload element in the workload document");
+                    }
+                }else
+                {
+                    if(it->at("src").is_number_integer() && it->at("dst").is_number_integer() && it->at("size").is_number_integer() && it->at("id").is_number_integer() && it->at("dep").is_array() && it->at("cl").is_number_integer() && it->at("type").is_string() && it->at("pt_required").is_number_integer()){
+                        // check that the depencies are valid intergers
+                        for (auto & dep : it->at("dep")){
+                            if(!dep.is_number_integer()){
+                                parseError("Invalid dependency in the workload document");
+                            }
+                        }
+                        addPacket(it->at("src"), it->at("dst"), it->at("size"), it->at("id"), it->at("dep"),it->at("type"), it->at("cl"), it-> at("pt_required"));
+                    }
+                    else{
+                        parseError("Invalid packet element in the workload document");
+                    }
+                } 
             }
         }
         

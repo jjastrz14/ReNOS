@@ -79,6 +79,11 @@ protected:
   vector<int> _write_request_size;
   vector<int> _write_reply_size;
 
+  vector<int> _read_request_time;
+  vector<int> _write_request_time;
+  vector<int> _read_reply_time;
+  vector<int> _write_reply_time;
+
   vector<string> _traffic;
 
   vector<int> _class_priority;
@@ -117,7 +122,9 @@ protected:
 
   // =================== Additions for User-Defined Traffic ====================
   bool _user_defined_traffic;
-  vector<set<pair<int,int>>> _landed_packets;
+  vector<vector<set<tuple<int,int,int>>>> _landed_packets;
+  vector<vector<set<tuple<int,int,int>>>> _to_process_packets;
+  vector<vector<set<tuple<int,int,int>>>> _processed_packets;
   // ===========================================================================
   vector<map<int, Flit *> > _total_in_flight_flits;
   vector<map<int, Flit *> > _measured_in_flight_flits;

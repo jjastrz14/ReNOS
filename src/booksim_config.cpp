@@ -209,8 +209,10 @@ BookSimConfig::BookSimConfig( )
   // Control Injection of Packets into Replicated Networks
   _arch_int["read_request_subnet"] = 0;
   _arch_int["read_reply_subnet"] = 0;
+  _arch_int["read_subnet"] = 0;
   _arch_int["write_request_subnet"] = 0;
   _arch_int["write_reply_subnet"] = 0;
+  _arch_int["write_subnet"] = 0;
 
   // Set packet length in flits
   _arch_int["read_request_size"]  = 1;
@@ -221,6 +223,17 @@ BookSimConfig::BookSimConfig( )
   addStrField("read_reply_size", ""); // workaraound to allow for vector specification
   _arch_int["write_reply_size"]   = 1;
   addStrField("write_reply_size", ""); // workaraound to allow for vector specification
+
+  // Set packet processing times
+  _arch_int["read_request_time"]  = 1;
+  addStrField("read_request_time", "");
+  _arch_int["write_request_time"] = 1;
+  addStrField("write_request_time", "");
+  _arch_int["read_reply_time"] = 0;
+  addStrField("read_reply_time", "");
+  _arch_int["write_reply_time"] = 0;
+  addStrField("write_reply_time", "");
+
 
   //==== Simulation parameters ==========================
 

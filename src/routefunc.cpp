@@ -68,16 +68,16 @@ void qtree_nca( const Router *r, const Flit *f,
 		int in_channel, OutSet* outputs, bool inject)
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ  || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ  || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -119,16 +119,16 @@ void tree4_anca( const Router *r, const Flit *f,
 		 int in_channel, OutSet* outputs, bool inject)
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ  ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -189,16 +189,16 @@ void tree4_nca( const Router *r, const Flit *f,
 		int in_channel, OutSet* outputs, bool inject)
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ  ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ  || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -252,16 +252,16 @@ void fattree_nca( const Router *r, const Flit *f,
                int in_channel, OutSet* outputs, bool inject)
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ  ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -317,16 +317,16 @@ void fattree_anca( const Router *r, const Flit *f,
 {
 
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ  ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -394,16 +394,16 @@ void adaptive_xy_yx_mesh( const Router *r, const Flit *f,
 		 int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -466,16 +466,16 @@ void xy_yx_mesh( const Router *r, const Flit *f,
 		 int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -632,16 +632,16 @@ void dim_order_mesh( const Router *r, const Flit *f, int in_channel, OutSet *out
   int out_port = inject ? -1 : dor_next_mesh( r->GetID(), f->dst );
   
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -671,16 +671,16 @@ void dim_order_ni_mesh( const Router *r, const Flit *f, int in_channel, OutSet *
   int out_port = inject ? -1 : dor_next_mesh( r->GetID(), f->dst );
   
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ ||  f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -721,16 +721,16 @@ void dim_order_pni_mesh( const Router *r, const Flit *f, int in_channel, OutSet 
   int out_port = inject ? -1 : dor_next_mesh( r->GetID(), f->dst );
   
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -802,16 +802,16 @@ int rand_min_intr_mesh( int src, int dest )
 void romm_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -863,16 +863,16 @@ void romm_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs,
 void romm_ni_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ  || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -920,16 +920,16 @@ void romm_ni_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outpu
 void min_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ ||  f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1020,16 +1020,16 @@ void min_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutSet *out
 void planar_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1264,16 +1264,16 @@ void limited_adapt_mesh( const Router *r, const Flit *f, int in_channel, OutSet 
 void valiant_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1325,16 +1325,16 @@ void valiant_mesh( const Router *r, const Flit *f, int in_channel, OutSet *outpu
 void valiant_torus( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1404,16 +1404,16 @@ void valiant_ni_torus( const Router *r, const Flit *f, int in_channel,
 		       OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1506,16 +1506,16 @@ void dim_order_torus( const Router *r, const Flit *f, int in_channel,
 		      OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1574,16 +1574,16 @@ void dim_order_ni_torus( const Router *r, const Flit *f, int in_channel,
 			 OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1642,13 +1642,13 @@ void dim_order_bal_torus( const Router *r, const Flit *f, int in_channel,
   if ( f->type == commType::READ_REQ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK || f->type == commType::READ ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1706,16 +1706,16 @@ void dim_order_bal_torus( const Router *r, const Flit *f, int in_channel,
 void min_adapt_torus( const Router *r, const Flit *f, int in_channel, OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }
@@ -1787,16 +1787,16 @@ void dest_tag_fly( const Router *r, const Flit *f, int in_channel,
 		   OutSet *outputs, bool inject )
 {
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd = gWriteReplyEndVC;
   }

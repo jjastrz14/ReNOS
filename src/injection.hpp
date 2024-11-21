@@ -42,11 +42,12 @@ protected:
 public:
   virtual ~InjectionProcess() {}
   virtual bool test(int source) = 0;
+  virtual void addToWaitingQueue(int source, Packet * p){};
   virtual void reset();
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  set<pair<int,int>> * landed_packets,
+  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets,
         Configuration const * const config = NULL);
 
 };
@@ -75,32 +76,87 @@ public:
 
 class DependentInjectionProcess : public InjectionProcess {
   private:
-    // pointer to the sets of landed packets, i.e. the packets that have reached their destination, and the time 
-    // at which they have been received
-    set<pair<int,int>> * _landed_packets;
-    // vector of timers (and decurring flags) to keep track of the time elapsed since all the dependencies have been satisfied
-    // to simulate the processing time needed to generate all the data that will be injected in the next packet
-    vector<int> _processing_time;
-    vector<bool> _decurring;
-    // the vector hosting the packets that are waiting for their dependencies to be processed
+    
+    vector<int> _timer; // timer only used for workloads, packets processing time is managaed in trafficmanager
+    vector<bool> _decur;
+    vector<set<tuple<int, int, int>>> * _processed;
+    vector<set<tuple<int, int, int>>> _executed;
     vector<deque<const Packet *>> _waiting_packets;
+    vector<const Packet *> _pending_packets; // used as buffer for packets being processed
+    vector<deque<const ComputingWorkload * >> _waiting_workloads;
+    vector<const ComputingWorkload *> _pending_workloads; // used as buffer for workloads being processed
+
     // a pointer to the clock of traffic manager
     Clock * _clock;
     // finally, a pointer to the traffic object, holding the packets to be injected
     TrafficPattern * _traffic;
     
-    // a method to check if the dependencies have been satisfied for the packet
-    int _dependenciesSatisfied (const Packet * p) const;
+    // a method to check if the dependencies have been satisfied for the packet/workload
+    template <typename T>
+    int _dependenciesSatisfied (const T * u, int source) const{
+      // get the vector of dependencies and convert it to a set
+      assert(u);
+      assert((u->dep.size() > 0));
+      set<int> dep(u->dep.begin(), u->dep.end());
+      std::vector<int> dep_time;
+
+      if (dep.size() == 1){
+        // check wether the only element is -1
+        if (find(dep.begin(), dep.end(), -1) != dep.end()){
+          return 0;
+        }
+      }
+      
+      // check if the dependencies have been satisfied for the packet
+      for (auto it = dep.begin(); it != dep.end(); ++it){
+        // check in the processed packets for the coinsidered source if there are requests whose
+        // id matches the dependency: THE PACKET ID MUST MATCH WITH THE DEPENDENCY, AS WELL AS BE A WRITE PACKET
+        auto match = std::find_if(_processed->at(source).begin(), _processed->at(source).end(), [it](const tuple<int,int,int> & p){
+          return std::get<0>(p) == *it && std::get<1>(p) == commType::WRITE;
+        });
+        if (match != _processed->at(source).end()){
+          dep_time.push_back(std::get<2>(*match));
+        }
+      }
+
+      // do the same for the executed workloads
+      for (auto it = dep.begin(); it != dep.end(); ++it){
+        // check in landed packets if the (last) dependency for the packet has been satisfied
+        auto match = std::find_if(_executed[source].begin(), _executed[source].end(), [it](const tuple<int,int,int> & p){
+          return std::get<0>(p) == *it;
+        });
+        if (match != _executed[source].end()){
+          dep_time.push_back(std::get<2>(*match));
+        }
+      }
+
+      
+
+      // if the set is empty, return the maximum time of the dependencies
+      if (dep.size() == dep_time.size()){
+        std::cout << "\n"<<std::endl;
+        std::cout << "Dependencies satisfied for node: " << source << std::endl;
+        for(auto & t : dep_time){
+          std::cout << t << " ";
+        }
+        std::cout << "\n"<<std::endl;
+        return *max_element(dep_time.begin(), dep_time.end());
+      }
+      else{
+        return -1;
+      }
+    }
+
     // a method to build the waiting queues
-    void _buildWaitingQueues();
+    void _buildStaticWaitingQueues();
     // a method to set the clock to a specific value
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , set<pair<int,int>> * landed_packets);
+    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets);
     virtual void reset();
-    // method to model elapsing processing time to call when test() is not current control flow
-    void decurPTime(int source);
+    // a method used to append additional packets to the waiting queues
+    virtual void addToWaitingQueue(int source, Packet * p);
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     

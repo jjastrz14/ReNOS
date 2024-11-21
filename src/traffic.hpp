@@ -43,18 +43,20 @@ public:
   virtual ~TrafficPattern() {}
   virtual void reset();
   // --------- additional methods for user defined traffic patterns --------
-  bool reached_end;
+  bool reached_end_packets;
+  bool reached_end_workloads;
+  const Packet * cur_packet;
+  const ComputingWorkload * cur_workload;
   virtual bool check_user_defined() {return false;};
-  virtual int id() {return -1;};
-  virtual int type() {return -1;};
-  virtual int size() {return -1;};
-  virtual void updateNext() {};
-  virtual void updateCurPacket(const Packet * p) {};
-  virtual const Packet * getNext() const {return nullptr;};
-  virtual const Packet * getCur() const {return nullptr;};
-  virtual const Packet * packetByID(int id) const {// return null iterator
-    return nullptr;
-  };
+
+  virtual void updateNextPacket(){};
+  virtual const Packet * getNextPacket(){return NULL;};
+  virtual void updateNextWorkload(){};
+  virtual const ComputingWorkload * getNextWorkload(){return NULL;};
+  // method to return the iterator to the packet with a specific id
+  virtual const Packet * packetByID(int id) const {return NULL;};
+  virtual const ComputingWorkload * workloadByID(int id) const {return NULL;}; ;
+  
   // ------------------------------------------------------------------------
   virtual int dest(int source) = 0;
   static TrafficPattern * New(string const & pattern, int nodes, 
@@ -190,25 +192,32 @@ class UserDefinedTrafficPattern : public TrafficPattern {
   private:
     // pointer to the vector of packets
     const vector<Packet> * _packets;
+    // pointer to the vector of computing workloads 
+    const vector<ComputingWorkload> * _workloads;
+    // even if the computing workload does not properly belong to the traffic pattern, it
+    // still affects the time at which the packets depart from each node (would better belong 
+    // to the injection process?)
+
     // iterator to the current processed in the list of packets
-    vector<Packet>::const_iterator next_in_list;
-    const Packet * _cur_packet;
+    vector<Packet>::const_iterator _next_in_packet_list;
+    vector<ComputingWorkload>::const_iterator _next_in_workload_list;
 
     
   public:
-    UserDefinedTrafficPattern(int nodes, const vector<Packet> * packets);
+
+
+    UserDefinedTrafficPattern(int nodes, const vector<Packet> * packets, const vector<ComputingWorkload> * workloads);
     virtual void reset();
     virtual int dest(int source);
-    virtual int id() {return _cur_packet->id;};
-    virtual int type() {return _cur_packet->type;};
-    virtual int size() {return _cur_packet->size;};
     virtual bool check_user_defined() {return true;};
-    virtual void updateNext(){if(++next_in_list == _packets->end()){reached_end = true;}};
-    virtual void updateCurPacket(const Packet * p) {_cur_packet = p;};
-    virtual const Packet * getNext() const {return &(*next_in_list);};
-    virtual const Packet * getCur() const {return _cur_packet;};
+
+    virtual void updateNextPacket(){if(++_next_in_packet_list == _packets->end()){reached_end_packets = true;}};
+    virtual const Packet * getNextPacket(){return &(*_next_in_packet_list);};
+    virtual void updateNextWorkload(){if(++_next_in_workload_list == _workloads->end()){reached_end_workloads = true;}};
+    virtual const ComputingWorkload * getNextWorkload(){return &(*_next_in_workload_list);};
     // method to return the iterator to the packet with a specific id
     virtual const Packet * packetByID(int id) const ;
+    virtual const ComputingWorkload * workloadByID(int id) const ;
 
 };
 #endif

@@ -221,16 +221,16 @@ void min_anynet( const Router *r, const Flit *f, int in_channel,
  
 
   int vcBegin = 0, vcEnd = gNumVCs-1;
-  if ( f->type == commType::READ_REQ ) {
+  if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
     vcBegin = gReadReqBeginVC;
     vcEnd   = gReadReqEndVC;
-  } else if ( f->type == commType::WRITE_REQ ) {
+  } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
     vcBegin = gWriteReqBeginVC;
     vcEnd   = gWriteReqEndVC;
-  } else if ( f->type ==  commType::READ_REP ) {
+  } else if ( f->type ==  commType::READ_ACK ) {
     vcBegin = gReadReplyBeginVC;
     vcEnd   = gReadReplyEndVC;
-  } else if ( f->type ==  commType::WRITE_REP ) {
+  } else if ( f->type ==  commType::WRITE_ACK ) {
     vcBegin = gWriteReplyBeginVC;
     vcEnd   = gWriteReplyEndVC;
   }

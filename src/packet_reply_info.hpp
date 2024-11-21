@@ -37,6 +37,8 @@ class PacketReplyInfo {
 
 public:
   int source;
+  int src;
+  int dst;
   int time;
   bool record;
   int rpid;

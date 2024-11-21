@@ -32,14 +32,18 @@
             "node" : 1,
             "type" : "COMP_OP",
             "ct_required" : 10,
-            "dep" : [0]
+            "dep" : [-1]
         },
         {
             "id" : 2,
-            "node" : 1,
-            "type" : "COMP_OP",
-            "ct_required" : 5,
-            "dep" : [0,1]
+            "src" : 1,
+            "dst" : 7,
+            "size" : 6,
+            "dep" : [1],
+            "type" : "READ_REQ",
+            "cl" : 0,
+            "pt_required" : 10
         }
+
     ]
 }

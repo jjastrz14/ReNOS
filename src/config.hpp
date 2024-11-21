@@ -58,18 +58,33 @@ using json = nlohmann::json;
 //                         BASIC PACKET DEFINITION
 // ======================================================================
 struct Packet {
+    int id;
     int src;
     int dst;
     int size;
-    int id;
-    int dep;
+    std::vector<int> dep; // list of dependencies (intended as list of dependencies' ids)
     int cl;
-    int type; // 1 for read, 2 for write
+    int type; // type of the packet (0: any, 1: read request, 2: write request, 3: read ack, 4: write ack, 5: read, 6: write)
     int pt_required; // estimation for the required time to process the data, assuming all the operations/processing phases have already
     // been divided between PEs
+    int priority; // priority of the packet
 };
 // ======================================================================
 
+
+// Computing Workload is used to simulate the time required for a PE to
+// perform operations of some sort. During this time, the node of the corresponding 
+// PE will be able to forward packets to next nodes, but not to pass them direcly to the
+// PE, as it will be busy in processing the data. Once the processing is completed, the PE
+// will update a register of performed operations for the node, and a WRITE_REQ will be passed to the node of
+// the next PE that will need to further process the data
+struct ComputingWorkload {
+    int id; // computing workload id
+    int node; // node id
+    std::vector<int> dep; // list of dependencies
+    int ct_required; // computing time required
+    int type; // type to identify the workload (always converted to -1)
+};
 
 
 class Configuration {
@@ -88,6 +103,7 @@ class Configuration {
         std::map<std::string, std::vector<double>> _arch_float_array;
         std::map<std::string, std::vector<std::string>> _arch_str_array;
         std::vector<Packet> _packets;
+        std::vector<ComputingWorkload> _workloads;
         // packets will be a list of elements, each one characterized by:
         // 1. the source node
         // 2. the destination node
@@ -104,7 +120,8 @@ class Configuration {
         void addIntArray(std::string const & field, std::vector<int> const & value);
         void addFloatArray(std::string const & field, std::vector<double> const & value);
         void addStrArray(std::string const & field, std::vector<std::string> const & value);
-        void addPacket(int src, int dst,int size, int id, int dep, int type, int cl, int pt_required);
+        void addPacket(int src, int dst,int size, int id, const std::vector<int> & dep, const std::string & type, int cl, int pt_required);
+        void addComputingWorkload(int node, int id, const std::vector<int> & dep, int ct_required, const std::string & type);
 
         void assignArch(std::string const &field, std::string const &value);
         void assignArch(std::string const &field, int value); 
@@ -117,6 +134,7 @@ class Configuration {
         std::vector<double> getFloatArray(std::string const &field) const;
         std::vector<std::string> getStrArray(std::string const &field) const;
         Packet getPacket(int index) const;
+        ComputingWorkload getComputingWorkload(int index) const;
 
 
         void WriteFile(std::string const & filename);
@@ -139,6 +157,7 @@ class Configuration {
         inline const std::map<std::string, std::vector<double>> & getFloatArrayMap() const { return _arch_float_array; }
         inline const std::map<std::string, std::vector<std::string>> & getStrArrayMap() const { return _arch_str_array; }
         inline const std::vector<Packet> & getPackets() const { return _packets; }
+        inline const std::vector<ComputingWorkload> & getComputingWorkloads() const { return _workloads; }
 
         static Configuration * getInstance() { return instance; }
 };

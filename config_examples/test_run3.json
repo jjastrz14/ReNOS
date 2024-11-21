@@ -20,26 +20,31 @@
         {
             "id" : 0,
             "src" : 0,
-            "dst" : 1,
-            "size" : 3,
+            "dst" : 4,
+            "size" : 10,
             "dep" : [-1],
-            "type" : "WRITE_REQ",
+            "type" : "READ_REQ",
             "cl" : 0,
-            "pt_required" : 5
-        },
+            "pt_required" : 10
+        }, 
         {
             "id" : 1,
-            "node" : 1,
-            "type" : "COMP_OP",
-            "ct_required" : 10,
-            "dep" : [0]
+            "src" : 1,
+            "dst" : 4,
+            "size" : 7,
+            "dep" : [-1],
+            "type" : "READ_REQ",
+            "cl" : 0,
+            "pt_required" : 7
         },
         {
             "id" : 2,
-            "node" : 1,
+            "node" : 4,
             "type" : "COMP_OP",
-            "ct_required" : 5,
-            "dep" : [0,1]
+            "ct_required" : 30,
+            "dep" : [-1]
         }
+        
+
     ]
 }

@@ -66,9 +66,11 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
  
     _subnet.resize(NUM_FLIT_TYPES);
     _subnet[commType::READ_REQ] = config.getIntField("read_request_subnet");
-    _subnet[commType::READ_REP] = config.getIntField("read_reply_subnet");
-    _subnet[commType::WRITE_REQ] = config.getIntField("write_request_subnet");
-    _subnet[commType::WRITE_REP] = config.getIntField("write_reply_subnet");
+    _subnet[commType::READ_ACK] = config.getIntField("read_reply_subnet");
+    _subnet[commType::READ] = config.getIntField("read_subnet");
+    _subnet[commType::WRITE_ACK] = config.getIntField("write_request_subnet");
+    _subnet[commType::WRITE_ACK] = config.getIntField("write_reply_subnet");
+    _subnet[commType::WRITE] = config.getIntField("write_subnet");
 
     // ============ Message priorities ============ 
 
@@ -132,6 +134,19 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     }
 
     _landed_packets.resize(_classes);
+    for (int s = 0; s <_classes; ++s){
+        _landed_packets[s].resize(_nodes);
+    }
+
+    _to_process_packets.resize(_classes);
+    for (int s = 0; s <_classes; ++s){
+        _to_process_packets[s].resize(_nodes);
+    }
+
+    _processed_packets.resize(_classes);
+    for (int s = 0; s <_classes; ++s){
+        _processed_packets[s].resize(_nodes);
+    }
 
     _use_read_write = config.getIntArray("use_read_write");
     if(_use_read_write.empty()) {
@@ -168,6 +183,31 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         _write_reply_size.push_back(config.getIntField("write_reply_size"));
     }
     _write_reply_size.resize(_classes, _write_reply_size.back());
+
+    _read_request_time = config.getIntArray("read_request_time");
+    if(_read_request_time.empty()) {
+        _read_request_time.push_back(config.getIntField("read_request_time"));
+    }
+    _read_request_time.resize(_classes, _read_request_time.back());
+
+    _write_request_time = config.getIntArray("write_request_time");
+    if(_write_request_time.empty()) {
+        _write_request_time.push_back(config.getIntField("write_request_time"));
+    }
+    _write_request_time.resize(_classes, _write_request_time.back());
+
+    _read_reply_time = config.getIntArray("read_reply_time");
+    if(_read_reply_time.empty()) {
+        _read_reply_time.push_back(config.getIntField("read_reply_time"));
+    }
+    _read_reply_time.resize(_classes, _read_reply_time.back());
+
+    _write_reply_time = config.getIntArray("write_reply_time");
+    if(_write_reply_time.empty()) {
+        _write_reply_time.push_back(config.getIntField("write_reply_time"));
+    }
+    _write_reply_time.resize(_classes, _write_reply_time.back());
+
 
 
 
@@ -246,7 +286,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], &(_landed_packets[c]), &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 
@@ -725,30 +765,78 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
         // if the packet is a request, assert that it is not already there
         // if the packet is a reply, assert that there is one request already
         if(_use_read_write[f->cl]) {
-            auto it = std::find_if(_landed_packets[f->cl].begin(), _landed_packets[f->cl].end(), [f](const std::pair<int, int> & p) { return p.first == f->rpid; });
-            if(f->type == commType::READ_REQ || f->type == commType::WRITE_REQ) {
-                assert(it == _landed_packets[f->cl].end());
-                _landed_packets[f->cl].insert(std::make_pair(f->rpid, _clock._time));
-            } else if (f->type == commType::READ_REP || f->type == commType::WRITE_REP) {
-                assert(it != _landed_packets[f->cl].end());
+            if(f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
+                // search in the destination node landed packets list
+                std::cout << " Read/Write packet arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", type: " << f->type << ", size: "<< f->size << std::endl;
+                auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
+                assert(it == _landed_packets[f->cl][dest].end());
+                _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type ,_clock._time));
+
+                // ================ MANAGING OF PROCESSING TIMES FOR PACKETS ================ 
+                int processing_time = 0;
+                if(f->type == commType::WRITE || f->type == commType::READ){
+                    processing_time = f->data_ptime_expected;
+                    std::cout << "Processing time: " << processing_time << std::endl;
+                }
+                else{
+                    processing_time = (f->type == commType::WRITE_REQ) ? _write_request_time[f->cl] : _read_request_time[f->cl];
+                    
+                }
+                _to_process_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock._time + processing_time));
+                // ==========================================================================
+            } else if (f->type == commType::READ_ACK || f->type == commType::WRITE_ACK) {
+                // search in the reply source node (destination node of the replied packet) landed packets list
+                int req_type1, req_type2;
+                if (f->type == commType::READ_ACK) {
+                    req_type1 = commType::READ_REQ;
+                    req_type2 = commType::READ;
+                } else {
+                    req_type1 = commType::WRITE_REQ;
+                    req_type2 = commType::WRITE;
+                }
+                std::cout << " Reply packet arrieved at: "<< f->dst <<" at time: "<< _clock.time() << " from node: " << f->src <<", type: "<< f->type << std::endl;
+                auto it = std::find_if(_landed_packets[f->cl][f->src].begin(), _landed_packets[f->cl][f->src].end(), [f, req_type1, req_type2](const std::tuple<int, int, int> & p) { return get<0>(p) == f->rpid && (get<1>(p) == req_type1 || get<1>(p) == req_type2); });
+                assert(it != _landed_packets[f->cl][f->src].end());
             }
         }
 
         //code the source of request, look carefully, its tricky ;
-        if (f->type == commType::READ_REQ || f->type == commType::WRITE_REQ) {
+        if (f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
             PacketReplyInfo* rinfo = PacketReplyInfo::newReply();
             rinfo->source = f->src;
+            rinfo->src = f->src;
+            rinfo->dst = f->dst;
             rinfo->time = f->atime; 
             rinfo->record = f->record;
             rinfo->type = f->type;
             rinfo->rpid = f->rpid;
             _repliesPending[dest].push_back(rinfo);
-        } else {
-            if(f->type == commType::READ_REP || f->type == commType::WRITE_REP ){
+        }else {
+            if(f->type == commType::READ_ACK || f->type == commType::WRITE_ACK ){
                 _requestsOutstanding[dest]--;
             } else if(f->type == commType::ANY) {
                 _requestsOutstanding[f->src]--;
             }
+        }
+
+        // AUTOMATIC GENERATION OF READ_REQ AND WRITEs AFTER RECEIVED MESSAGES
+        if ((f->type == commType::WRITE_REQ || f->type == commType::READ_REQ) && _traffic_pattern[f->cl]->check_user_defined()) {
+            // size of the write (data to be tranferred) is taken from
+            // the size field of the landed packet element that originated the read request
+            int size = f->data_size;
+            // same with time
+            int time = f->data_ptime_expected;
+            // no dependecies to be resolved
+            std::vector<int> dep(1, -1);
+            int type = (f->type == commType::WRITE_REQ) ? commType::READ_REQ : commType::WRITE;
+            if (f->type == commType::WRITE_REQ){
+                std::cout << "Generating READ_REQ packet at time: " << _clock._time << " from node: " << dest << " to node: " << f->src << std::endl;
+            } else {
+                std::cout << "Generating WRITE packet at time: " << _clock._time << " from node: " << dest << " to node: " << f->src << std::endl;
+            }
+            Packet* p = new Packet{f->rpid, f->dst, f->src, size, dep, f->cl, type, time}; 
+            // append this new packet to the list of packets that are waiting to be processed
+            _injection_process[f->cl]->addToWaitingQueue(f->dst, p);
         }
 
         // Only record statistics once per packet (at tail)
@@ -806,13 +894,13 @@ int TrafficManager::_IssuePacket( int source, int cl )
             // the presence in the net of not-yet-arrived packets from which next packets
             // depend on, as well as the time necessary for each node to actually process
             // the sent. This will be modelled in the injection process itself.
-    
+
             // Produce a packet
             if(_injection_process[cl]->test(source)) {
                 
                 if(_traffic_pattern[cl]->check_user_defined()){
                     // user defined type for the next packet
-                    result = _traffic_pattern[cl]->type();
+                    result = _traffic_pattern[cl]->cur_packet->type;
                 } else {
                     //coin toss to determine request type.
                     result = (randomFloat() < _write_fraction[cl]) ? 2 : 1;
@@ -854,15 +942,21 @@ void TrafficManager::_GeneratePacket( int source, int stype,
     bool record = false;
     bool watch = gWatchOut && (_packets_to_watch.count(pid) > 0);
     if(_use_read_write[cl]){
-        if(stype > 0) {
+        if(stype > 0) {    
             packet_destination = _traffic_pattern[cl]->dest(source);
-            rpid = _traffic_pattern[cl]->id();
+            rpid = _traffic_pattern[cl]->cur_packet->id;
             if (stype == 1) {
                 packet_type = commType::READ_REQ;
-                size = _traffic_pattern[cl]->check_user_defined() ? size : _read_request_size[cl];
+                size = _read_request_size[cl];
             } else if (stype == 2) {
                 packet_type = commType::WRITE_REQ;
-                size = _traffic_pattern[cl]->check_user_defined() ? size : _write_request_size[cl];
+                size = _write_request_size[cl];
+            } else if (stype == 5) {
+                packet_type = commType::READ;
+                size = (_traffic_pattern[cl]->check_user_defined()) ? _traffic_pattern[cl]->cur_packet->size : _read_request_size[cl];
+            } else if (stype == 6) {
+                packet_type = commType::WRITE;
+                size = (_traffic_pattern[cl]->check_user_defined()) ? _traffic_pattern[cl]->cur_packet->size : _write_request_size[cl];
             } else {
                 ostringstream err;
                 err << "Invalid packet type: " << packet_type;
@@ -871,12 +965,12 @@ void TrafficManager::_GeneratePacket( int source, int stype,
         } else {
 
             PacketReplyInfo* rinfo = _repliesPending[source].front();
-            if (rinfo->type == commType::READ_REQ) {//read reply
+            if (rinfo->type == commType::READ_REQ || rinfo->type == commType::READ) {//read reply
                 size = _read_reply_size[cl];
-                packet_type = commType::READ_REP;
-            } else if(rinfo->type == commType::WRITE_REQ) {  //write reply
+                packet_type = commType::READ_ACK;
+            } else if(rinfo->type == commType::WRITE_REQ || rinfo->type == commType::WRITE) {  //write reply
                 size = _write_reply_size[cl];
-                packet_type = commType::WRITE_REP;
+                packet_type = commType::WRITE_ACK;
             } else {
                 ostringstream err;
                 err << "Invalid packet type: " << rinfo->type;
@@ -914,6 +1008,7 @@ void TrafficManager::_GeneratePacket( int source, int stype,
                    << " at time " << time
                    << "." << endl;
     }
+
   
     for ( int i = 0; i < size; ++i ) {
         Flit * f  = Flit::newFlit();
@@ -921,6 +1016,9 @@ void TrafficManager::_GeneratePacket( int source, int stype,
         assert(_cur_id);
         f->pid    = pid;
         f->rpid   = rpid;
+        f->size   = size;
+        f->data_size = _traffic_pattern[cl]->check_user_defined() ? _traffic_pattern[cl]->cur_packet->size : 0;
+        f->data_ptime_expected = _traffic_pattern[cl]->check_user_defined() ? _traffic_pattern[cl]->cur_packet->pt_required : 0;
         f->watch  = watch | (gWatchOut && (_flits_to_watch.count(f->id) > 0));
         f->subnetwork = subnetwork;
         f->src    = source;
@@ -998,7 +1096,6 @@ void TrafficManager::_Inject(){
                     // actually prevents us from using decurPTime, since each time the method test
                     // exectution is skipped, it is actually then made-up for by the execution of the while loop
                     int stype = _IssuePacket( input, c );
-
                     //std::cout << "Time: " << _clock._time << " | Node: " << input << " | Class: " << c << " | Stype: " << stype << std::endl;
             
                     if ( stype != 0 ) { //generate a packet (only requests)
@@ -1354,6 +1451,38 @@ void TrafficManager::_Step( )
         _net[subnet]->evaluate( );
         _net[subnet]->writeOutputs( );
     }
+    
+    // ==========================================
+    for(int c = 0; c < _classes; ++c) {
+        for(int n=0; n < _nodes; ++n) {
+            // for each node, check in the _to_process_packets list if there are packets that have 
+            // elapsed the processing time
+            auto it = _to_process_packets[c][n].begin();
+            while(it != _to_process_packets[c][n].end()) {
+                // if the packet has elapsed the processing time, then it can be moved to the _processed_packets list
+                if(get<2>(*it) <= _clock._time) {
+                    _processed_packets[c][n].insert(*it);
+                    it = _to_process_packets[c][n].erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+    }
+
+    // print the elements of processed packets at each time step
+    std::cout << "==================== Processed Packets ====================" << std::endl;
+    std::cout << "                      Time: " << _clock._time << std::endl;
+    for(int c = 0; c < _classes; ++c) {
+        for(int n = 0; n < _nodes; ++n) {
+            for(auto it = _processed_packets[c][n].begin(); it != _processed_packets[c][n].end(); ++it) {
+                std::cout << " Class: " << c << " | Node: " << n << " | Request ID: " << get<0>(*it) << " | Type: " << get<1>(*it) << " | Time: " << get<2>(*it) << std::endl;
+            }
+        }
+    }
+    std::cout << "=============================================================" << std::endl;
+        
+    // ==========================================
 
     ++_clock._time;
     assert(_clock._time);
@@ -2462,7 +2591,7 @@ int TrafficManager::_GetNextPacketSize(int cl) const
     assert(cl >= 0 && cl < _classes);
 
     if(_traffic_pattern[cl]->check_user_defined()){
-        return _traffic_pattern[cl]->size();
+        return _traffic_pattern[cl]->cur_packet->size;
     }
 
     vector<int> const & psize = _packet_size[cl];

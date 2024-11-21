@@ -24,7 +24,7 @@ TEST_CASE("Test Config") {
     REQUIRE(firstPacket.src == 0);
     REQUIRE(firstPacket.dst == 1);
     REQUIRE(firstPacket.size == 1000);
-    REQUIRE(firstPacket.dep == -1);
+    REQUIRE(firstPacket.dep[0] == -1);
     REQUIRE(firstPacket.cl == 0);
     REQUIRE(firstPacket.type == 2);
     REQUIRE(firstPacket.pt_required == 10);

@@ -132,7 +132,7 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   return result;
 }
 
-InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  set<pair<int,int>> * landed_packets,
+InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets,
         Configuration const * const config)
 {
   string process_name;
@@ -222,169 +222,217 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , set<pair<int,int>> * landed_packets)
-  : InjectionProcess(nodes, 0.0), _traffic(traffic), _landed_packets(landed_packets), _clock(clock)
+DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets)
+  : InjectionProcess(nodes, 0.0), _traffic(traffic), _processed(landed_packets), _clock(clock)
 {
   assert(_traffic);
-  assert(_landed_packets);
+  assert(_processed);
   assert(_clock);
-  _processing_time.resize(nodes, 0);
-  _decurring.resize(nodes, false);
+  _executed.resize(nodes);
+  _timer.resize(nodes, 0);
+  _decur.resize(nodes, false);
   _waiting_packets.resize(nodes);
-  _buildWaitingQueues();
+  for (int i = 0; i < nodes; ++i){
+    _waiting_packets[i].resize(0);
+  }
+  _pending_packets.resize(nodes);
+  _waiting_workloads.resize(nodes);
+  for (int i = 0; i < nodes; ++i){
+    _waiting_workloads[i].resize(0);
+  }
+  _pending_workloads.resize(nodes);
+  _buildStaticWaitingQueues();
   //reset();
 }
 
 void DependentInjectionProcess::reset()
 {
-  _processing_time.clear();
-  _decurring.clear();
+  _timer.clear();
+  _decur.clear();
 }
 
 void DependentInjectionProcess::_setProcessingTime(int node, int value)
 {
 
   assert((node >= 0) && (node < _nodes));
-  _processing_time[node] = value;
+  _timer[node] = value;
   // check in the _landed_packets for the packet with the id equal to the dependency
-  _decurring[node] = true;
+  _decur[node] = false;
 }
 
-int DependentInjectionProcess::_dependenciesSatisfied(const Packet * p) const
-{
-  int last_dependecy = p->dep;
-  if (p->dep == -1)
-    return 0;
-  else{
-    // check in landed packets if the (last) dependency for the packet has been satisfied
-    auto it = std::find_if(_landed_packets->begin(), _landed_packets->end(), [last_dependecy](const pair<int,int> & p){
-      return p.first == last_dependecy;
-    });
-    // if the search find a dependency in the set, it means it has already landed, so 
-    // return the time at which it has landed
-    return (it != _landed_packets->end()) ? it->second : -1;
-  }
-  
-}
 
 // the method is to be called within the constructor
-void DependentInjectionProcess::_buildWaitingQueues(){
+void DependentInjectionProcess::_buildStaticWaitingQueues(){
 
   // starting from the first packet in the list, loop over the packets
   // and build the waiting queues for each source node
   _traffic->reset();
   _waiting_packets.clear();
+  _waiting_workloads.clear();
+  _pending_packets.clear();
 
   // STUPID COMPILING OPTION, MAY DECIDE TO UPGRADE LATER
-  while(_traffic->reached_end == false){
-    const Packet * p = _traffic->getNext();
+  if (_traffic->getNextPacket() == nullptr){
+    _traffic->reached_end_packets = true;
+  }
+  if (_traffic->getNextWorkload() == nullptr){
+    _traffic->reached_end_workloads = true;
+
+  }
+
+  while(_traffic->reached_end_packets == false){
+    const Packet * p = _traffic->getNextPacket();
     assert(p);
     assert((p->size > 0));
     assert((p->src >= 0) && (p->src < _nodes));
     int source = p->src;
     _waiting_packets[source].push_back(p);
-    _traffic->updateNext();
+    _traffic->updateNextPacket();
+  }
+
+  while(_traffic->reached_end_workloads == false){
+    const ComputingWorkload * w = _traffic->getNextWorkload();
+    assert(w);
+    assert((w->ct_required > 0));
+    assert((w->node >= 0) && (w->node < _nodes));
+    int source = w->node;
+    _waiting_workloads[source].push_back(w);
+    _traffic->updateNextWorkload();
   }
 
   _traffic->reset();
 }
 
-void DependentInjectionProcess::decurPTime(int source)
+
+void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
 {
-  //
+  // starting from the first packet in the list, iterate over the packets
+  // and append the new packet before the first one with 0 priority
+  p->priority = 1;
+
+  auto it = _waiting_packets[source].begin();
+  while (it != _waiting_packets[source].end() && (*it)->priority != 0) {
+    //check that the packet is not a dependency for the packets already in the queue
+    ++it;
+  }
+
+  if (it != _waiting_packets[source].end() && (*it)->priority != 0){
+    it++;
+  }
+
+  _waiting_packets[source].insert(it, p); // INSERT AFTER
+
 }
 
 bool DependentInjectionProcess::test(int source)
 {
   bool valid = false;
+  const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
 
-  // check in the _waiting_packets if there are any packets for the source node
-  // currently considered
-  if(!_waiting_packets[source].empty()){
+  if(!(_waiting_packets[source].empty())){
     p = _waiting_packets[source].front();
+    assert(p);
+    assert((p->size > 0));
+    assert((p->src == source));
   }
-  else{
+  if (!(_waiting_workloads[source].empty())){
+    w =_waiting_workloads[source].front();
+    assert(w);
+    assert((w->ct_required > 0));
+    assert(w->node == source);
+  }
+
+  
+  if (p == nullptr && w == nullptr && _pending_packets[source] == nullptr && _pending_workloads[source] == nullptr){
     return valid;
   }
 
-  assert(p);
   assert((source >= 0) && (source < _nodes));
-  assert((p->size > 0));
 
-  // check if the dependencies have been satisfied for the packet
-  int dep_time = _dependenciesSatisfied(&(*p));
-  if(dep_time>=0 && source == p->src){
-    // check if the processing time has elapsed and the time for that source node is decurring
-    // -> the node with dependencies has finisched processing it so we can 
-    //    send the dependent packet ( NEED CHECK THAT THE DESTINATION NODE
-    //    OF THE DEPENDECY IS THE SOURCE NODE OF THE CURRENT PACKET)
-    if(_processing_time[source] == 0 && _decurring[source]){
-      // this is possible only if there are waiting packets still to inject
-      assert(_waiting_packets[source].front() != nullptr);
+  int dep_time_w = -1;
+  int dep_time_p = -1;
+  if (!(w == nullptr)){
+    dep_time_w = _dependenciesSatisfied(&(*w), source);
+  }
+  if (!(p == nullptr)){
+    dep_time_p = _dependenciesSatisfied(&(*p), source);
+  }
 
-      _decurring[source] = false; // reset the decurring flag for further packets
-      _traffic->updateCurPacket(p); // set the current packet to the one that has been waiting
+  // if there are pending workloads, the timer should be decremented
+  if (_timer[source] > 0){
+    assert(!(_pending_workloads[source] == nullptr));
+    --_timer[source];
+    return valid;
+  } else if (_timer[source] == 0 && _decur[source] == true && !(_pending_workloads[source] == nullptr)){
+    // the workload has been processed
+    _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
+    _pending_workloads[source] = nullptr;
+    _decur[source] = false;
+    std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
+  }
+  // last case: node is idle
+  else if (!(_pending_packets[source] == nullptr)){
+    assert(_pending_workloads[source] == nullptr);
+    std::cout << "HERE is the problem" << std::endl;
+    _traffic->cur_packet = _pending_packets[source];
+    _pending_packets[source] = nullptr;
+    valid = true;
+    _decur[source] = true;
+    std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
+  }
+  
+  // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
+  if(dep_time_w>=0 && source == w->node && !(w==nullptr)){
+    if(_timer[source] == 0){
+      // the node is idle and can process the workload
+      assert(_pending_workloads[source] == nullptr);
+      if (_decur[source] == false) assert(_pending_packets[source] == nullptr);
+      _pending_workloads[source] = w;
+      _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
+      _timer[source] =(_decur[source] == false ) ? w->ct_required - 1 : w->ct_required ; // update the timer for the required time
+      _decur[source] = true;
+      std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
+    }
+  }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
+    assert(_pending_workloads[source] == nullptr);
+    assert(_pending_packets[source] == nullptr);
+    // 1. a packet request has been serviced in the current cycle
+    std::cout << "HERE" << std::endl;
+    if(_timer[source] == 0 && _decur[source]){
+      _pending_packets[source] = p; // the new pending packet is the one currently considerd
       _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
-      
-      valid = true;
-    }
-    // if the processing time has not elapsed, decrement the time
-    // -> THE SOURCE NODE NEEDS TO WAIT FOR THE PROCESSING
-    //    OF THE DEPENDENCY TO BE FINISHED BEFORE SENDING THE PACKET
-    else if(_processing_time[source] > 0){
-      --_processing_time[source];
-    }
-    // both the processing time is 0 and the decurring flag is false,
-    // -> THE SOURCE NODE IS IDLE, SO IT CAN TAKE THE NEXT PACKET
-    else if(_processing_time[source]==0 && !_decurring[source]){
-      std::cout << "======================================================================================================" << std::endl;
-      std::cout << "Setting processing time for packet " << p->id << " at node " << source << " and time " << _clock->time() << std::endl;
-      
-      if (p->dep == -1){
-        // no need to wait for dependencies, injection can start directly
-        _traffic->updateCurPacket(p);
-        _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
-        valid = true;
-      }
-      else{
-        // find the processing time of the dependence
-        auto bpacket = _traffic->packetByID(p->dep);
-        //set the processing time also taking into account the amount of time already passed
-        int new_time = bpacket->pt_required - (_clock->time()-dep_time);
-        new_time = new_time < 0 ? 0 : new_time;
-        if(new_time == 0){
-          // no need to wait for dependencies, injection can start directly
-          _traffic->updateCurPacket(p);
-          _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
-          valid = true;
-        }else{
-          // set the processing time for the source node
-          _setProcessingTime(source, new_time);
 
-          std::cout << "PROCESSING TIME SET TO " << new_time << std::endl;
-        }
-      }
-      std::cout << "======================================================================================================" << std::endl;
+    }
+    // 2. the node is idel and can process the packet request
+    else if(_timer[source]==0 && !_decur[source]){
+
+      // the packet has already been cleared for the dependencies, 
+      // we can inject directly --> bypass _pending_packets
+      _traffic->cur_packet = p;
+      _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
+      //no need to set p to pending packet, as it will be injected direcly
+      valid = true;
+      std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
     }
     else{
       exit(-1);
     }
   }
 
-  
   // check that there are still waiting packets to inject
   // if there are none, _reached_end is set to true
   int count = 0;
   for(int i = 0; i < _nodes; i++){
-    if(_waiting_packets[i].empty()){
+    if(_waiting_packets[i].empty() && _waiting_workloads[i].empty() && _pending_packets[i] == nullptr && _pending_workloads[i] == nullptr){
       count++;
     }
-    if(count == _nodes){
+    if(count == _nodes  && _timer[source] == 0 && _decur[source] == false){
       reached_end = true;
     }   
   }
 
+  std::cout << "Source: " << source << " Timer: " << _timer[source] << " Decur: " << _decur[source] << " Valid: " << valid << " P. Packet: " << (_pending_packets[source] != nullptr)  << " W. Packets: " << (_waiting_packets[source].front() != nullptr)<< std::endl;
   return valid;
 }
 

@@ -43,15 +43,23 @@
 #include "outset.hpp"
 
 
+// Gerarchies for packet automatic generation in Custom Workload Mode:
+// 1. WRITE_REQ, WRITE packets generate automatically WRITE_ACKs as instant replies
+// 2. READ_REQ, READ packets generate automatically READ_ACKs as instant replies
+// 3. WRITE_REQ will generate READ_REQ from the dst node to the src node as soon as the dst node is free ( no dependencies)
+// 4. READ_REQ will generate WRITE packets from the dst node to the src node as soon as the dst node is free
+
 enum commType {
     READ_REQ = 1,
-    READ_REP = 3,
+    READ_ACK = 3, // read reply type is substituted with read ack
+    READ = 5,
     WRITE_REQ = 2,
-    WRITE_REP = 4,
+    WRITE_ACK = 4, // write reply type is substituted with write ack
+    WRITE  = 6,
     ANY = 0
 };
 
-const int NUM_FLIT_TYPES = 5;
+const int NUM_FLIT_TYPES = 7;
 
 class Flit {
     private:
@@ -89,6 +97,8 @@ class Flit {
         //  -- packet common fields --
         int pid; // packet id
         int rpid; // request packet id
+        int data_ptime_expected;
+        int data_size;
         int src;
         int dst;
         commType type;
