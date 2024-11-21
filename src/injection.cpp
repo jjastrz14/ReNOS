@@ -344,7 +344,7 @@ bool DependentInjectionProcess::test(int source)
   }
 
   
-  if (p == nullptr && w == nullptr && _pending_packets[source] == nullptr && _pending_workloads[source] == nullptr){
+  if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr){
     return valid;
   }
 
@@ -371,16 +371,6 @@ bool DependentInjectionProcess::test(int source)
     _decur[source] = false;
     std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
   }
-  // last case: node is idle
-  else if (!(_pending_packets[source] == nullptr)){
-    assert(_pending_workloads[source] == nullptr);
-    std::cout << "HERE is the problem" << std::endl;
-    _traffic->cur_packet = _pending_packets[source];
-    _pending_packets[source] = nullptr;
-    valid = true;
-    _decur[source] = true;
-    std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
-  }
   
   // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
   if(dep_time_w>=0 && source == w->node && !(w==nullptr)){
@@ -399,14 +389,10 @@ bool DependentInjectionProcess::test(int source)
     assert(_pending_packets[source] == nullptr);
     // 1. a packet request has been serviced in the current cycle
     std::cout << "HERE" << std::endl;
-    if(_timer[source] == 0 && _decur[source]){
-      _pending_packets[source] = p; // the new pending packet is the one currently considerd
-      _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
-
-    }
-    // 2. the node is idel and can process the packet request
-    else if(_timer[source]==0 && !_decur[source]){
-
+    // 2. the node is ideal and can process the packet request
+    if(_timer[source]==0){
+      
+      assert(!_decur[source]);
       // the packet has already been cleared for the dependencies, 
       // we can inject directly --> bypass _pending_packets
       _traffic->cur_packet = p;
