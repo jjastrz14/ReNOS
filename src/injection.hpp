@@ -42,6 +42,7 @@ protected:
 public:
   virtual ~InjectionProcess() {}
   virtual bool test(int source) = 0;
+  virtual bool isIdle(int source) { return false; }
   virtual void addToWaitingQueue(int source, Packet * p){};
   virtual void reset();
   bool reached_end;
@@ -76,13 +77,13 @@ public:
 
 class DependentInjectionProcess : public InjectionProcess {
   private:
-    
+    int _resorting;
     vector<int> _timer; // timer only used for workloads, packets processing time is managaed in trafficmanager
     vector<bool> _decur;
     vector<set<tuple<int, int, int>>> * _processed;
     vector<set<tuple<int, int, int>>> _executed;
     vector<deque<const Packet *>> _waiting_packets;
-    vector<const Packet *> _pending_packets; // used as buffer for packets being processed
+    //vector<const Packet *> _pending_packets; // used as buffer for packets being processed
     vector<deque<const ComputingWorkload * >> _waiting_workloads;
     vector<const ComputingWorkload *> _pending_workloads; // used as buffer for workloads being processed
 
@@ -93,7 +94,7 @@ class DependentInjectionProcess : public InjectionProcess {
     
     // a method to check if the dependencies have been satisfied for the packet/workload
     template <typename T>
-    int _dependenciesSatisfied (const T * u, int source) const{
+    int _dependenciesSatisfied (const T * u, int source, bool extensive_search= false) const{
       // get the vector of dependencies and convert it to a set
       assert(u);
       assert((u->dep.size() > 0));
@@ -106,32 +107,61 @@ class DependentInjectionProcess : public InjectionProcess {
           return 0;
         }
       }
-      
-      // check if the dependencies have been satisfied for the packet
-      for (auto it = dep.begin(); it != dep.end(); ++it){
-        // check in the processed packets for the coinsidered source if there are requests whose
-        // id matches the dependency: THE PACKET ID MUST MATCH WITH THE DEPENDENCY, AS WELL AS BE A WRITE PACKET
-        auto match = std::find_if(_processed->at(source).begin(), _processed->at(source).end(), [it](const tuple<int,int,int> & p){
-          return std::get<0>(p) == *it && std::get<1>(p) == commType::WRITE;
-        });
-        if (match != _processed->at(source).end()){
-          dep_time.push_back(std::get<2>(*match));
+      if (!extensive_search) // consider just the specified source
+      {
+        // check if the dependencies have been satisfied for the packet
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in the processed packets for the coinsidered source if there are requests whose
+          // id matches the dependency: THE PACKET ID MUST MATCH WITH THE DEPENDENCY, AS WELL AS BE A WRITE PACKET
+          auto match = std::find_if(_processed->at(source).begin(), _processed->at(source).end(), [it](const tuple<int,int,int> & p){
+            return std::get<0>(p) == *it && std::get<1>(p) == commType::WRITE;
+          });
+          if (match != _processed->at(source).end()){
+            dep_time.push_back(std::get<2>(*match));
+          }
+        }
+
+        // do the same for the executed workloads
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in landed packets if the (last) dependency for the packet has been satisfied
+          auto match = std::find_if(_executed[source].begin(), _executed[source].end(), [it](const tuple<int,int,int> & p){
+            return std::get<0>(p) == *it;
+          });
+          if (match != _executed[source].end()){
+            dep_time.push_back(std::get<2>(*match));
+          }
         }
       }
+      else{ // consider also all the other sources
 
-      // do the same for the executed workloads
-      for (auto it = dep.begin(); it != dep.end(); ++it){
-        // check in landed packets if the (last) dependency for the packet has been satisfied
-        auto match = std::find_if(_executed[source].begin(), _executed[source].end(), [it](const tuple<int,int,int> & p){
-          return std::get<0>(p) == *it;
-        });
-        if (match != _executed[source].end()){
-          dep_time.push_back(std::get<2>(*match));
+        // check if the dependencies have been satisfied for the packet
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in the processed packets for the coinsidered source if there are requests whose
+          // id matches the dependency: THE PACKET ID MUST MATCH WITH THE DEPENDENCY, AS WELL AS BE A WRITE PACKET
+          for (int i = 0; i < _nodes; ++i){
+            auto match = std::find_if(_processed->at(i).begin(), _processed->at(i).end(), [it](const tuple<int,int,int> & p){
+              return std::get<0>(p) == *it && std::get<1>(p) == commType::WRITE;
+            });
+            if (match != _processed->at(i).end()){
+              dep_time.push_back(std::get<2>(*match));
+            }
+          }
+        }
+
+        // do the same for the executed workloads
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in landed packets if the (last) dependency for the packet has been satisfied
+          for (int i = 0; i < _nodes; ++i){
+            auto match = std::find_if(_executed[i].begin(), _executed[i].end(), [it](const tuple<int,int,int> & p){
+              return std::get<0>(p) == *it;
+            });
+            if (match != _executed[i].end()){
+              dep_time.push_back(std::get<2>(*match));
+            }
+          }
         }
       }
-
       
-
       // if the set is empty, return the maximum time of the dependencies
       if (dep.size() == dep_time.size()){
         std::cout << "\n"<<std::endl;
@@ -147,16 +177,45 @@ class DependentInjectionProcess : public InjectionProcess {
       }
     }
 
+    // a new method to resort the waiting queues: if the function gets called, 
+    // it will loop over the waiting queues and check if the dependencies have been satisfied.
+    // If so, the packet/workload will be moved to the front of the queue. If no packets/workloads
+    // dependencies have been satisfied, the function will scan over all the elements in the queue and 
+    // finally return false. Otherwise, it stops at the first element that has dependencies satisfied
+    // and moves it to the front of the queue, returning true
+    template <typename T>
+    bool _resortWaitingQueues(T& container, int source) {
+        bool resorted = false;
+        // scan over the waiting packets
+        for (auto it = container[source].begin(); it != container[source].end(); ++it) {
+            // check if the dependencies have been satisfied
+            if (_dependenciesSatisfied(&(*(*it)), source) >= 0) {
+                // if the item is already at the front of the queue, do nothing
+                if (it == container[source].begin()) {
+                    return resorted;
+                }
+                // else, move the item to the front of the queue and return true
+                it = container[source].erase(it);
+                container[source].push_front(*it);
+                resorted = true;
+                return resorted;
+            }
+        }
+        return resorted;
+    }
+
     // a method to build the waiting queues
     void _buildStaticWaitingQueues();
     // a method to set the clock to a specific value
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets);
+    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);
+    // a method to test if the landed packets can be processed
+    virtual bool isIdle(int source){return _timer[source] == 0;};
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     

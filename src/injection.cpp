@@ -153,7 +153,8 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
 
   InjectionProcess * result = NULL;
   if(process_name == "dependent") {
-    result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets);
+    int resort = config ? config->getIntField("resort_waiting_queues") : 0;
+    result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort);
   } else {
     cout << "Invalid injection process: " << inject << endl;
     exit(-1);
@@ -222,7 +223,7 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets)
+DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort)
   : InjectionProcess(nodes, 0.0), _traffic(traffic), _processed(landed_packets), _clock(clock)
 {
   assert(_traffic);
@@ -235,12 +236,14 @@ DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, T
   for (int i = 0; i < nodes; ++i){
     _waiting_packets[i].resize(0);
   }
-  _pending_packets.resize(nodes);
+  //_pending_packets.resize(nodes);
   _waiting_workloads.resize(nodes);
   for (int i = 0; i < nodes; ++i){
     _waiting_workloads[i].resize(0);
   }
   _pending_workloads.resize(nodes);
+
+  _resorting = resort;
   _buildStaticWaitingQueues();
   //reset();
 }
@@ -269,7 +272,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
   _traffic->reset();
   _waiting_packets.clear();
   _waiting_workloads.clear();
-  _pending_packets.clear();
+  //_pending_packets.clear();
 
   // STUPID COMPILING OPTION, MAY DECIDE TO UPGRADE LATER
   if (_traffic->getNextPacket() == nullptr){
@@ -330,6 +333,16 @@ bool DependentInjectionProcess::test(int source)
   const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
 
+  if (_resorting){
+    if (_resortWaitingQueues(_waiting_packets, source)){
+    std::cout << "Resorted the waiting packets" << std::endl;
+    }
+    if (_resortWaitingQueues(_waiting_workloads, source)){
+      std::cout << "Resorted the waiting workloads" << std::endl;
+    }
+  }
+  
+
   if(!(_waiting_packets[source].empty())){
     p = _waiting_packets[source].front();
     assert(p);
@@ -377,19 +390,18 @@ bool DependentInjectionProcess::test(int source)
     if(_timer[source] == 0){
       // the node is idle and can process the workload
       assert(_pending_workloads[source] == nullptr);
-      if (_decur[source] == false) assert(_pending_packets[source] == nullptr);
+      //if (_decur[source] == false) assert(_pending_packets[source] == nullptr);
       _pending_workloads[source] = w;
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
-      _timer[source] =(_decur[source] == false ) ? w->ct_required - 1 : w->ct_required ; // update the timer for the required time
+      _timer[source] = w->ct_required - 1 ; // update the timer for the required time
       _decur[source] = true;
       std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
     }
   }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
     assert(_pending_workloads[source] == nullptr);
-    assert(_pending_packets[source] == nullptr);
-    // 1. a packet request has been serviced in the current cycle
-    std::cout << "HERE" << std::endl;
-    // 2. the node is ideal and can process the packet request
+    //assert(_pending_packets[source] == nullptr);
+    //std::cout << "HERE (Time: "<< _clock->time() <<") injected a packet" << std::endl;
+    // the node is ideal and can process the packet request
     if(_timer[source]==0){
       
       assert(!_decur[source]);
@@ -410,7 +422,7 @@ bool DependentInjectionProcess::test(int source)
   // if there are none, _reached_end is set to true
   int count = 0;
   for(int i = 0; i < _nodes; i++){
-    if(_waiting_packets[i].empty() && _waiting_workloads[i].empty() && _pending_packets[i] == nullptr && _pending_workloads[i] == nullptr){
+    if(_waiting_packets[i].empty() && _waiting_workloads[i].empty() && _pending_workloads[i] == nullptr){ // && _pending_packets[i] == nullptr
       count++;
     }
     if(count == _nodes  && _timer[source] == 0 && _decur[source] == false){
@@ -418,7 +430,7 @@ bool DependentInjectionProcess::test(int source)
     }   
   }
 
-  std::cout << "Source: " << source << " Timer: " << _timer[source] << " Decur: " << _decur[source] << " Valid: " << valid << " P. Packet: " << (_pending_packets[source] != nullptr)  << " W. Packets: " << (_waiting_packets[source].front() != nullptr)<< std::endl;
+  // std::cout << "Source: " << source << " Timer: " << _timer[source] << " Decur: " << _decur[source] << " Valid: " << valid << " P. Packet: " << (_pending_packets[source] != nullptr)  << " W. Packets: " << (_waiting_packets[source].front() != nullptr)<< std::endl;
   return valid;
 }
 

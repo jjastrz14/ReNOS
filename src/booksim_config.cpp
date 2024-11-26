@@ -190,6 +190,7 @@ BookSimConfig::BookSimConfig( )
   // Use read/write request reply scheme
   // ========== Additions for user-defined traffic ==========
   _arch_int["user_defined_traffic"] = 0;
+  _arch_int["resort_waiting_queues"] = 0;
   // ========================================================
   _arch_int["use_read_write"] = 0;
   addStrField("use_read_write", ""); // workaraound to allow for vector specification

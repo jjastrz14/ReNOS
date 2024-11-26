@@ -123,6 +123,7 @@ protected:
   // =================== Additions for User-Defined Traffic ====================
   bool _user_defined_traffic;
   vector<vector<set<tuple<int,int,int>>>> _landed_packets;
+  vector<vector<int>> _useful_pocessing_spots;
   vector<vector<set<tuple<int,int,int>>>> _to_process_packets;
   vector<vector<set<tuple<int,int,int>>>> _processed_packets;
   // ===========================================================================
@@ -324,6 +325,12 @@ public:
   Stats * getStats(const string & name) { return _stats[name]; }
 
 };
+
+template <typename Container, typename ConstIterator>
+typename Container::iterator remove_constness(Container& c, ConstIterator it)
+{
+    return c.erase(it, it);
+}
 
 
 #endif

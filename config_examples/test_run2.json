@@ -31,7 +31,7 @@
             "id" : 1,
             "node" : 1,
             "type" : "COMP_OP",
-            "ct_required" : 10,
+            "ct_required" : 20,
             "dep" : [-1]
         },
         {
@@ -42,7 +42,7 @@
             "dep" : [1],
             "type" : "READ_REQ",
             "cl" : 0,
-            "pt_required" : 10
+            "pt_required" : 20
         }
 
     ]

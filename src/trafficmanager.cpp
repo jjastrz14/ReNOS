@@ -138,6 +138,11 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         _landed_packets[s].resize(_nodes);
     }
 
+    _useful_pocessing_spots.resize(_classes);
+    for (int s = 0; s <_classes; ++s){
+        _useful_pocessing_spots[s].resize(_nodes, 0);
+    }
+
     _to_process_packets.resize(_classes);
     for (int s = 0; s <_classes; ++s){
         _to_process_packets[s].resize(_nodes);
@@ -1459,28 +1464,45 @@ void TrafficManager::_Step( )
             // elapsed the processing time
             auto it = _to_process_packets[c][n].begin();
             while(it != _to_process_packets[c][n].end()) {
-                // if the packet has elapsed the processing time, then it can be moved to the _processed_packets list
-                if(get<2>(*it) <= _clock._time) {
+
+                // find the corresponding packet in the landed packets list
+                auto it_land = std::find_if(_landed_packets[c][n].begin(), _landed_packets[c][n].end(), [it](const std::tuple<int, int, int> & p) { return (get<0>(*it) == get<0>(p)) && (get<1>(*it) == get<1>(p));});
+                _useful_pocessing_spots[c][n] += (_injection_process[c]->isIdle(n) ? 1 : 0);
+
+                // if the two times match, then the packet has elapsed the processing time
+                if(get<2>(*it) < get<2>(*it_land) + _useful_pocessing_spots[c][n]) {
+                    // insert the packet in the processed packets list
                     _processed_packets[c][n].insert(*it);
+                    // erase the packet from the to process packets list
                     it = _to_process_packets[c][n].erase(it);
+                    // reset the useful processing spots counter
+                    _useful_pocessing_spots[c][n] = 0;
                 } else {
                     ++it;
                 }
+
+                // // if the packet has elapsed the processing time, then it can be moved to the _processed_packets list
+                // if(get<2>(*it) <= _clock._time) {
+                //     _processed_packets[c][n].insert(*it);
+                //     it = _to_process_packets[c][n].erase(it);
+                // } else {
+                //     ++it;
+                // }
             }
         }
     }
 
     // print the elements of processed packets at each time step
-    std::cout << "==================== Processed Packets ====================" << std::endl;
-    std::cout << "                      Time: " << _clock._time << std::endl;
-    for(int c = 0; c < _classes; ++c) {
-        for(int n = 0; n < _nodes; ++n) {
-            for(auto it = _processed_packets[c][n].begin(); it != _processed_packets[c][n].end(); ++it) {
-                std::cout << " Class: " << c << " | Node: " << n << " | Request ID: " << get<0>(*it) << " | Type: " << get<1>(*it) << " | Time: " << get<2>(*it) << std::endl;
-            }
-        }
-    }
-    std::cout << "=============================================================" << std::endl;
+    // std::cout << "==================== Processed Packets ====================" << std::endl;
+    // std::cout << "                      Time: " << _clock._time << std::endl;
+    // for(int c = 0; c < _classes; ++c) {
+    //     for(int n = 0; n < _nodes; ++n) {
+    //         for(auto it = _processed_packets[c][n].begin(); it != _processed_packets[c][n].end(); ++it) {
+    //             std::cout << " Class: " << c << " | Node: " << n << " | Request ID: " << get<0>(*it) << " | Type: " << get<1>(*it) << " | Time: " << get<2>(*it) << std::endl;
+    //         }
+    //     }
+    // }
+    // std::cout << "=============================================================" << std::endl;
         
     // ==========================================
 
@@ -1871,6 +1893,8 @@ bool TrafficManager::RunUserDefined(){
         packets_left |= !_total_in_flight_flits[c].empty();
     }
 
+    
+
 
     int total_steps(0);
 
@@ -1901,6 +1925,12 @@ bool TrafficManager::RunUserDefined(){
         // also check for outstanding replies
         for (int i=0;i<_nodes;i++) {
             packets_left |= !_repliesPending[i].empty();
+        }
+        // also check for packets to be still processed
+        for(int c = 0; c < _classes; ++c) {
+            for(int n = 0; n < _nodes; ++n) {
+                packets_left |= !_to_process_packets[c][n].empty();
+            }
         }
         //reached_end variable is computed as
         //the logic or of the _reached_end variable of the 
