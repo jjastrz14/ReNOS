@@ -33,7 +33,7 @@ add_subdirectory(src/networks)
 #     add_subdirectory(tests)
 # endif()
 # find the header file for json parsing
-find_path(nlohmann_json_INCLUDE_DIR nlohmann/json.hpp)
+find_path(nlohmann_json_INCLUDE_DIR nlohmann/json.hpp PATHS ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(restart STATIC ${network_SRC} ${routers_SRC} ${arbiters_SRC} ${allocators_SRC} ${power_SRC} ${topologies_SRC}   ${network_INC} ${routers_INC} ${arbiters_INC} ${allocators_INC} ${power_INC} ${topologies_INC})
 target_include_directories(restart PUBLIC src src/routers src/arbiters src/allocators src/power src/networks ${nlohmann_json_INCLUDE_DIR}) 
