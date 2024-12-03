@@ -306,6 +306,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     std::cout << "_buf_states.size(): " << _buf_states.size() << std::endl;
     _last_vc.resize(_nodes);
     _last_class.resize(_nodes);
+    exit(-1);
 
     for ( int source = 0; source < _nodes; ++source ) {
         _buf_states[source].resize(_subnets);
