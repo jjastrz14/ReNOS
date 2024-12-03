@@ -297,6 +297,9 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     // ============ Injection VC states  ============ 
 
+
+    std::cout << "_nodes: " << _nodes << std::endl;
+
     _buf_states.resize(_nodes);
     _last_vc.resize(_nodes);
     _last_class.resize(_nodes);
