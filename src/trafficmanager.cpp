@@ -289,7 +289,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     _injection_process.resize(_classes);
 
-    _buf_states.resize(_nodes);
+    
 
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
@@ -298,12 +298,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     }
 
     // ============ Injection VC states  ============ 
-
-
-    std::cout << "_nodes: " << _nodes << std::endl;
-
-    
-    std::cout << "_buf_states.size(): " << _buf_states.size() << std::endl;
+    _buf_states.resize(_nodes);
     _last_vc.resize(_nodes);
     _last_class.resize(_nodes);
     exit(-1);

@@ -275,9 +275,6 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
   // starting from the first packet in the list, loop over the packets
   // and build the waiting queues for each source node
   _traffic->reset();
-  _waiting_packets.clear();
-  _waiting_workloads.clear();
-  //_pending_packets.clear();
 
   // STUPID COMPILING OPTION, MAY DECIDE TO UPGRADE LATER
   if (_traffic->getNextPacket() == nullptr){
@@ -294,7 +291,8 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     assert((p->size > 0));
     assert((p->src >= 0) && (p->src < _nodes));
     int source = p->src;
-    _waiting_packets[source].push_back(p);
+    // make space for the packet
+    _waiting_packets[source].emplace_back(p);
     _traffic->updateNextPacket();
   }
 
@@ -304,7 +302,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     assert((w->ct_required > 0));
     assert((w->node >= 0) && (w->node < _nodes));
     int source = w->node;
-    _waiting_workloads[source].push_back(w);
+    _waiting_workloads[source].emplace_back(w);
     _traffic->updateNextWorkload();
   }
 
