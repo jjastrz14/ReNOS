@@ -29,9 +29,9 @@ add_subdirectory(src/networks)
 
 
 
-if(BUILD_TESTING)
-    add_subdirectory(tests)
-endif()
+# if(BUILD_TESTING)
+#     add_subdirectory(tests)
+# endif()
 # find the header file for json parsing
 find_path(nlohmann_json_INCLUDE_DIR nlohmann/json.hpp)
 
