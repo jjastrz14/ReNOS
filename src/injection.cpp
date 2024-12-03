@@ -154,6 +154,11 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
   InjectionProcess * result = NULL;
   if(process_name == "dependent") {
     int resort = config ? config->getIntField("resort_waiting_queues") : 0;
+    std::cout << "Resort waiting queues: " << resort << std::endl;
+    std::cout << "Nodes: " << nodes << std::endl;
+    std::cout << "Clock: " << clock << std::endl;
+    std::cout << "Traffic: " << traffic << std::endl;
+    std::cout << "Landed packets: " << landed_packets << std::endl;
     result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort);
   } else {
     cout << "Invalid injection process: " << inject << endl;
