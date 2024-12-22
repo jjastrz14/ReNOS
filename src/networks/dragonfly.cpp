@@ -145,8 +145,8 @@ int dragonfly_port(int rID, int source, int dest){
 }
 
 
-DragonFlyNew::DragonFlyNew( const Configuration &config, const string & name ) :
-  Network( config, name )
+DragonFlyNew::DragonFlyNew( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name ) :
+  Network( config, context, par, name )
 {
 
   _ComputeSize( config );
@@ -178,7 +178,7 @@ void DragonFlyNew::_ComputeSize( const Configuration &config )
 
   
   // FIX...
-  gK = _p; gN = _n;
+  context->gK = _p; context->gN = _n;
 
   // with 1 dimension, total of 2p routers per group
   // N = 2p * p * (2p^2 + 1)
@@ -241,7 +241,7 @@ void DragonFlyNew::_BuildNet( const Configuration &config )
     
     router_name << "_" <<  node ;
 
-    _routers[node] = Router::NewRouter( config, this, router_name.str( ), 
+    _routers[node] = Router::NewRouter( config, *context, *par, this, router_name.str( ), 
 					node, _k, _k );
     _timed_modules.push_back(_routers[node]);
 
@@ -399,20 +399,20 @@ double DragonFlyNew::Capacity( ) const
   return (double)_k / 8.0;
 }
 
-void DragonFlyNew::RegisterRoutingFunctions(){
+void DragonFlyNew::RegisterRoutingFunctions(tRoutingParameters& par){
 
-  gRoutingFunctionMap["min_dragonflynew"] = &min_dragonflynew;
-  gRoutingFunctionMap["ugal_dragonflynew"] = &ugal_dragonflynew;
+  par.gRoutingFunctionMap["min_dragonflynew"] = &min_dragonflynew;
+  par.gRoutingFunctionMap["ugal_dragonflynew"] = &ugal_dragonflynew;
 }
 
 
-void min_dragonflynew( const Router *r, const Flit *f, int in_channel, 
+void min_dragonflynew( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 		       OutSet *outputs, bool inject )
 {
   outputs->clear( );
 
   if(inject) {
-    int inject_vc= randomInt(gNumVCs-1);
+    int inject_vc= randomInt(p->gNumVCs-1);
     outputs->addRange(-1, inject_vc, inject_vc);
     return;
   }
@@ -446,7 +446,7 @@ void min_dragonflynew( const Router *r, const Flit *f, int in_channel,
   
   out_vc = f->ph;
   if (debug)
-    *gWatchOut << GetSimTime() << " | " << r->getFullName() << " | "
+    *(c->gWatchOut) << GetSimTime(c) << " | " << r->getFullName() << " | "
 	       << "	through output port : " << out_port 
 	       << " out vc: " << out_vc << endl;
   outputs->addRange( out_port, out_vc, out_vc );
@@ -454,15 +454,15 @@ void min_dragonflynew( const Router *r, const Flit *f, int in_channel,
 
 
 //Basic adaptive routign algorithm for the dragonfly
-void ugal_dragonflynew( const Router *r, const Flit *f, int in_channel, 
+void ugal_dragonflynew( const SimulationContext* c, const Router *r,const tRoutingParameters * p, const Flit *f, int in_channel, 
 			OutSet *outputs, bool inject )
 {
   //need 3 VCs for deadlock freedom
 
-  assert(gNumVCs==3);
+  assert(p->gNumVCs==3);
   outputs->clear( );
   if(inject) {
-    int inject_vc= randomInt(gNumVCs-1);
+    int inject_vc= randomInt(p->gNumVCs-1);
     outputs->addRange(-1, inject_vc, inject_vc);
     return;
   }

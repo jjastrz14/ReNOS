@@ -37,6 +37,7 @@
 #include "config.hpp"
 #include "network.hpp"
 #include "packet.hpp"
+#include "packet_reply_info.hpp"
 #include "buffer_state.hpp"
 #include "stats.hpp"
 #include "traffic.hpp"
@@ -49,6 +50,12 @@ class PacketReplyInfo;
 
 class TrafficManager : public Module {
 
+public: 
+  // ============ Pools ============
+  CreditPool credit_pool;
+  FlitPool flit_pool;
+  PacketReplyPool packet_reply_pool;
+
 private:
 
   // save the pointer to the packets stored by the config structure
@@ -58,6 +65,8 @@ private:
   vector<int> _packet_size_max_val;
 
 protected:
+  const SimulationContext * _context;
+
   int _nodes;
   int _routers;
   int _vcs;
@@ -307,13 +316,15 @@ protected:
 public:
 
   static TrafficManager * New(Configuration const & config, 
-			      vector<Network *> const & net);
+			      vector<Network *> const & net,
+            const SimulationContext& context,
+            const tRoutingParameters& par);
 
-  TrafficManager( const Configuration &config, const vector<Network *> & net );
+  TrafficManager( const Configuration &config, const vector<Network *> & net, const SimulationContext& context,  const tRoutingParameters& par);
   virtual ~TrafficManager( );
 
-  bool Run( );
-  virtual bool RunUserDefined( ); 
+  int Run( );
+  virtual int RunUserDefined( ); 
 
   virtual void WriteStats( ostream & os = cout ) const ;
   virtual void UpdateStats( ) ;
@@ -321,8 +332,8 @@ public:
   virtual void DisplayOverallStats( ostream & os = cout ) const ;
   virtual void DisplayOverallStatsCSV( ostream & os = cout ) const ;
 
-  inline int getTime() { return _clock.time(); }
-  Stats * getStats(const string & name) { return _stats[name]; }
+  inline int getTime() const { return _clock.time(); }
+  Stats * getStats (const string & name) const { return _stats.at(name); }
 
 };
 

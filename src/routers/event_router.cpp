@@ -34,11 +34,16 @@
 #include "event_router.hpp"
 #include "stats.hpp"
 #include "globals.hpp"
+#include "trafficmanager.hpp"
 
 EventRouter::EventRouter( const Configuration& config,
+        const SimulationContext& context,
+        const tRoutingParameters& par,
 		    Module *parent, const string & name, int id,
 		    int inputs, int outputs )
   : Router( config,
+      context,
+      par,
 	    parent, name,
 	    id,
 	    inputs, outputs )
@@ -56,8 +61,8 @@ EventRouter::EventRouter( const Configuration& config,
   // Routing
 
   string rf = config.getStrField("routing_function") + "_" + config.getStrField("topology");
-  map<string, tRoutingFunction>::iterator rf_iter = gRoutingFunctionMap.find(rf);
-  if(rf_iter == gRoutingFunctionMap.end()) {
+  map<string, tRoutingFunction>::const_iterator rf_iter = this->par->gRoutingFunctionMap.find(rf);
+  if(rf_iter == this->par->gRoutingFunctionMap.end()) {
     error("Invalid routing function: " + rf);
   }
   _rf = rf_iter->second;
@@ -69,7 +74,7 @@ EventRouter::EventRouter( const Configuration& config,
 
   for ( int i = 0; i < _inputs; ++i ) {
     module_name << "buf_" << i;
-    _buf[i] = new Buffer( config, _outputs, this, module_name.str( ) );
+    _buf[i] = new Buffer(config, context, par, _outputs, this, module_name.str( ) );
     module_name.seekp( 0, ios::beg );
     _active[i].resize(_vcs, false);
   }
@@ -354,7 +359,7 @@ void EventRouter::_IncomingFlits( )
       }
       
       if ( f->watch ) {
-	*gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	*(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		    << "Received flit at " << getFullName() << ".  Output port = " 
 		    << cur_buf->getOutputPort( vc ) << ", output VC = " 
 		    << cur_buf->getOutputVC( vc ) << endl
@@ -517,7 +522,7 @@ void EventRouter::_ArrivalArb( int output )
       }
     }
 
-    c->freeCredit();
+    c->freeCredit(context->trafficManager->credit_pool);
   }
 
   // Now process arrival events
@@ -670,7 +675,7 @@ void EventRouter::_TransportArb( int input )
       }
     }
 
-    c = Credit::newCredit( );
+    c = Credit::newCredit(context->trafficManager->credit_pool);
     c->vc.insert(f->vc);
     c->head          = f->head;
     c->tail          = f->tail;
@@ -678,7 +683,7 @@ void EventRouter::_TransportArb( int input )
     _credit_pipe->write( c, input );
     
     if ( f->watch && c->tail ) {
-      *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+      *(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		  << getFullName() << " sending tail credit back for flit " << f->id << endl;
     }
 
@@ -689,7 +694,7 @@ void EventRouter::_TransportArb( int input )
     _crossbar_pipe->write( f, output );
 
     if ( f->watch ) {
-      *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+      *(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		  << "Forwarding flit through crossbar at " << getFullName() << ":" << endl
 		  << *f;
     }  

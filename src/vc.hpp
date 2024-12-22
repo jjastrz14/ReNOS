@@ -65,6 +65,9 @@ class VC : public Module {
 
         eVCState _state;  // state of the virtual channel
 
+        const SimulationContext * _context;
+        const tRoutingParameters * _par;
+
         OutSet * _route_set;
         int _out_port, _out_vc;
 
@@ -87,7 +90,7 @@ class VC : public Module {
 
         public:
         
-        VC( const Configuration& config, int outputs,
+        VC( const Configuration& config, const SimulationContext& context, const tRoutingParameters& par, int outputs,
             Module *parent, const std::string& name );
         ~VC();
 
@@ -146,7 +149,7 @@ class VC : public Module {
 
         void setWatch( bool watch = true );
         bool isWatched( ) const;
-        void display( std::ostream & os = std::cout ) const;
+        void display( std::ostream & os ) const;
 
 
 

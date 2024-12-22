@@ -29,12 +29,13 @@
 #include <sstream>
 
 #include "fly.hpp"
+#include "routefunc.hpp"
 #include "misc_utils.hpp"
 
 //#define DEBUG_FLY
 
-KNFly::KNFly( const Configuration &config, const string & name ) :
-Network( config, name )
+KNFly::KNFly( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name ) :
+Network( config, context, par, name )
 {
   _ComputeSize( config );
   _Alloc( );
@@ -46,7 +47,7 @@ void KNFly::_ComputeSize( const Configuration &config )
   _k = config.getIntField( "k" );
   _n = config.getIntField( "n" );
 
-  gK = _k; gN = _n;
+  context->gK = _k; context->gN = _n;
 
   _nodes = powi( _k, _n );
 
@@ -70,7 +71,7 @@ void KNFly::_BuildNet( const Configuration &config )
     for ( int addr = 0; addr < per_stage; ++addr ) {
 
       router_name << "router_" << stage << "_" << addr;
-      _routers[node] = Router::NewRouter( config, this, router_name.str( ), 
+      _routers[node] = Router::NewRouter( config, *context, *par, this, router_name.str( ), 
 					  node, _k, _k );
       _timed_modules.push_back(_routers[node]);
       router_name.str("");

@@ -40,6 +40,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "globals.hpp"
 
 
 #include <nlohmann/json.hpp>
@@ -88,8 +89,6 @@ struct ComputingWorkload {
 
 
 class Configuration {
-
-    static Configuration * instance;
 
     private:
         std::FILE * _config_file;
@@ -158,11 +157,9 @@ class Configuration {
         inline const std::map<std::string, std::vector<std::string>> & getStrArrayMap() const { return _arch_str_array; }
         inline const std::vector<Packet> & getPackets() const { return _packets; }
         inline const std::vector<ComputingWorkload> & getComputingWorkloads() const { return _workloads; }
-
-        static Configuration * getInstance() { return instance; }
 };
 
-bool ParseArgs(Configuration * cf, int argc, char **argv);
+bool ParseArgs(Configuration * cf, const SimulationContext& context, int argc, char **argv);
 
 std::vector<std::string> tokenize_str(std::string const & data);
 std::vector<int> tokenize_int(std::string const & data);

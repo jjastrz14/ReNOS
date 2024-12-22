@@ -29,6 +29,7 @@
 #define _KNCUBE_HPP_
 
 #include "network.hpp"
+#include "routefunc.hpp"
 
 class KNCube : public Network {
 
@@ -47,8 +48,8 @@ class KNCube : public Network {
   int _RightNode( int node, int dim );
 
 public:
-  KNCube( const Configuration &config, const string & name, bool mesh );
-  static void RegisterRoutingFunctions();
+  KNCube( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name, bool mesh );
+  static void RegisterRoutingFunctions(tRoutingParameters& par);
 
   int GetN( ) const;
   int GetK( ) const;

@@ -154,11 +154,11 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
   InjectionProcess * result = NULL;
   if(process_name == "dependent") {
     int resort = config ? config->getIntField("resort_waiting_queues") : 0;
-    std::cout << "Resort waiting queues: " << resort << std::endl;
-    std::cout << "Nodes: " << nodes << std::endl;
-    std::cout << "Clock: " << clock << std::endl;
-    std::cout << "Traffic: " << traffic << std::endl;
-    std::cout << "Landed packets: " << landed_packets << std::endl;
+    // std::cout << "Resort waiting queues: " << resort << std::endl;
+    // std::cout << "Nodes: " << nodes << std::endl;
+    // std::cout << "Clock: " << clock << std::endl;
+    // std::cout << "Traffic: " << traffic << std::endl;
+    // std::cout << "Landed packets: " << landed_packets << std::endl;
     result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort);
   } else {
     cout << "Invalid injection process: " << inject << endl;
@@ -338,10 +338,10 @@ bool DependentInjectionProcess::test(int source)
 
   if (_resorting){
     if (_resortWaitingQueues(_waiting_packets, source)){
-    std::cout << "Resorted the waiting packets" << std::endl;
+    // std::cout << "Resorted the waiting packets" << std::endl;
     }
     if (_resortWaitingQueues(_waiting_workloads, source)){
-      std::cout << "Resorted the waiting workloads" << std::endl;
+      // std::cout << "Resorted the waiting workloads" << std::endl;
     }
   }
   
@@ -385,7 +385,7 @@ bool DependentInjectionProcess::test(int source)
     _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
     _pending_workloads[source] = nullptr;
     _decur[source] = false;
-    std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
+    // std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
   }
   
   // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
@@ -398,7 +398,7 @@ bool DependentInjectionProcess::test(int source)
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
       _timer[source] = w->ct_required - 1 ; // update the timer for the required time
       _decur[source] = true;
-      std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
+      // std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
     }
   }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
     assert(_pending_workloads[source] == nullptr);
@@ -414,7 +414,7 @@ bool DependentInjectionProcess::test(int source)
       _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
       //no need to set p to pending packet, as it will be injected direcly
       valid = true;
-      std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
+      // std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
     }
     else{
       exit(-1);

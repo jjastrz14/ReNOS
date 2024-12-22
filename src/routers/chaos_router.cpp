@@ -34,11 +34,16 @@
 #include "chaos_router.hpp"
 #include "random_utils.hpp"
 #include "globals.hpp"
+#include "trafficmanager.hpp"
 
 ChaosRouter::ChaosRouter( const Configuration& config,
+        const SimulationContext& context,
+        const tRoutingParameters& par,
 		    Module *parent, const string & name, int id,
 		    int inputs, int outputs )
   : Router( config,
+      context,
+      par,
 	    parent, name,
 	    id,
 	    inputs, outputs )
@@ -60,8 +65,8 @@ ChaosRouter::ChaosRouter( const Configuration& config,
   // Routing
 
   string rf = config.getStrField("routing_function") + "_" + config.getStrField("topology");
-  map<string, tRoutingFunction>::iterator rf_iter = gRoutingFunctionMap.find(rf);
-  if(rf_iter == gRoutingFunctionMap.end()) {
+  map<string, tRoutingFunction>::const_iterator rf_iter = this->par->gRoutingFunctionMap.find(rf);
+  if(rf_iter == this->par->gRoutingFunctionMap.end()) {
     error("Invalid routing function: " + rf);
   }
   _rf = rf_iter->second;
@@ -138,7 +143,7 @@ void ChaosRouter::readInputs( )
       _input_frame[input].push( f );
 
       if ( f->watch ) {
-	*gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	*(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		    << "Flit arriving at " << getFullName() 
 		    << " on channel " << input << endl
 		    << *f;
@@ -152,7 +157,7 @@ void ChaosRouter::readInputs( )
 	  } else {
 	    _input_state[input] = filling;
 	  }
-	  _rf( this, f, input, _input_route[input], false );
+	  _rf( context, this, par, f, input, _input_route[input], false );
 	} else {
 	  cout << *f;
 	  error( "Empty buffer received non-head flit!" );
@@ -219,7 +224,7 @@ void ChaosRouter::readInputs( )
 	error( "Next queue count fell below zero!" );
       }
 
-      c->freeCredit();
+      c->freeCredit(context->trafficManager->credit_pool);
     }
   }
 }
@@ -512,7 +517,7 @@ void ChaosRouter::_OutputAdvance( )
 	_crossbar_pipe->write( f, _input_output_match[i] );
 	
 	if ( f->watch ) {
-	  *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	  *(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		      << "Flit traversing crossbar from input queue " 
 		      << i << " at " 
 		      << getFullName() << endl
@@ -526,7 +531,7 @@ void ChaosRouter::_OutputAdvance( )
 	mq = _input_mq_match[i];
 
 	if ( f->head ) {
-	  _rf( this, f, i, _mq_route[mq], false );
+	  _rf(context, this, par, f, i, _mq_route[mq], false );
 	  _mq_age[mq] = 0;
 
 	  if ( _multi_state[mq] == empty ) {
@@ -553,7 +558,7 @@ void ChaosRouter::_OutputAdvance( )
 	_multi_queue[mq].push( f );
 	
 	if ( f->watch ) {
-	  *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	  *(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		      << "Flit stored in multiqueue at " 
 		      << getFullName() << endl
 		      << "State = " << _multi_state[mq] << endl
@@ -573,14 +578,14 @@ void ChaosRouter::_OutputAdvance( )
 	    _input_state[i] = filling;
 	    f2 = _input_frame[i].front( );
 	    // update routes
-	    _rf( this, f2, i, _input_route[i], false );
+	    _rf(context,  this, par, f2, i, _input_route[i], false );
 	  }
 	  
 	  _input_output_match[i] = -1;
 	  _input_mq_match[i]     = -1;
 	}
 	
-	c = Credit::newCredit( );
+	c = Credit::newCredit(context->trafficManager->credit_pool);
 	c->vc.insert(0);
 	_credit_queue[i].push( c );
       }
@@ -600,7 +605,7 @@ void ChaosRouter::_OutputAdvance( )
       _crossbar_pipe->write( f, _multi_match[m] );
 
       if ( f->watch ) {
-	*gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	*(context->gWatchOut) << GetSimTime(context) << " | " << getFullName() << " | "
 		    << "Flit traversing crossbar from multiqueue slot "
 		    << m << " at " 
 		    << getFullName() << endl

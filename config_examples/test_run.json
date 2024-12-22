@@ -9,10 +9,7 @@
             "routing_function" : "dim_order",
             "num_vcs" : 16,
             "user_defined_traffic" : 1,
-            "watch_out" : "-",
-            "watch_file" : "../config_examples/watch_list",
-            "sim_power" : 1,
-            "tech_file" : "../src/power/techfile.json"
+            "watch_out" : "-"
         },
         
     "workload" : [

@@ -40,16 +40,32 @@
 #include "config.hpp"
 #include "globals.hpp"
 
-typedef void (*tRoutingFunction)( const Router *, const Flit *, int in_channel, OutSet *, bool );
+typedef void (*tRoutingFunction)( const SimulationContext *, const Router *, const tRoutingParameters *, const Flit *, int in_channel, OutSet *, bool );
 
-void initializeRoutingMap( const Configuration & config );
+// define a new class to hold all of the routing parameters
+class tRoutingParameters {
+    public:
+        std::map<std::string, tRoutingFunction> gRoutingFunctionMap;
 
-extern std::map<std::string, tRoutingFunction> gRoutingFunctionMap;
+        int gNumVCs;
+        int gReadReqBeginVC, gReadReqEndVC;
+        int gWriteReqBeginVC, gWriteReqEndVC;
+        int gReadReplyBeginVC, gReadReplyEndVC;
+        int gWriteReplyBeginVC, gWriteReplyEndVC;
 
-extern int gNumVCs;
-extern int gReadReqBeginVC, gReadReqEndVC;
-extern int gWriteReqBeginVC, gWriteReqEndVC;
-extern int gReadReplyBeginVC, gReadReplyEndVC;
-extern int gWriteReplyBeginVC, gWriteReplyEndVC;
+        tRoutingParameters():
+            gRoutingFunctionMap(),
+            gNumVCs(0),
+            gReadReqBeginVC(0), gReadReqEndVC(0),
+            gWriteReqBeginVC(0), gWriteReqEndVC(0),
+            gReadReplyBeginVC(0), gReadReplyEndVC(0),
+            gWriteReplyBeginVC(0), gWriteReplyEndVC(0)
+        {}
+
+};
+
+tRoutingParameters initializeRoutingMap( const Configuration & config);
+
+
 
 #endif //ROUTEFUNC_HPP

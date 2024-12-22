@@ -38,9 +38,6 @@
 
 ///////////////////// FLIT ///////////////////////
 
-std::stack<Flit *> Flit::_all;
-std::stack<Flit *> Flit::_free;
-
 std::ostream& operator<<(std::ostream& os, const Flit& flit) {
     os << "Flit ID: " << flit.id << " (" << &flit << ")"
        << "Size: " << flit.size << " "
@@ -104,34 +101,31 @@ void Flit::reset()
     data = 0;
 }  
 
-Flit * Flit::newFlit() {
+Flit * Flit::newFlit(FlitPool & pool) {
     Flit * f;
-    if (_free.empty()) {
+    if (pool.free.empty()) {
         f = new Flit();
-        _all.push(f);
+        pool.all.push(f);
     } else {
-        f = _free.top();
+        f = pool.free.top();
         f->reset();
-        _free.pop();
+        pool.free.pop();
     }
     return f;
 }
 
-void Flit::freeFlit() {
-  _free.push(this);
+void Flit::freeFlit(FlitPool & pool) {
+  pool.free.push(this);
 }
 
-void Flit::freeAllFlits() {
-  while(!_all.empty()) {
-    delete _all.top();
-    _all.pop();
+void FlitPool::freeAllFlits() {
+  while(!this->all.empty()) {
+    delete this->all.top();
+    this->all.pop();
   }
 }
 
 ///////////////////// CREDIT ///////////////////////
-
-std::stack<Credit *> Credit::_all;
-std::stack<Credit *> Credit::_free;
 
 void Credit::reset(){
     vc.clear();
@@ -140,32 +134,32 @@ void Credit::reset(){
     tail = false;
 }
 
-Credit * Credit::newCredit() {
+Credit * Credit::newCredit(CreditPool & pool) {
     Credit * c;
-    if (_free.empty()) {
+    if (pool.free.empty()) {
         c = new Credit();
-        _all.push(c);
+        pool.all.push(c);
     } else {
-        c = _free.top();
+        c = pool.free.top();
         c->reset();
-        _free.pop();
+        pool.free.pop();
     }
     return c;
 }
 
-void Credit::freeCredit() {
-    _free.push(this);
+void Credit::freeCredit(CreditPool & pool) {
+    pool.free.push(this);
 }
 
-void Credit::freeAllCredits() {
-    while(!_all.empty()) {
-        delete _all.top();
-        _all.pop();
+void CreditPool::freeAllCredits() {
+    while(!this->all.empty()) {
+        delete this->all.top();
+        this->all.pop();
     }
 }
 
-int Credit::OutStanding(){
-  return _all.size()-_free.size();
+int CreditPool::OutStanding(){
+  return this->all.size()-this->free.size();
 }
 
 

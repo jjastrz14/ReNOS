@@ -174,7 +174,7 @@ wire const & Power_Module::wireOptimize(double L){
 	}
       }
     }
-    cout<<"L = "<<L<<" K = "<<bestK<<" M = "<<bestM<<" N = "<<bestN<<endl;
+    *(net->context->gDumpFile)<<"L = "<<L<<" K = "<<bestK<<" M = "<<bestM<<" N = "<<bestN<<endl;
     
     wire const temp = {L, bestK, bestM, bestN};
     iter = wire_map.insert(make_pair(L, temp)).first;
@@ -235,7 +235,7 @@ void Power_Module::calcBuffer(const BufferMonitor *bm){
       double ar = ((double)reads[i* classes+j])/totalTime;
       double aw = ((double)writes[i* classes+j])/totalTime;
       if(ar>1 ||aw >1){
-	cout<<"activity factor is greater than one, soemthing is stomping memory\n"; exit(-1);
+	*(net->context->gDumpFile)<<"activity factor is greater than one, soemthing is stomping memory\n"; exit(-1);
       }
       double Pwl =  powerWordLine( channel_width, depth) ;
       double Prd = powerMemoryBitRead( depth ) * channel_width ;
@@ -317,7 +317,7 @@ void Power_Module::calcSwitch(const SwitchMonitor* sm){
 	double a = activity[k+classes*(i+sm->NumOutputs()*j)];
 	a = a/totalTime;
 	if(a>1){
-	  cout<<"Switcht activity factor is greater than 1!!!\n";exit(-1);
+	  *(net->context->gDumpFile)<<"Switcht activity factor is greater than 1!!!\n";exit(-1);
 	}
 	double Px = powerCrossbar(channel_width, sm->NumInputs(),sm->NumOutputs(),j,i);
 	switchPower += a*channel_width*Px;
@@ -446,7 +446,7 @@ double Power_Module:: areaOutputModule(double Outputs) {
 }
 
 void Power_Module::run(){
-  totalTime = GetSimTime();
+  totalTime = GetSimTime(net->context);
   channelWirePower=0;
   channelClkPower=0;
   channelDFFPower=0;
@@ -494,37 +494,37 @@ void Power_Module::run(){
   
   double totalpower =  channelWirePower+channelClkPower+channelDFFPower+channelLeakPower+ inputReadPower+inputWritePower+inputLeakagePower+ switchPower+switchPowerCtrl+switchPowerLeak+outputPower+outputPowerClk+outputCtrlPower;
   double totalarea =  channelArea+switchArea+inputArea+outputArea;
-  cout<< "-----------------------------------------\n" ;
-  cout<< "- OCN Power Summary\n" ;
-  cout<< "- Completion Time:         "<<totalTime <<"\n" ;
-  cout<< "- Flit Widths:            "<<channel_width<<"\n" ;
-  cout<< "- Channel Wire Power:      "<<channelWirePower <<"\n" ;
-  cout<< "- Channel Clock Power:     "<<channelClkPower <<"\n" ;
-  cout<< "- Channel Retiming Power:  "<<channelDFFPower <<"\n" ;
-  cout<< "- Channel Leakage Power:   "<<channelLeakPower <<"\n" ;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "- OCN Power Summary\n" ;
+  *(net->context->gDumpFile)<< "- Completion Time:         "<<totalTime <<"\n" ;
+  *(net->context->gDumpFile)<< "- Flit Widths:            "<<channel_width<<"\n" ;
+  *(net->context->gDumpFile)<< "- Channel Wire Power:      "<<channelWirePower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Channel Clock Power:     "<<channelClkPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Channel Retiming Power:  "<<channelDFFPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Channel Leakage Power:   "<<channelLeakPower <<"\n" ;
   
-  cout<< "- Input Read Power:        "<<inputReadPower <<"\n" ;
-  cout<< "- Input Write Power:       "<<inputWritePower <<"\n" ;
-  cout<< "- Input Leakage Power:     "<<inputLeakagePower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Input Read Power:        "<<inputReadPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Input Write Power:       "<<inputWritePower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Input Leakage Power:     "<<inputLeakagePower <<"\n" ;
   
-  cout<< "- Switch Power:            "<<switchPower <<"\n" ;
-  cout<< "- Switch Control Power:    "<<switchPowerCtrl <<"\n" ;
-  cout<< "- Switch Leakage Power:    "<<switchPowerLeak <<"\n" ;
+  *(net->context->gDumpFile)<< "- Switch Power:            "<<switchPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Switch Control Power:    "<<switchPowerCtrl <<"\n" ;
+  *(net->context->gDumpFile)<< "- Switch Leakage Power:    "<<switchPowerLeak <<"\n" ;
   
-  cout<< "- Output DFF Power:        "<<outputPower <<"\n" ;
-  cout<< "- Output Clk Power:        "<<outputPowerClk <<"\n" ;
-  cout<< "- Output Control Power:    "<<outputCtrlPower <<"\n" ;
-  cout<< "- Total Power:             "<<totalpower <<"\n";
-  cout<< "-----------------------------------------\n" ;
-  cout<< "\n" ;
-  cout<< "-----------------------------------------\n" ;
-  cout<< "- OCN Area Summary\n" ;
-  cout<< "- Channel Area:  "<<channelArea<<"\n" ;
-  cout<< "- Switch  Area:  "<<switchArea<<"\n" ;
-  cout<< "- Input  Area:   "<<inputArea<<"\n" ;
-  cout<< "- Output  Area:  "<<outputArea<<"\n" ;
-  cout<< "- Total Area:    "<<totalarea<<endl;
-  cout<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "- Output DFF Power:        "<<outputPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Output Clk Power:        "<<outputPowerClk <<"\n" ;
+  *(net->context->gDumpFile)<< "- Output Control Power:    "<<outputCtrlPower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Total Power:             "<<totalpower <<"\n";
+  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "\n" ;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "- OCN Area Summary\n" ;
+  *(net->context->gDumpFile)<< "- Channel Area:  "<<channelArea<<"\n" ;
+  *(net->context->gDumpFile)<< "- Switch  Area:  "<<switchArea<<"\n" ;
+  *(net->context->gDumpFile)<< "- Input  Area:   "<<inputArea<<"\n" ;
+  *(net->context->gDumpFile)<< "- Output  Area:  "<<outputArea<<"\n" ;
+  *(net->context->gDumpFile)<< "- Total Area:    "<<totalarea<<endl;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
 
 
 

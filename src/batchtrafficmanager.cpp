@@ -34,8 +34,10 @@
 #include "batchtrafficmanager.hpp"
 
 BatchTrafficManager::BatchTrafficManager( const Configuration &config, 
-					  const vector<Network *> & net )
-: TrafficManager(config, net), _last_id(-1), _last_pid(-1), 
+					  const vector<Network *> & net,
+            const SimulationContext& context,
+            const tRoutingParameters& par)
+: TrafficManager(config, net, context, par), _last_id(-1), _last_pid(-1), 
    _overall_min_batch_time(0), _overall_avg_batch_time(0), 
    _overall_max_batch_time(0)
 {
@@ -120,7 +122,7 @@ bool BatchTrafficManager::_SingleSim( )
     _sim_state = running;
     int start_time = _clock._time;
     bool batch_complete;
-    cout << "Sending batch " << batch_index + 1 << " (" << _batch_size << " packets)..." << endl;
+    *(_context->gDumpFile) << "Sending batch " << batch_index + 1 << " (" << _batch_size << " packets)..." << endl;
     do {
       _Step();
       batch_complete = true;
@@ -134,10 +136,10 @@ bool BatchTrafficManager::_SingleSim( )
 	*_sent_packets_out << _packet_seq_no << endl;
       }
     } while(!batch_complete);
-    cout << "Batch injected. Time used is " << _clock._time - start_time << " cycles." << endl;
+    *(_context->gDumpFile) << "Batch injected. Time used is " << _clock._time - start_time << " cycles." << endl;
 
     int sent_time = _clock._time;
-    cout << "Waiting for batch to complete..." << endl;
+    *(_context->gDumpFile) << "Waiting for batch to complete..." << endl;
 
     int empty_steps = 0;
     
@@ -153,7 +155,7 @@ bool BatchTrafficManager::_SingleSim( )
       
       if ( empty_steps % 1000 == 0 ) {
 	_DisplayRemaining( ); 
-	cout << ".";
+	*(_context->gDumpFile) << ".";
       }
       
       packets_left = false;
@@ -161,16 +163,16 @@ bool BatchTrafficManager::_SingleSim( )
 	packets_left |= !_total_in_flight_flits[c].empty();
       }
     }
-    cout << endl;
-    cout << "Batch received. Time used is " << _clock._time - sent_time << " cycles." << endl
+    *(_context->gDumpFile) << endl;
+    *(_context->gDumpFile) << "Batch received. Time used is " << _clock._time - sent_time << " cycles." << endl
 	 << "Last packet was " << _last_pid << ", last flit was " << _last_id << "." << endl;
 
     _batch_time->AddSample(_clock._time - start_time);
 
-    cout << _sim_state << endl;
+    *(_context->gDumpFile) << _sim_state << endl;
 
     UpdateStats();
-    DisplayStats();
+    DisplayStats(*(_context->gDumpFile));
         
     ++batch_index;
   }

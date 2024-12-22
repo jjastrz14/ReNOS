@@ -162,6 +162,8 @@ class EventRouter : public Router {
 
 public:
   EventRouter( const Configuration& config,
+         const SimulationContext& context,
+         const tRoutingParameters& par,
 	       Module *parent, const string & name, int id,
 	       int inputs, int outputs );
   virtual ~EventRouter( );

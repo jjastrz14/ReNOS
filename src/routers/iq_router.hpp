@@ -139,6 +139,8 @@ class IQRouter : public Router {
 public:
 
   IQRouter( Configuration const & config,
+      const SimulationContext & context,
+      const tRoutingParameters & par,
 	    Module *parent, string const & name, int id,
 	    int inputs, int outputs );
   

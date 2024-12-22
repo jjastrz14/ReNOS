@@ -63,8 +63,8 @@ class FatTree : public Network {
 
 public:
 
-  FatTree( const Configuration& config ,const string & name );
-  static void RegisterRoutingFunctions() ;
+  FatTree( const Configuration& config, SimulationContext& context, tRoutingParameters& par,const string & name );
+  static void RegisterRoutingFunctions(tRoutingParameters& par) ;
 
   //
   // Methods to Assit Routing Functions

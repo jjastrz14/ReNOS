@@ -42,7 +42,9 @@
 #include <fstream>
 
 
-
+// bindings for pybind11
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <sstream>
 #include "globals.hpp"
 #include "routefunc.hpp"
@@ -57,45 +59,31 @@
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//Global declarations
+// Definitions for the functions defined in globals.hpp
 //////////////////////
 
- /* the current traffic manager instance */
-TrafficManager * trafficManager = NULL;
 
-int GetSimTime() {
-  return trafficManager->getTime();
+
+
+int GetSimTime(const SimulationContext* context) {
+  return context->trafficManager->getTime();
 }
 
 class Stats;
-Stats * GetStats(const std::string & name) {
-  Stats* test =  trafficManager->getStats(name);
+Stats * GetStats(const std::string & name, const SimulationContext* context) {
+  Stats* test =  context->trafficManager->getStats(name);
   if(test == 0){
     cout<<"warning statistics "<<name<<" not found"<<endl;
   }
   return test;
 }
 
-/* printing activity factor*/
-bool gPrintActivity;
 
-int gK;//radix
-int gN;//dimension
-int gC;//concentration
-
-int gNodes;
-
-//generate nocviewer trace
-bool gTrace;
-
-ostream * gWatchOut;
-
-
-
+ 
 /////////////////////////////////////////////////////////////////////////////
 
-bool Simulate( BookSimConfig const & config )
-{
+int Simulate( BookSimConfig const & config, SimulationContext & context, tRoutingParameters & par ) {
+  
   vector<Network *> net;
 
   int subnets = config.getIntField("subnets");
@@ -106,25 +94,29 @@ bool Simulate( BookSimConfig const & config )
   for (int i = 0; i < subnets; ++i) {
     ostringstream name;
     name << "network_" << i;
-    net[i] = Network::New( config, name.str() );
+    net[i] = Network::New( config, context, par, name.str());
   }
 
   /*tcc and characterize are legacy
    *not sure how to use them 
    */
 
-  assert(trafficManager == NULL);
-  trafficManager = TrafficManager::New( config, net ) ;
+  
+  TrafficManager * trafficManager = TrafficManager::New( config, net, context, par );
+
+
+  // Assign the traffic manager to the routing parameters class for timing purposes
+  context.setTrafficManager(trafficManager);
 
   /*Start the simulation run
-   */
+   */ 
 
   double total_time; /* Amount of time we've run */
   struct timeval start_time, end_time; /* Time before/after user code */
   total_time = 0.0;
   gettimeofday(&start_time, NULL);
 
-  bool result;
+  int result;
   if(config.getIntField("user_defined_traffic") > 0){
     result = trafficManager->RunUserDefined();
 
@@ -137,7 +129,7 @@ bool Simulate( BookSimConfig const & config )
   total_time = ((double)(end_time.tv_sec) + (double)(end_time.tv_usec)/1000000.0)
             - ((double)(start_time.tv_sec) + (double)(start_time.tv_usec)/1000000.0);
 
-  cout<<"Total run time "<<total_time<<endl;
+  *(context.gDumpFile) << "Total simulation time: " << total_time << " seconds" << endl;
 
   for (int i=0; i<subnets; ++i) {
 
@@ -156,14 +148,79 @@ bool Simulate( BookSimConfig const & config )
   return result;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Create a wrapper for the simulator, in order to expose it to Python
+
+namespace py = pybind11;
+
+int SimulateWrapper(const std::string &config_file, const std::string &output_file) {
+
+    // Generate a simulation context
+    SimulationContext context;
+
+    // define the dump file (name passed as argument)
+    if (output_file == "") {
+        context.gDumpFile = &context.nullStream;;
+    } else if (output_file == "-") {
+        context.gDumpFile = &std::cout;
+    } else {
+        context.gDumpFile = new std::ofstream(output_file.c_str());
+    }
+
+    // release GIL
+    py::gil_scoped_release release;
+
+    BookSimConfig config;
+    char *argv[] = {const_cast<char *>("nocsim"), const_cast<char *>(config_file.c_str())};
+    int argc = 2; // name of the program + name of the config file
+
+    if (!ParseArgs(&config, context, argc, argv)) {
+        throw std::runtime_error("Failed to parse configuration file");
+    }
+
+    tRoutingParameters p=initializeRoutingMap(config);
+
+    context.gPrintActivity = (config.getIntField("print_activity") > 0);
+    context.gTrace = (config.getIntField("viewer_trace") > 0);
+
+    std::string watch_out_file = config.getStrField("watch_out");
+    if (watch_out_file == "") {
+        context.gWatchOut = &context.nullStream;
+    } else if (watch_out_file == "-") {
+        context.gWatchOut = &std::cout;
+    } else {
+        context.gWatchOut = new std::ofstream(watch_out_file.c_str());
+    }
+
+
+    // For now, just return the latency of the simulation
+    int result = Simulate(config, context, p);
+
+    // Re-acquire GIL
+    py::gil_scoped_acquire acquire;
+
+    return result;
+}
+
+PYBIND11_MODULE(nocsim, m) {
+    m.doc() = "Network-on-Chip simulator";
+    m.def("simulate", &SimulateWrapper, "Run the simulation with the given configuration file");
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
 
 int main( int argc, char **argv )
 {
 
+  SimulationContext context;
+
+  context.gDumpFile = &cout;
+  //context.gDumpFile = &context.nullStream;
+
   BookSimConfig config;
 
-
-  if ( !ParseArgs( &config, argc, argv ) ) {
+  if ( !ParseArgs( &config, context, argc, argv ) ) {
     cerr << "Usage: " << argv[0] << " configfile... [param=value...]" << endl;
     return 0;
  } 
@@ -171,22 +228,23 @@ int main( int argc, char **argv )
   
   /*initialize routing, traffic, injection functions
    */
-  initializeRoutingMap( config );
+  tRoutingParameters p=initializeRoutingMap(config);
 
-  gPrintActivity = (config.getIntField("print_activity") > 0);
-  gTrace = (config.getIntField("viewer_trace") > 0);
+  context.gPrintActivity = (config.getIntField("print_activity") > 0);
+  context.gTrace = (config.getIntField("viewer_trace") > 0);
   
   string watch_out_file = config.getStrField( "watch_out" );
   if(watch_out_file == "") {
-    gWatchOut = NULL;
+    context.gWatchOut = NULL;
   } else if(watch_out_file == "-") {
-    gWatchOut = &cout;
+    context.gWatchOut = &cout;
   } else {
-    gWatchOut = new ofstream(watch_out_file.c_str());
+    context.gWatchOut = new ofstream(watch_out_file.c_str());
   }
 
   /*configure and run the simulator
    */
-  bool result = Simulate( config );
-  return result ? -1 : 0;
+  cout << "Simulation context: " << &context << endl;
+  int result = Simulate(config, context, p);
+  return result >0 ? 0 : -1;
 }

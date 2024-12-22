@@ -47,14 +47,14 @@
 
 class CMesh : public Network {
 public:
-  CMesh( const Configuration &config, const string & name );
+  CMesh( const Configuration &config, SimulationContext& context, tRoutingParameters& par,  const string & name );
   int GetN() const;
   int GetK() const;
 
-  static int NodeToRouter( int address ) ;
-  static int NodeToPort( int address ) ;
+  static int NodeToRouter( const SimulationContext* c, int address ) ;
+  static int NodeToPort( const SimulationContext* c, int address ) ;
 
-  static void RegisterRoutingFunctions() ;
+  static void RegisterRoutingFunctions(tRoutingParameters&  par) ;
 
 private:
 
@@ -81,16 +81,16 @@ private:
 //
 // Routing Functions
 //
-void xy_yx_cmesh( const Router *r, const Flit *f, int in_channel, 
+void xy_yx_cmesh( const SimulationContext * c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 		  OutSet *outputs, bool inject ) ;
 
-void xy_yx_no_express_cmesh( const Router *r, const Flit *f, int in_channel, 
+void xy_yx_no_express_cmesh( const SimulationContext * c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 			     OutSet *outputs, bool inject ) ;
 
-void dor_cmesh( const Router *r, const Flit *f, int in_channel, 
+void dor_cmesh( const SimulationContext * c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 		OutSet *outputs, bool inject ) ;
 
-void dor_no_express_cmesh( const Router *r, const Flit *f, int in_channel, 
+void dor_no_express_cmesh( const SimulationContext * c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 			   OutSet *outputs, bool inject ) ;
 
 #endif

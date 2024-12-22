@@ -53,19 +53,19 @@ int CMesh::_memo_NodeShiftX = 0 ;
 int CMesh::_memo_NodeShiftY = 0 ;
 int CMesh::_memo_PortShiftY = 0 ;
 
-CMesh::CMesh( const Configuration& config, const string & name ) 
-  : Network(config, name) 
+CMesh::CMesh( const Configuration& config, SimulationContext& context, tRoutingParameters& par, const string & name ) 
+  : Network(config, context, par, name) 
 {
   _ComputeSize( config );
   _Alloc();
   _BuildNet(config);
 }
 
-void CMesh::RegisterRoutingFunctions() {
-  gRoutingFunctionMap["dor_cmesh"] = &dor_cmesh;
-  gRoutingFunctionMap["dor_no_express_cmesh"] = &dor_no_express_cmesh;
-  gRoutingFunctionMap["xy_yx_cmesh"] = &xy_yx_cmesh;
-  gRoutingFunctionMap["xy_yx_no_express_cmesh"]  = &xy_yx_no_express_cmesh;
+void CMesh::RegisterRoutingFunctions(tRoutingParameters& par) {
+  par.gRoutingFunctionMap["dor_cmesh"] = &dor_cmesh;
+  par.gRoutingFunctionMap["dor_no_express_cmesh"] = &dor_no_express_cmesh;
+  par.gRoutingFunctionMap["xy_yx_cmesh"] = &xy_yx_cmesh;
+  par.gRoutingFunctionMap["xy_yx_no_express_cmesh"]  = &xy_yx_no_express_cmesh;
 }
 
 void CMesh::_ComputeSize( const Configuration &config ) {
@@ -86,9 +86,9 @@ void CMesh::_ComputeSize( const Configuration &config ) {
   _yrouter = config.getIntField("yr");
   assert(_xrouter == _yrouter); // broken for asymmetric concentration
 
-  gK = _k = k ;
-  gN = _n = n ;
-  gC = _c = c ;
+  context->gK = _k = k ;
+  context->gN = _n = n ;
+  context->gC = _c = c ;
 
   assert(c == _xrouter*_yrouter);
   
@@ -101,8 +101,8 @@ void CMesh::_ComputeSize( const Configuration &config ) {
 
   //
   _memo_NodeShiftX = _cX >> 1 ;
-  _memo_NodeShiftY = log_two(gK * _cX) + ( _cY >> 1 ) ;
-  _memo_PortShiftY = log_two(gK * _cX)  ;
+  _memo_NodeShiftY = log_two(context->gK * _cX) + ( _cY >> 1 ) ;
+  _memo_PortShiftY = log_two(context->gK * _cX)  ;
 
 }
 
@@ -112,7 +112,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
   int y_index ;
 
   //standard trace configuration 
-  if(gTrace){
+  if(context->gTrace){
     cout<<"Setup Finished Router"<<endl;
   }
 
@@ -139,6 +139,8 @@ void CMesh::_BuildNet( const Configuration& config ) {
 
     name << "router_" << y_index << '_' << x_index;
     _routers[node] = Router::NewRouter( config, 
+          *context,
+          *par,
 					this, 
 					name.str(), 
 					node,
@@ -243,7 +245,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
     _routers[node]->AddOutputChannel( _chan[px_out], _chan_cred[px_out] );
     _routers[node]->AddInputChannel( _chan[px_in], _chan_cred[px_in] );
     
-    if(gTrace) {
+    if(context->gTrace) {
       cout<<"Link "<<" "<<px_out<<" "<<px_in<<" "<<node<<" "<<_chan[px_out]->getLatency()<<endl;
     }
 
@@ -259,7 +261,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
     _routers[node]->AddOutputChannel( _chan[nx_out], _chan_cred[nx_out] );
     _routers[node]->AddInputChannel( _chan[nx_in], _chan_cred[nx_in] );
 
-    if(gTrace){
+    if(context->gTrace){
       cout<<"Link "<<" "<<nx_out<<" "<<nx_in<<" "<<node<<" "<<_chan[nx_out]->getLatency()<<endl;
     }
 
@@ -275,7 +277,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
     _routers[node]->AddOutputChannel( _chan[py_out], _chan_cred[py_out] );
     _routers[node]->AddInputChannel( _chan[py_in], _chan_cred[py_in] );
     
-    if(gTrace){
+    if(context->gTrace){
       cout<<"Link "<<" "<<py_out<<" "<<py_in<<" "<<node<<" "<<_chan[py_out]->getLatency()<<endl;
     }
 
@@ -291,7 +293,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
     _routers[node]->AddOutputChannel( _chan[ny_out], _chan_cred[ny_out] );
     _routers[node]->AddInputChannel( _chan[ny_in], _chan_cred[ny_in] );    
 
-    if(gTrace){
+    if(context->gTrace){
       cout<<"Link "<<" "<<ny_out<<" "<<ny_in<<" "<<node<<" "<<_chan[ny_out]->getLatency()<<endl;
     }
     
@@ -301,7 +303,7 @@ void CMesh::_BuildNet( const Configuration& config ) {
   for ( int i = 0 ; i < _nodes ; i++ ) 
     assert( channel_vector[i] == true ) ;
   
-  if(gTrace){
+  if(context->gTrace){
     cout<<"Setup Finished Link"<<endl;
   }
 }
@@ -313,24 +315,24 @@ void CMesh::_BuildNet( const Configuration& config ) {
 //
 // ----------------------------------------------------------------------
 
-int CMesh::NodeToRouter( int address ) {
+int CMesh::NodeToRouter( const SimulationContext* c, int address ) {
 
-  int y  = (address /  (_cX*gK))/_cY ;
-  int x  = (address %  (_cX*gK))/_cY ;
-  int router = y*gK + x ;
+  int y  = (address /  (_cX*c->gK))/_cY ;
+  int x  = (address %  (_cX*c->gK))/_cY ;
+  int router = y*c->gK + x ;
   
   return router ;
 }
 
-int CMesh::NodeToPort( int address ) {
+int CMesh::NodeToPort( const SimulationContext* c, int address ) {
   
   const int maskX  = _cX - 1 ;
   const int maskY  = _cY - 1 ;
 
   int x = address & maskX ;
-  int y = (int)(address/(2*gK)) & maskY ;
+  int y = (int)(address/(2*c->gK)) & maskY ;
 
-  return (gC / 2) * y + x;
+  return (c->gC / 2) * y + x;
 }
 
 // ----------------------------------------------------------------------
@@ -340,136 +342,136 @@ int CMesh::NodeToPort( int address ) {
 // ----------------------------------------------------------------------
 
 // Concentrated Mesh: X-Y
-int cmesh_xy( int cur, int dest ) {
+int cmesh_xy( const SimulationContext* c, int cur, int dest ) {
 
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
   const int POSITIVE_Y = 2 ;
   const int NEGATIVE_Y = 3 ;
 
-  int cur_y  = cur / gK;
-  int cur_x  = cur % gK;
-  int dest_y = dest / gK;
-  int dest_x = dest % gK;
+  int cur_y  = cur / c->gK;
+  int cur_x  = cur % c->gK;
+  int dest_y = dest / c->gK;
+  int dest_x = dest % c->gK;
 
   // Dimension-order Routing: x , y
   if (cur_x < dest_x) {
     // Express?
     if ((dest_x - cur_x) > 1){
       if (cur_y == 0)
-    	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1))
-    	return gC + POSITIVE_Y ;
+    	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1))
+    	return c->gC + POSITIVE_Y ;
     }
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
     // Express ? 
     if ((cur_x - dest_x) > 1){
       if (cur_y == 0)
-    	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1))
-    	return gC + POSITIVE_Y ;
+    	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1))
+    	return c->gC + POSITIVE_Y ;
     }
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   if (cur_y < dest_y) {
     // Express?
     if ((dest_y - cur_y) > 1) {
       if (cur_x == 0)
-    	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-    	return gC + POSITIVE_X ;
+    	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+    	return c->gC + POSITIVE_X ;
     }
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
     // Express ?
     if ((cur_y - dest_y) > 1 ){
       if (cur_x == 0)
-    	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-    	return gC + POSITIVE_X ;
+    	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+    	return c->gC + POSITIVE_X ;
     }
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
   return 0;
 }
 
 // Concentrated Mesh: Y-X
-int cmesh_yx( int cur, int dest ) {
+int cmesh_yx( const SimulationContext* c, int cur, int dest ) {
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
   const int POSITIVE_Y = 2 ;
   const int NEGATIVE_Y = 3 ;
 
-  int cur_y  = cur / gK ;
-  int cur_x  = cur % gK ;
-  int dest_y = dest / gK ;
-  int dest_x = dest % gK ;
+  int cur_y  = cur / c->gK ;
+  int cur_x  = cur % c->gK ;
+  int dest_y = dest / c->gK ;
+  int dest_x = dest % c->gK ;
 
   // Dimension-order Routing: y, x
   if (cur_y < dest_y) {
     // Express?
     if ((dest_y - cur_y) > 1) {
       if (cur_x == 0)
-    	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-    	return gC + POSITIVE_X ;
+    	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+    	return c->gC + POSITIVE_X ;
     }
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
     // Express ?
     if ((cur_y - dest_y) > 1 ){
       if (cur_x == 0)
-    	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-    	return gC + POSITIVE_X ;
+    	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+    	return c->gC + POSITIVE_X ;
     }
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
   if (cur_x < dest_x) {
     // Express?
     if ((dest_x - cur_x) > 1){
       if (cur_y == 0)
-    	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1))
-    	return gC + POSITIVE_Y ;
+    	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1))
+    	return c->gC + POSITIVE_Y ;
     }
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
     // Express ? 
     if ((cur_x - dest_x) > 1){
       if (cur_y == 0)
-    	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1))
-    	return gC + POSITIVE_Y ;
+    	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1))
+    	return c->gC + POSITIVE_Y ;
     }
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   return 0;
 }
 
-void xy_yx_cmesh( const Router *r, const Flit *f, int in_channel, 
+void xy_yx_cmesh(const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 		  OutSet *outputs, bool inject )
 {
 
   // ( Traffic Class , Routing Order ) -> Virtual Channel Range
-  int vcBegin = 0, vcEnd = gNumVCs-1;
+  int vcBegin = 0, vcEnd = p->gNumVCs-1;
   if ( f->type == commType::READ_REQ  || f->type == commType::READ ) {
-    vcBegin = gReadReqBeginVC;
-    vcEnd = gReadReqEndVC;
+    vcBegin = p->gReadReqBeginVC;
+    vcEnd = p->gReadReqEndVC;
   } else if ( f->type == commType::WRITE_REQ  || f->type == commType::WRITE ) {
-    vcBegin = gWriteReqBeginVC;
-    vcEnd = gWriteReqEndVC;
+    vcBegin = p->gWriteReqBeginVC;
+    vcEnd = p->gWriteReqEndVC;
   } else if ( f->type ==  commType::READ_ACK ) {
-    vcBegin = gReadReplyBeginVC;
-    vcEnd = gReadReplyEndVC;
+    vcBegin = p->gReadReplyBeginVC;
+    vcEnd = p->gReadReplyEndVC;
   } else if ( f->type ==  commType::WRITE_ACK ) {
-    vcBegin = gWriteReplyBeginVC;
-    vcEnd = gWriteReplyEndVC;
+    vcBegin = p->gWriteReplyBeginVC;
+    vcEnd = p->gWriteReplyEndVC;
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
@@ -485,12 +487,12 @@ void xy_yx_cmesh( const Router *r, const Flit *f, int in_channel,
     int cur_router = r->GetID();
 
     // Destination Router
-    int dest_router = CMesh::NodeToRouter( f->dst ); ;  
+    int dest_router = CMesh::NodeToRouter( c, f->dst ); ;  
 
     if (dest_router == cur_router) {
 
       // Forward to processing element
-      out_port = CMesh::NodeToPort( f->dst );      
+      out_port = CMesh::NodeToPort( c, f->dst );      
 
     } else {
 
@@ -501,15 +503,15 @@ void xy_yx_cmesh( const Router *r, const Flit *f, int in_channel,
       assert(available_vcs > 0);
 
       // randomly select dimension order at first hop
-      bool x_then_y = ((in_channel < gC) ?
+      bool x_then_y = ((in_channel < c->gC) ?
 		       (randomInt(1) > 0) :
 		       (f->vc < (vcBegin + available_vcs)));
 
       if(x_then_y) {
-	out_port = cmesh_xy( cur_router, dest_router );
+	out_port = cmesh_xy( c, cur_router, dest_router );
 	vcEnd -= available_vcs;
       } else {
-	out_port = cmesh_yx( cur_router, dest_router );
+	out_port = cmesh_yx( c, cur_router, dest_router );
 	vcBegin += available_vcs;
       }
     }
@@ -530,17 +532,17 @@ void xy_yx_cmesh( const Router *r, const Flit *f, int in_channel,
 //
 // ----------------------------------------------------------------------
 
-int cmesh_xy_no_express( int cur, int dest ) {
+int cmesh_xy_no_express( const SimulationContext* c, int cur, int dest ) {
   
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
   const int POSITIVE_Y = 2 ;
   const int NEGATIVE_Y = 3 ;
 
-  const int cur_y  = cur  / gK ;
-  const int cur_x  = cur  % gK ;
-  const int dest_y = dest / gK ;
-  const int dest_x = dest % gK ;
+  const int cur_y  = cur  / c->gK ;
+  const int cur_x  = cur  % c->gK ;
+  const int dest_y = dest / c->gK ;
+  const int dest_x = dest % c->gK ;
 
 
   //  Note: channel numbers bellow gC (degree of concentration) are
@@ -548,68 +550,68 @@ int cmesh_xy_no_express( int cur, int dest ) {
 
   // Dimension-order Routing: X , Y
   if (cur_x < dest_x) {
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   if (cur_y < dest_y) {
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
   return 0;
 }
 
-int cmesh_yx_no_express( int cur, int dest ) {
+int cmesh_yx_no_express( const SimulationContext* c, int cur, int dest ) {
 
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
   const int POSITIVE_Y = 2 ;
   const int NEGATIVE_Y = 3 ;
   
-  const int cur_y  = cur / gK ;
-  const int cur_x  = cur % gK ;
-  const int dest_y = dest / gK ;
-  const int dest_x = dest % gK ;
+  const int cur_y  = cur / c->gK ;
+  const int cur_x  = cur % c->gK ;
+  const int dest_y = dest / c->gK ;
+  const int dest_x = dest % c->gK ;
 
   //  Note: channel numbers bellow gC (degree of concentration) are
   //        injection and ejection links
 
   // Dimension-order Routing: X , Y
   if (cur_y < dest_y) {
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
   if (cur_x < dest_x) {
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   return 0;
 }
 
-void xy_yx_no_express_cmesh( const Router *r, const Flit *f, int in_channel, 
+void xy_yx_no_express_cmesh( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 			     OutSet *outputs, bool inject )
 {
   // ( Traffic Class , Routing Order ) -> Virtual Channel Range
-  int vcBegin = 0, vcEnd = gNumVCs-1;
+  int vcBegin = 0, vcEnd = p->gNumVCs-1;
   if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
-    vcBegin = gReadReqBeginVC;
-    vcEnd = gReadReqEndVC;
+    vcBegin = p->gReadReqBeginVC;
+    vcEnd = p->gReadReqEndVC;
   } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
-    vcBegin = gWriteReqBeginVC;
-    vcEnd = gWriteReqEndVC;
+    vcBegin = p->gWriteReqBeginVC;
+    vcEnd = p->gWriteReqEndVC;
   } else if ( f->type ==  commType::READ_ACK ) {
-    vcBegin = gReadReplyBeginVC;
-    vcEnd = gReadReplyEndVC;
+    vcBegin = p->gReadReplyBeginVC;
+    vcEnd = p->gReadReplyEndVC;
   } else if ( f->type ==  commType::WRITE_ACK ) {
-    vcBegin = gWriteReplyBeginVC;
-    vcEnd = gWriteReplyEndVC;
+    vcBegin = p->gWriteReplyBeginVC;
+    vcEnd = p->gWriteReplyEndVC;
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
@@ -625,12 +627,12 @@ void xy_yx_no_express_cmesh( const Router *r, const Flit *f, int in_channel,
     int cur_router = r->GetID();
 
     // Destination Router
-    int dest_router = CMesh::NodeToRouter( f->dst );  
+    int dest_router = CMesh::NodeToRouter( c, f->dst );  
 
     if (dest_router == cur_router) {
 
       // Forward to processing element
-      out_port = CMesh::NodeToPort( f->dst );
+      out_port = CMesh::NodeToPort( c, f->dst );
 
     } else {
 
@@ -641,15 +643,15 @@ void xy_yx_no_express_cmesh( const Router *r, const Flit *f, int in_channel,
       assert(available_vcs > 0);
 
       // randomly select dimension order at first hop
-      bool x_then_y = ((in_channel < gC) ?
+      bool x_then_y = ((in_channel < c->gC) ?
 		       (randomInt(1) > 0) :
 		       (f->vc < (vcBegin + available_vcs)));
 
       if(x_then_y) {
-	out_port = cmesh_xy_no_express( cur_router, dest_router );
+	out_port = cmesh_xy_no_express( c, cur_router, dest_router );
 	vcEnd -= available_vcs;
       } else {
-	out_port = cmesh_yx_no_express( cur_router, dest_router );
+	out_port = cmesh_yx_no_express( c, cur_router, dest_router );
 	vcBegin += available_vcs;
       }
     }
@@ -662,81 +664,81 @@ void xy_yx_no_express_cmesh( const Router *r, const Flit *f, int in_channel,
 //============================================================
 //
 //=====
-int cmesh_next( int cur, int dest ) {
+int cmesh_next( const SimulationContext* c, int cur, int dest ) {
 
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
   const int POSITIVE_Y = 2 ;
   const int NEGATIVE_Y = 3 ;
   
-  int cur_y  = cur / gK ;
-  int cur_x  = cur % gK ;
-  int dest_y = dest / gK ;
-  int dest_x = dest % gK ;
+  int cur_y  = cur / c->gK ;
+  int cur_x  = cur % c->gK ;
+  int dest_y = dest / c->gK ;
+  int dest_x = dest % c->gK ;
 
   // Dimension-order Routing: x , y
   if (cur_x < dest_x) {
     // Express?
-    if ((dest_x - cur_x) > gK/2-1){
+    if ((dest_x - cur_x) > c->gK/2-1){
       if (cur_y == 0)
-	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1))
-	return gC + POSITIVE_Y ;
+	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1))
+	return c->gC + POSITIVE_Y ;
     }
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
     // Express ? 
-    if ((cur_x - dest_x) > gK/2-1){
+    if ((cur_x - dest_x) > c->gK/2-1){
       if (cur_y == 0)
-	return gC + NEGATIVE_Y ;
-      if (cur_y == (gK-1)) 
-	return gC + POSITIVE_Y ;
+	return c->gC + NEGATIVE_Y ;
+      if (cur_y == (c->gK-1)) 
+	return c->gC + POSITIVE_Y ;
     }
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   if (cur_y < dest_y) {
     // Express?
-    if ((dest_y - cur_y) > gK/2-1) {
+    if ((dest_y - cur_y) > c->gK/2-1) {
       if (cur_x == 0)
-	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-	return gC + POSITIVE_X ;
+	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+	return c->gC + POSITIVE_X ;
     }
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
     // Express ?
-    if ((cur_y - dest_y) > gK/2-1){
+    if ((cur_y - dest_y) > c->gK/2-1){
       if (cur_x == 0)
-	return gC + NEGATIVE_X ;
-      if (cur_x == (gK-1))
-	return gC + POSITIVE_X ;
+	return c->gC + NEGATIVE_X ;
+      if (cur_x == (c->gK-1))
+	return c->gC + POSITIVE_X ;
     }
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
 
   assert(false);
   return -1;
 }
 
-void dor_cmesh( const Router *r, const Flit *f, int in_channel, 
+void dor_cmesh( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 		OutSet *outputs, bool inject )
 {
   // ( Traffic Class , Routing Order ) -> Virtual Channel Range
-  int vcBegin = 0, vcEnd = gNumVCs-1;
+  int vcBegin = 0, vcEnd = p->gNumVCs-1;
   if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
-    vcBegin = gReadReqBeginVC;
-    vcEnd = gReadReqEndVC;
+    vcBegin = p->gReadReqBeginVC;
+    vcEnd = p->gReadReqEndVC;
   } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
-    vcBegin = gWriteReqBeginVC;
-    vcEnd = gWriteReqEndVC;
+    vcBegin = p->gWriteReqBeginVC;
+    vcEnd = p->gWriteReqEndVC;
   } else if ( f->type ==  commType::READ_ACK ) {
-    vcBegin = gReadReplyBeginVC;
-    vcEnd = gReadReplyEndVC;
+    vcBegin = p->gReadReplyBeginVC;
+    vcEnd = p->gReadReplyEndVC;
   } else if ( f->type ==  commType::WRITE_ACK ) {
-    vcBegin = gWriteReplyBeginVC;
-    vcEnd = gWriteReplyEndVC;
+    vcBegin = p->gWriteReplyBeginVC;
+    vcEnd = p->gWriteReplyEndVC;
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
@@ -752,17 +754,17 @@ void dor_cmesh( const Router *r, const Flit *f, int in_channel,
     int cur_router = r->GetID();
 
     // Destination Router
-    int dest_router = CMesh::NodeToRouter( f->dst ); ;  
+    int dest_router = CMesh::NodeToRouter( c, f->dst ); ;  
   
     if (dest_router == cur_router) {
 
       // Forward to processing element
-      out_port = CMesh::NodeToPort( f->dst ); ;
+      out_port = CMesh::NodeToPort( c, f->dst ); ;
 
     } else {
 
       // Forward to neighbouring router
-      out_port = cmesh_next( cur_router, dest_router );
+      out_port = cmesh_next( c, cur_router, dest_router );
     }
   }
 
@@ -774,7 +776,7 @@ void dor_cmesh( const Router *r, const Flit *f, int in_channel,
 //============================================================
 //
 //=====
-int cmesh_next_no_express( int cur, int dest ) {
+int cmesh_next_no_express( const SimulationContext* c, int cur, int dest ) {
 
   const int POSITIVE_X = 0 ;
   const int NEGATIVE_X = 1 ;
@@ -782,45 +784,45 @@ int cmesh_next_no_express( int cur, int dest ) {
   const int NEGATIVE_Y = 3 ;
   
   //magic constant 2, which is supose to be _cX and _cY
-  int cur_y  = cur/gK ;
-  int cur_x  = cur%gK ;
-  int dest_y = dest/gK;
-  int dest_x = dest%gK ;
+  int cur_y  = cur/c->gK ;
+  int cur_x  = cur%c->gK ;
+  int dest_y = dest/c->gK;
+  int dest_x = dest%c->gK ;
 
   // Dimension-order Routing: x , y
   if (cur_x < dest_x) {
-    return gC + POSITIVE_X ;
+    return c->gC + POSITIVE_X ;
   }
   if (cur_x > dest_x) {
-    return gC + NEGATIVE_X ;
+    return c->gC + NEGATIVE_X ;
   }
   if (cur_y < dest_y) {
-    return gC + POSITIVE_Y ;
+    return c->gC + POSITIVE_Y ;
   }
   if (cur_y > dest_y) {
-    return gC + NEGATIVE_Y ;
+    return c->gC + NEGATIVE_Y ;
   }
   assert(false);
   return -1;
 }
 
-void dor_no_express_cmesh( const Router *r, const Flit *f, int in_channel, 
+void dor_no_express_cmesh( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 			   OutSet *outputs, bool inject )
 {
   // ( Traffic Class , Routing Order ) -> Virtual Channel Range
-  int vcBegin = 0, vcEnd = gNumVCs-1;
+  int vcBegin = 0, vcEnd = p->gNumVCs-1;
   if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
-    vcBegin = gReadReqBeginVC;
-    vcEnd = gReadReqEndVC;
+    vcBegin = p->gReadReqBeginVC;
+    vcEnd = p->gReadReqEndVC;
   } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
-    vcBegin = gWriteReqBeginVC;
-    vcEnd = gWriteReqEndVC;
+    vcBegin = p->gWriteReqBeginVC;
+    vcEnd = p->gWriteReqEndVC;
   } else if ( f->type ==  commType::READ_ACK ) {
-    vcBegin = gReadReplyBeginVC;
-    vcEnd = gReadReplyEndVC;
+    vcBegin = p->gReadReplyBeginVC;
+    vcEnd = p->gReadReplyEndVC;
   } else if ( f->type ==  commType::WRITE_ACK ) {
-    vcBegin = gWriteReplyBeginVC;
-    vcEnd = gWriteReplyEndVC;
+    vcBegin = p->gWriteReplyBeginVC;
+    vcEnd = p->gWriteReplyEndVC;
   }
   assert(((f->vc >= vcBegin) && (f->vc <= vcEnd)) || (inject && (f->vc < 0)));
 
@@ -836,17 +838,17 @@ void dor_no_express_cmesh( const Router *r, const Flit *f, int in_channel,
     int cur_router = r->GetID();
 
     // Destination Router
-    int dest_router = CMesh::NodeToRouter( f->type ) ;  
+    int dest_router = CMesh::NodeToRouter( c, f->type ) ;  
   
     if (dest_router == cur_router) {
 
       // Forward to processing element
-      out_port = CMesh::NodeToPort( f->type );
+      out_port = CMesh::NodeToPort( c, f->type );
 
     } else {
 
       // Forward to neighbouring router
-      out_port = cmesh_next_no_express( cur_router, dest_router );
+      out_port = cmesh_next_no_express( c, cur_router, dest_router );
     }
   }
 

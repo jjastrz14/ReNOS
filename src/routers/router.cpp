@@ -32,9 +32,11 @@ int const Router::STALL_BUFFER_RESERVED = -5;
 int const Router::STALL_CROSSBAR_CONFLICT = -6;
 
 Router::Router( const Configuration& config,
+    const SimulationContext& context,
+    const tRoutingParameters& par,
 		Module *parent, const std::string & name, int id,
 		int inputs, int outputs ) :
-TimedModule( parent, name ), _id( id ), _inputs( inputs ), _outputs( outputs ),
+TimedModule( parent, name ), par(&par), context(&context), _id( id ), _inputs( inputs ), _outputs( outputs ),
    _partial_internal_cycles(0.0)
 {
   _crossbar_delay   = ( config.getIntField( "st_prepare_delay" ) + 
@@ -101,17 +103,19 @@ bool Router::IsFaultyOutput( int c ) const
 
 /*Router constructor*/
 Router *Router::NewRouter( const Configuration& config,
+         const SimulationContext& context,
+         const tRoutingParameters& par,
 			   Module *parent, const std::string & name, int id,
 			   int inputs, int outputs )
 {
   const std::string type = config.getStrField( "router" );
   Router *r = NULL;
   if ( type == "iq" ) {
-    r = new IQRouter( config, parent, name, id, inputs, outputs );
+    r = new IQRouter( config, context, par, parent, name, id, inputs, outputs );
   } else if ( type == "event" ) {
-    r = new EventRouter( config, parent, name, id, inputs, outputs );
+    r = new EventRouter( config, context, par, parent, name, id, inputs, outputs );
   } else if ( type == "chaos" ) {
-    r = new ChaosRouter( config, parent, name, id, inputs, outputs );
+    r = new ChaosRouter( config, context, par, parent, name, id, inputs, outputs );
   } else {
     std::cerr << "Unknown router type: " << type << std::endl;
   }

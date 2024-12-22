@@ -35,11 +35,8 @@
 #include "config.hpp"
 
 
-// Initialize the singleton instance
-Configuration *Configuration::instance = nullptr;
 
 Configuration::Configuration(){
-    instance = this;
     _config_file = nullptr;
 }
 
@@ -519,11 +516,12 @@ void Configuration::parseError(const std::string &msg, unsigned int line) const 
 //============================================================
 
 
-bool ParseArgs(Configuration * cf, int argc, char * * argv)
+bool ParseArgs(Configuration * cf, const SimulationContext& context, int argc, char * * argv)
 {
   bool rc = false;
 
   //all dashed variables are ignored by the arg parser
+  *(context.gDumpFile) << "Parsing arguments" << std::endl;
   for(int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     size_t pos = arg.find('=');
@@ -532,17 +530,17 @@ bool ParseArgs(Configuration * cf, int argc, char * * argv)
       // parse config file
       cf->parseJSONFile( argv[i] );
       std::ifstream in(argv[i]);
-      std::cout << "BEGIN Configuration File: " << argv[i] << std::endl;
+      *(context.gDumpFile) << "BEGIN Configuration File: " << argv[i] << std::endl;
       while (!in.eof()) {
 	char c;
 	in.get(c);
-	std::cout << c ;
+	*(context.gDumpFile) << c ;
       }
-      std::cout << "END Configuration File: " << argv[i] << std::endl;
+      *(context.gDumpFile) << "END Configuration File: " << argv[i] << std::endl;
       rc = true;
     } /*else if(pos != std::string::npos)  {
       // override individual parameter
-      std::cout << "OVERRIDE Parameter: " << arg << std::endl;
+      *(context.gDumpFile) << "OVERRIDE Parameter: " << arg << std::endl;
       cf->ParseString(argv[i]);
     }*/
   }

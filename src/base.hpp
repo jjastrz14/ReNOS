@@ -46,7 +46,7 @@ class Clock {
         ~Clock() {};
 
         inline void tick() { _time++; }
-        inline int time() { return _time; }
+        inline int  time() const { return _time; }
         inline void reset() { _time = 0; }
 
     friend class TrafficManager;
@@ -74,13 +74,13 @@ class Module {
         inline const std::string & getName() const { return _name; }
         inline const std::string & getFullName() const { return _fullname; }
 
-        void printHierarchy(int lev= 0, std::ostream & os = std::cout) const;
+        void printHierarchy(int lev, std::ostream & os) const;
 
         void error(const std::string & msg, const short int & code = 1, std::ostream & os = std::cerr) const;
-        void printDebug(const std::string & msg, std::ostream & os = std::cout) const;
+        void printDebug(const std::string & msg, std::ostream & os) const;
         //virtual float power() const = 0;
 
-        virtual void display( std::ostream & os = std::cout ) const;
+        virtual void display( std::ostream & os) const;
     
 };
 

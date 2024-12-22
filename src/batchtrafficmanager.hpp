@@ -63,11 +63,11 @@ protected:
 
 public:
 
-  BatchTrafficManager( const Configuration &config, const vector<Network *> & net );
+  BatchTrafficManager( const Configuration &config, const vector<Network *> & net, const SimulationContext& context, const tRoutingParameters& par);
   virtual ~BatchTrafficManager( );
 
-  virtual void WriteStats( ostream & os = cout ) const;
-  virtual void DisplayStats( ostream & os = cout ) const;
+  virtual void WriteStats( ostream & os ) const;
+  virtual void DisplayStats( ostream & os = cout  ) const;
   virtual void DisplayOverallStats( ostream & os = cout ) const;
 
 };

@@ -34,7 +34,7 @@
 #include "channel.hpp"
 
 
-FlitChannel::FlitChannel(Module * parent, const std::string & name, const int & classes) : Channel<Flit>(parent, name), _src_router(nullptr), _snk_router(nullptr), _src_port(-1), _snk_port(-1), _idle(0){_active.resize(classes,0);};
+FlitChannel::FlitChannel(Module * parent, const SimulationContext& context, const std::string & name, const int & classes) : Channel<Flit>(parent, context, name), _src_router(nullptr), _snk_router(nullptr), _src_port(-1), _snk_port(-1), _idle(0){_active.resize(classes,0);};
 
 void FlitChannel::setSrcRouter(Router const * router, int port) {
     _src_router = router;
@@ -57,25 +57,6 @@ void FlitChannel::send(Flit * flit) {
     Channel<Flit>::send(flit);
 }
 
-void FlitChannel::sread(std::ostream &os) {
-    Flit const * const & f = _input_end; 
-    // trace the flit that is being read, as direclty referecing input would not work
-
-    if(f && f->watch){
-        os << GetSimTime() << " | " << getFullName() << " | "
-            << "Starting channel trasversal for flit ID: " << f->id << "with delay " << _delay  << "."<< std::endl;
-    }
-    Channel<Flit>::readInputs();
-}
-
-
-void FlitChannel::swrite(std::ostream &os) {
-    Channel<Flit>::writeOutputs();
-    
-    os << GetSimTime() << " | " << getFullName() << " | "
-        << "Ending channel trasversal for flit ID: " << _output_end->id << "with delay " << _delay  << "."<< std::endl;
-    
-}
 
 
     

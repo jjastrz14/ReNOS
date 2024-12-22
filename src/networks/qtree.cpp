@@ -42,10 +42,11 @@
 #include <vector>
 #include <sstream>
 #include "qtree.hpp"
+#include "routefunc.hpp"
 #include "misc_utils.hpp"
 
-QTree::QTree( const Configuration& config, const string & name )
-: Network ( config, name )
+QTree::QTree( const Configuration& config, SimulationContext& context, tRoutingParameters& par, const string & name )
+: Network ( config, context, par, name )
 {
   _ComputeSize( config );
   _Alloc( );
@@ -61,7 +62,7 @@ void QTree::_ComputeSize( const Configuration& config )
 
   assert( _k == 4 && _n == 3 );
 
-  gK = _k; gN = _n;
+  context->gK = _k; context->gN = _n;
 
   _nodes = powi( _k, _n );
 
@@ -75,7 +76,7 @@ void QTree::_ComputeSize( const Configuration& config )
 
 }
 
-void QTree::RegisterRoutingFunctions(){
+void QTree::RegisterRoutingFunctions(tRoutingParameters& par){
 
 }
 
@@ -91,7 +92,7 @@ void QTree::_BuildNet( const Configuration& config )
       routerName << h << "_" << pos;
 
       int d = ( h == 0 ) ? _k : _k + 1;
-      _routers[r] = Router::NewRouter( config, this,
+      _routers[r] = Router::NewRouter( config, *context, *par, this,
 				       routerName.str( ),
 				       id, d, d);
       _timed_modules.push_back(_routers[r]);

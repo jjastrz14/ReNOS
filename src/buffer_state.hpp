@@ -40,6 +40,7 @@
 #include "base.hpp"
 #include "packet.hpp"
 #include "config.hpp"
+#include "routefunc.hpp"
 
 class BufferState : public Module {
   
@@ -57,7 +58,7 @@ class BufferState : public Module {
         virtual int availableFor(int vc = 0) const = 0;
         virtual int limitFor(int vc = 0) const = 0;
 
-        static BufferPolicy * New(Configuration const & config, 
+        static BufferPolicy * New(Configuration const & config, SimulationContext const & context,
                     BufferState * parent, const std::string & name);
   };
   
@@ -132,6 +133,7 @@ class BufferState : public Module {
         int _computeRTT(int vc, int last_rtt) const;
         int _computeLimit(int rtt) const;
         int _computeMaxSlots(int vc) const;
+        const SimulationContext * _context;
         int _vcs;
         std::vector<int> _occupancy_limit;
         std::vector<int> _round_trip_time;
@@ -141,7 +143,7 @@ class BufferState : public Module {
         int _aging_scale;
         int _offset;
     public:
-        FeedbackSharedBufferPolicy(Configuration const & config, 
+        FeedbackSharedBufferPolicy(Configuration const & config, const SimulationContext * context,
                     BufferState * parent, const std::string & name);
         virtual void setMinLatency(int min_latency);
         virtual void sendingFlit(Flit const * const f);
@@ -155,7 +157,7 @@ class BufferState : public Module {
     protected:
         std::vector<int> _pending_credits;
     public:
-        SimpleFeedbackSharedBufferPolicy(Configuration const & config, 
+        SimpleFeedbackSharedBufferPolicy(Configuration const & config, const SimulationContext * context,
                         BufferState * parent, const std::string & name);
         virtual void sendingFlit(Flit const * const f);
         virtual void freeSlotFor(int vc = 0);
@@ -182,7 +184,7 @@ class BufferState : public Module {
 
 public:
 
-  BufferState( const Configuration& config, 
+  BufferState( const Configuration& config, const SimulationContext& context, 
 	       Module *parent, const std::string& name );
 
   ~BufferState();
@@ -238,7 +240,7 @@ public:
   }
 #endif
 
-  void display( std::ostream & os = std::cout ) const;
+  void display( std::ostream & os ) const;
 };
 
 #endif // BUFFER_STATE_HPP

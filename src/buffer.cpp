@@ -36,7 +36,9 @@
 #include "globals.hpp"
 #include "buffer.hpp"
 
-Buffer::Buffer( const Configuration& config, int outputs, 
+Buffer::Buffer( const Configuration& config,
+    const SimulationContext& context,
+    const tRoutingParameters& par, int outputs, 
 		Module *parent, const std::string& name ) :
 Module( parent, name ), _occupancy(0)
 {
@@ -52,7 +54,7 @@ Module( parent, name ), _occupancy(0)
   for(int i = 0; i < num_vcs; ++i) {
     std::ostringstream vc_name;
     vc_name << "vc_" << i;
-    _vc[i] = new VC(config, outputs, this, vc_name.str( ) );
+    _vc[i] = new VC(config, context, par, outputs, this, vc_name.str( ) );
   }
 
 #ifdef TRACK_BUFFERS

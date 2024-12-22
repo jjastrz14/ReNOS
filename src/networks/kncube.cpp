@@ -41,8 +41,8 @@
  //#include "iq_router.hpp"
 
 
-KNCube::KNCube( const Configuration &config, const string & name, bool mesh ) :
-Network( config, name )
+KNCube::KNCube( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name, bool mesh ) :
+Network( config, context, par, name )
 {
   _mesh = mesh;
 
@@ -56,14 +56,14 @@ void KNCube::_ComputeSize( const Configuration &config )
   _k = config.getIntField( "k" );
   _n = config.getIntField( "n" );
 
-  gK = _k; gN = _n;
+  context->gK = _k; context->gN = _n;
   _size     = powi( _k, _n );
   _channels = 2*_n*_size;
 
   _nodes = _size;
 }
 
-void KNCube::RegisterRoutingFunctions() {
+void KNCube::RegisterRoutingFunctions(tRoutingParameters& par) {
 
 }
 void KNCube::_BuildNet( const Configuration &config )
@@ -93,7 +93,7 @@ void KNCube::_BuildNet( const Configuration &config )
       }
     }
 
-    _routers[node] = Router::NewRouter( config, this, router_name.str( ), 
+    _routers[node] = Router::NewRouter( config, *context, *par, this, router_name.str( ), 
 					node, 2*_n + 1, 2*_n + 1 );
     _timed_modules.push_back(_routers[node]);
 

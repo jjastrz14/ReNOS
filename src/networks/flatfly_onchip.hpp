@@ -55,34 +55,34 @@ class FlatFlyOnChip : public Network {
   int _InChannel( int stage, int addr, int port ) const;
 
 public:
-  FlatFlyOnChip( const Configuration &config, const string & name );
+  FlatFlyOnChip( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name );
 
   int GetN( ) const;
   int GetK( ) const;
 
-  static void RegisterRoutingFunctions() ;
+  static void RegisterRoutingFunctions(tRoutingParameters& par) ;
   double Capacity( ) const;
   void InsertRandomFaults( const Configuration &config );
 };
-void adaptive_xyyx_flatfly( const Router *r, const Flit *f, int in_channel, 
+void adaptive_xyyx_flatfly( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 		  OutSet *outputs, bool inject );
-void xyyx_flatfly( const Router *r, const Flit *f, int in_channel, 
+void xyyx_flatfly( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 		  OutSet *outputs, bool inject );
-void min_flatfly( const Router *r, const Flit *f, int in_channel, 
+void min_flatfly( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel, 
 		  OutSet *outputs, bool inject );
-void ugal_xyyx_flatfly_onchip( const Router *r, const Flit *f, int in_channel,
+void ugal_xyyx_flatfly_onchip( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel,
 			  OutSet *outputs, bool inject );
-void ugal_flatfly_onchip( const Router *r, const Flit *f, int in_channel,
+void ugal_flatfly_onchip( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel,
 			  OutSet *outputs, bool inject );
-void ugal_pni_flatfly_onchip( const Router *r, const Flit *f, int in_channel,
+void ugal_pni_flatfly_onchip( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel,
 			      OutSet *outputs, bool inject );
-void valiant_flatfly( const Router *r, const Flit *f, int in_channel,
+void valiant_flatfly( const SimulationContext* c, const Router *r, const tRoutingParameters* p, const Flit *f, int in_channel,
 			  OutSet *outputs, bool inject );
 
-int find_distance (int src, int dest);
-int find_ran_intm (int src, int dest);
-int flatfly_outport(int dest, int rID);
-int flatfly_transformation(int dest);
-int flatfly_outport_yx(int dest, int rID);
+int find_distance (const SimulationContext* c, int src, int dest);
+int find_ran_intm (const SimulationContext* c, int src, int dest);
+int flatfly_outport(const SimulationContext* c, int dest, int rID);
+int flatfly_transformation(const SimulationContext* c, int dest);
+int flatfly_outport_yx(const SimulationContext* c, int dest, int rID);
 
 #endif

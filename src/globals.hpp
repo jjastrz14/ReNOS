@@ -39,22 +39,62 @@
 #include <vector>
 #include <iostream>
 
+/* forward definition of traffic manager*/
+class TrafficManager;
+class tRoutingParameters;
+
+struct NullBuf
+    : std::streambuf {
+    char buffer[100];
+    int overflow(int c) override {
+        setp(buffer, buffer + sizeof buffer);
+        return c;
+    }
+    std::streamsize xsputn(const char*, std::streamsize n) override {
+        return n;
+    }
+};
+
+class NullStream : public std::ostream {
+public:
+    NullStream() : std::ostream(&m_sb) {}
+private:
+    NullBuf m_sb;
+};
+
+
+class SimulationContext {
+  public:
+    bool gPrintActivity;
+    int gK; // radix
+    int gN; // dimension
+    int gC; // concentration
+    int gNodes;
+    bool gTrace;
+    std::ostream *gWatchOut;
+    // also defined a file to write the output
+    std::ostream *gDumpFile;
+    TrafficManager *trafficManager;
+
+    NullStream nullStream;
+
+    SimulationContext()
+        : gPrintActivity(false), gK(0), gN(0), gC(0), gNodes(0), gTrace(false), gWatchOut(NULL), gDumpFile(NULL), trafficManager(nullptr) {}
+
+    void setTrafficManager(TrafficManager *tm) {
+        trafficManager = tm;
+    }
+};
+
+
 
 /* to be declared in main.cpp */
-int GetSimTime();
+int GetSimTime(const SimulationContext* context);
 
 class Stats;
-Stats * GetStats(const std::string & name);
+Stats * GetStats(const std::string & name, const SimulationContext* context);
 
-extern bool gPrintActivity;
 
-extern int gK;
-extern int gN;
-extern int gC;
 
-extern int gNodes;
-extern bool gTrace;
-
-extern std::ostream * gWatchOut;
 
 #endif

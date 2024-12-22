@@ -58,8 +58,8 @@
 //this is a hack, I can't easily get the routing talbe out of the network
 map<int, int>* global_routing_table;
 
-AnyNet::AnyNet( const Configuration &config, const string & name )
-  :  Network( config, name ){
+AnyNet::AnyNet( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name )
+  :  Network( config, context, par, name ){
 
   router_list.resize(2);
   _ComputeSize( config );
@@ -150,7 +150,7 @@ void AnyNet::_BuildNet( const Configuration &config ){
     ostringstream router_name;
     router_name << "router";
     router_name << "_" <<  node ;
-    _routers[node] = Router::NewRouter( config, this, router_name.str( ), 
+    _routers[node] = Router::NewRouter( config, *context, *par, this, router_name.str( ), 
     					node, radix, radix );
     _timed_modules.push_back(_routers[node]);
     //add injeciton ejection channels
@@ -207,11 +207,11 @@ void AnyNet::_BuildNet( const Configuration &config ){
 }
 
 
-void AnyNet::RegisterRoutingFunctions() {
-  gRoutingFunctionMap["min_anynet"] = &min_anynet;
+void AnyNet::RegisterRoutingFunctions(tRoutingParameters& par) {
+  par.gRoutingFunctionMap["min_anynet"] = &min_anynet;
 }
 
-void min_anynet( const Router *r, const Flit *f, int in_channel, 
+void min_anynet( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 		 OutSet *outputs, bool inject ){
   int out_port=-1;
   if(!inject){
@@ -220,19 +220,19 @@ void min_anynet( const Router *r, const Flit *f, int in_channel,
   }
  
 
-  int vcBegin = 0, vcEnd = gNumVCs-1;
+  int vcBegin = 0, vcEnd = p->gNumVCs-1;
   if ( f->type == commType::READ_REQ || f->type == commType::READ ) {
-    vcBegin = gReadReqBeginVC;
-    vcEnd   = gReadReqEndVC;
+    vcBegin = p->gReadReqBeginVC;
+    vcEnd   = p->gReadReqEndVC;
   } else if ( f->type == commType::WRITE_REQ || f->type == commType::WRITE ) {
-    vcBegin = gWriteReqBeginVC;
-    vcEnd   = gWriteReqEndVC;
+    vcBegin = p->gWriteReqBeginVC;
+    vcEnd   = p->gWriteReqEndVC;
   } else if ( f->type ==  commType::READ_ACK ) {
-    vcBegin = gReadReplyBeginVC;
-    vcEnd   = gReadReplyEndVC;
+    vcBegin = p->gReadReplyBeginVC;
+    vcEnd   = p->gReadReplyEndVC;
   } else if ( f->type ==  commType::WRITE_ACK ) {
-    vcBegin = gWriteReplyBeginVC;
-    vcEnd   = gWriteReplyEndVC;
+    vcBegin = p->gWriteReplyBeginVC;
+    vcEnd   = p->gWriteReplyEndVC;
   }
 
   outputs->clear( );

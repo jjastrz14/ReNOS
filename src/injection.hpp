@@ -164,12 +164,12 @@ class DependentInjectionProcess : public InjectionProcess {
       
       // if the set is empty, return the maximum time of the dependencies
       if (dep.size() == dep_time.size()){
-        std::cout << "\n"<<std::endl;
-        std::cout << "Dependencies satisfied for node: " << source << std::endl;
+        // std::cout << "\n"<<std::endl;
+        // std::cout << "Dependencies satisfied for node: " << source << std::endl;
         for(auto & t : dep_time){
-          std::cout << t << " ";
+          // std::cout << t << " ";
         }
-        std::cout << "\n"<<std::endl;
+        // std::cout << "\n"<<std::endl;
         return *max_element(dep_time.begin(), dep_time.end());
       }
       else{

@@ -61,12 +61,19 @@ enum commType {
 
 const int NUM_FLIT_TYPES = 7;
 
+class Flit;
+
+class FlitPool {
+    public:
+        std::stack<Flit *> all;
+        std::stack<Flit *> free;
+        FlitPool() {}
+        void freeAllFlits();
+};
+
 class Flit {
     private:
         Flit(); // private constructor
-        
-        static std::stack<Flit * > _all;
-        static std::stack<Flit * > _free;
         
     public:
         
@@ -133,20 +140,28 @@ class Flit {
 
         void reset();
 
-        static Flit * newFlit();
-        void freeFlit();
-        static void freeAllFlits();
+        static Flit * newFlit(FlitPool & pool);
+        void freeFlit(FlitPool & pool);
+        
         
 };
 
 std::ostream & operator<<(std::ostream & os, const Flit& flit);
 
+class Credit;
+
+class CreditPool {
+    public:
+        std::stack<Credit *> all;
+        std::stack<Credit *> free;
+
+        CreditPool() {}
+        void freeAllCredits();
+        int OutStanding();
+};
+
 
 class Credit {
-    private:
-        
-        static std::stack<Credit *> _all;
-        static std::stack<Credit *> _free;
         
     public:
 
@@ -159,10 +174,8 @@ class Credit {
              tail;
         
         void reset();
-        static Credit * newCredit();
-        void freeCredit();
-        static void freeAllCredits();
-        static int OutStanding();
+        static Credit * newCredit(CreditPool & pool);
+        void freeCredit(CreditPool & pool);
 };
 
 

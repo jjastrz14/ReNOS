@@ -32,6 +32,17 @@
 
 #include "packet.hpp"
 
+class PacketReplyInfo;
+
+class PacketReplyPool {
+  public:
+    std::stack<PacketReplyInfo*> all;
+    std::stack<PacketReplyInfo*> free;
+    
+    PacketReplyPool() {}
+    void freeAllReplies();
+};
+
 //register the requests to a node
 class PacketReplyInfo {
 
@@ -44,16 +55,13 @@ public:
   int rpid;
   commType type;
 
-  static PacketReplyInfo* newReply();
-  void freeReply();
-  static void freeAllReplies();
+  static PacketReplyInfo* newReply(PacketReplyPool &pool);
+  void freeReply(PacketReplyPool &pool);
+  
 
 private:
-
-  static std::stack<PacketReplyInfo*> _all;
-  static std::stack<PacketReplyInfo*> _free;
-
   PacketReplyInfo() {}
+public:
   ~PacketReplyInfo() {}
 };
 

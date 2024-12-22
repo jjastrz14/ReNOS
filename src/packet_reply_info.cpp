@@ -27,31 +27,28 @@
 
 #include "packet_reply_info.hpp"
 
-std::stack<PacketReplyInfo*> PacketReplyInfo::_all;
-std::stack<PacketReplyInfo*> PacketReplyInfo::_free;
-
-PacketReplyInfo * PacketReplyInfo::newReply()
+PacketReplyInfo * PacketReplyInfo::newReply(PacketReplyPool &pool)
 {
   PacketReplyInfo * pr;
-  if(_free.empty()) {
+  if(pool.free.empty()) {
     pr = new PacketReplyInfo();
-    _all.push(pr);
+    pool.all.push(pr);
   } else {
-    pr = _free.top();
-    _free.pop();
+    pr = pool.free.top();
+    pool.free.pop();
   }
   return pr;
 }
 
-void PacketReplyInfo::freeReply()
+void PacketReplyInfo::freeReply(PacketReplyPool &pool)
 {
-  _free.push(this);
+  pool.free.push(this);
 }
 
-void PacketReplyInfo::freeAllReplies()
+void PacketReplyPool::freeAllReplies()
 {
-  while(!_all.empty()) {
-    delete _all.top();
-    _all.pop();
+  while(!this->all.empty()) {
+    delete this->all.top();
+    this->all.pop();
   }
 }

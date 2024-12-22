@@ -54,21 +54,21 @@ class DragonFlyNew : public Network {
 
  
 public:
-  DragonFlyNew( const Configuration &config, const string & name );
+  DragonFlyNew( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name );
 
   int GetN( ) const;
   int GetK( ) const;
 
   double Capacity( ) const;
-  static void RegisterRoutingFunctions();
+  static void RegisterRoutingFunctions(tRoutingParameters& par);
   void InsertRandomFaults( const Configuration &config );
 
 };
 int dragonfly_port(int rID, int source, int dest);
 
-void ugal_dragonflynew( const Router *r, const Flit *f, int in_channel,
+void ugal_dragonflynew( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel,
 		       OutSet *outputs, bool inject );
-void min_dragonflynew( const Router *r, const Flit *f, int in_channel, 
+void min_dragonflynew( const SimulationContext* c, const Router *r, const tRoutingParameters * p, const Flit *f, int in_channel, 
 		       OutSet *outputs, bool inject );
 
 #endif 

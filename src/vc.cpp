@@ -42,9 +42,9 @@ const char * const VC::VCSTATE[] = {"idle",
 				    "vc_alloc",
 				    "active"};
 
-VC::VC( const Configuration& config, int outputs, 
+VC::VC( const Configuration& config, const SimulationContext& context, const tRoutingParameters& par, int outputs, 
 	Module *parent, const std::string& name )
-  : Module( parent, name ), 
+  : Module( parent, name ),_par(&par),_context(&context), 
     _state(idle), _out_port(-1), _out_vc(-1), _pri(0), _watched(false), 
     _expected_pid(-1), _last_id(-1), _last_pid(-1)
 {
@@ -93,7 +93,7 @@ void VC::addFlit( Flit *f )
     
   // update flit priority before adding to VC buffer
   if(_pri_type == local_age_based) {
-    f->priority = std::numeric_limits<int>::max() - GetSimTime();
+    f->priority = std::numeric_limits<int>::max() - GetSimTime(_context);
     assert(f->priority >= 0);
   } else if(_pri_type == hop_count_based) {
     f->priority = f->hops;
@@ -126,7 +126,7 @@ void VC::setState( eVCState s )
   Flit * f = frontFlit();
   
   if(f && f->watch)
-    *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+    *(_context->gWatchOut) << GetSimTime(_context) << " | " << getFullName() << " | "
 		<< "Changing state from " << VC::VCSTATE[_state]
 		<< " to " << VC::VCSTATE[s] << "." << std::endl;
   
@@ -166,7 +166,7 @@ void VC::updatePriority()
         if(bf->priority > df->priority) df = bf; 
       }
       if((df != f) && (df->watch || f->watch)) {
-	*gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+	*(_context->gWatchOut) << GetSimTime(_context) << " | " << getFullName() << " | "
 		    << "Flit " << df->id
 		    << " donates priority to flit " << f->id
 		    << "." << std::endl;
@@ -174,7 +174,7 @@ void VC::updatePriority()
       f = df;
     }
     if(f->watch)
-      *gWatchOut << GetSimTime() << " | " << getFullName() << " | "
+      *(_context->gWatchOut) << GetSimTime(_context) << " | " << getFullName() << " | "
 		  << "Flit " << f->id
 		  << " sets priority to " << f->priority
 		  << "." << std::endl;
@@ -183,9 +183,9 @@ void VC::updatePriority()
 }
 
 
-void VC::route( tRoutingFunction rf, const Router* router, const Flit* f, int in_channel )
+void VC::route( tRoutingFunction rf, const Router* router,  const Flit* f, int in_channel )
 {
-  rf( router, f, in_channel, _route_set, false );
+  rf(_context, router, _par, f, in_channel, _route_set, false );
   _out_port = -1;
   _out_vc = -1;
 }

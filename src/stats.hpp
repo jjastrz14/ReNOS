@@ -67,7 +67,7 @@ public:
 
   int GetBin(int b){ return _hist[b];}
 
-  void Display( ostream & os = cout ) const;
+  void Display( ostream & os) const;
 
   friend ostream & operator<<(ostream & os, const Stats & s);
 

@@ -28,6 +28,10 @@
 
 class Router : public TimedModule {
 
+    public:
+        const SimulationContext * context;
+        const tRoutingParameters * par;
+
     protected:
         static int const STALL_BUFFER_BUSY;
         static int const STALL_BUFFER_CONFLICT;
@@ -78,10 +82,14 @@ class Router : public TimedModule {
 
     public:
         Router( const Configuration& config,
+                const SimulationContext& context,
+                const tRoutingParameters & par,
                 Module *parent, const std::string & name, int id,
                 int inputs, int outputs);
 
         static Router *NewRouter( const Configuration& config,
+                const SimulationContext& context,
+                const tRoutingParameters & par,   
 			    Module *parent, const std::string & name, int id,
 			    int inputs, int outputs );
 

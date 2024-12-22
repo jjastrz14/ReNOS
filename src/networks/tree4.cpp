@@ -50,9 +50,10 @@
 
 #include "tree4.hpp"
 #include "misc_utils.hpp"
+#include "routefunc.hpp"
 
-Tree4::Tree4( const Configuration& config, const string & name )
-: Network ( config, name )
+Tree4::Tree4( const Configuration& config, SimulationContext& context, tRoutingParameters& par, const string & name )
+: Network ( config, context, par, name )
 {
   _ComputeSize( config );
   _Alloc( );
@@ -68,7 +69,7 @@ void Tree4::_ComputeSize( const Configuration& config )
   _n = config.getIntField( "n" );
   assert(_n == 3);
   
-  gK = _k; gN = _n;
+  context->gK = _k; context->gN = _n;
   
   _nodes = powi( _k, _n );
   
@@ -81,7 +82,7 @@ void Tree4::_ComputeSize( const Configuration& config )
     * ( 2 * _k );                // Connectivity of Middle Routers
 }
 
-void Tree4::RegisterRoutingFunctions(){
+void Tree4::RegisterRoutingFunctions(tRoutingParameters& par){
 
 }
 
@@ -105,7 +106,7 @@ void Tree4::_BuildNet( const Configuration& config )
       name.str("");
       name << "router_" << h << "_" << pos;
       id = h * powi( _k, _n-1 ) + pos;
-      Router * r = Router::NewRouter( config, this, name.str( ),
+      Router * r = Router::NewRouter( config, *context, *par, this, name.str( ),
 				      id, degree, degree );
       _Router( h, pos ) = r;
       _timed_modules.push_back(r);

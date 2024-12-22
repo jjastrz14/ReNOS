@@ -52,12 +52,13 @@ template <class T> // May be packet or flit
 class Channel : public TimedModule {
     protected:
         int _delay;
+        const SimulationContext * _context;
         T * _input_end;
         T * _output_end;
         std::queue<std::pair<int, T *>>_wait_queue;
 
     public:
-    Channel(Module * parent, const std::string & name) : TimedModule(parent, name), _delay(COMM_DELAY), _input_end(nullptr), _output_end(nullptr) {};
+    Channel(Module * parent, const SimulationContext& context, const std::string & name) : TimedModule(parent, name), _delay(COMM_DELAY), _input_end(nullptr), _output_end(nullptr), _context(&context) {};
     ~Channel() {};
 
     void setLatency (int cycles);
@@ -100,7 +101,7 @@ T * Channel<T>::receive() {
 template <class T>
 void Channel<T>::readInputs() {
     if (_input_end != nullptr) {
-        _wait_queue.push(std::make_pair(GetSimTime() + _delay - 1, _input_end));
+        _wait_queue.push(std::make_pair(GetSimTime(_context) + _delay - 1, _input_end));
         _input_end = nullptr;
     }
 };
@@ -115,11 +116,11 @@ void Channel<T>::writeOutputs() {
     }
     std::pair<int, T *> & data = _wait_queue.front();
     int const & time = data.first;
-    if (GetSimTime()< time) {
+    if (GetSimTime(_context)< time) {
         return;
     }
     
-    assert(GetSimTime() == time);
+    assert(GetSimTime(_context) == time);
     // flit is written after the delay to the receiving end
     _output_end = data.second;
     // assert that the packet is not null
@@ -148,7 +149,7 @@ class FlitChannel : public Channel<Flit> {
         int _idle;
         
     public:
-        FlitChannel(Module * parent, const std::string & name, const int & classes);
+        FlitChannel(Module * parent, const SimulationContext& context, const std::string & name, const int & classes);
 
         void setSrcRouter(Router const * router, int port);
         inline Router const * getSrcRouter() const { return _src_router; }
@@ -160,9 +161,6 @@ class FlitChannel : public Channel<Flit> {
         inline std::vector<int> const & getActivity() const { return _active; }
 
         void send(Flit * flit) override;
-
-        void sread(std::ostream &os);
-        void swrite(std::ostream &os);
 
 
 };

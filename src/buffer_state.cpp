@@ -55,7 +55,7 @@ void BufferState::BufferPolicy::sendingFlit(Flit const * const f) {
 void BufferState::BufferPolicy::freeSlotFor(int vc) {
 }
 
-BufferState::BufferPolicy * BufferState::BufferPolicy::New(Configuration const & config, BufferState * parent, const std::string & name)
+BufferState::BufferPolicy * BufferState::BufferPolicy::New(Configuration const & config, SimulationContext const & context , BufferState * parent, const std::string & name)
 {
   BufferPolicy * sp = NULL;
   std::string buffer_policy = config.getStrField("buffer_policy");
@@ -70,11 +70,11 @@ BufferState::BufferPolicy * BufferState::BufferPolicy::New(Configuration const &
   } else if(buffer_policy == "shifting") {
     sp = new ShiftingDynamicLimitedSharedBufferPolicy(config, parent, name);
   } else if(buffer_policy == "feedback") {
-    sp = new FeedbackSharedBufferPolicy(config, parent, name);
+    sp = new FeedbackSharedBufferPolicy(config, &context,  parent, name);
   } else if(buffer_policy == "simplefeedback") {
-    sp = new SimpleFeedbackSharedBufferPolicy(config, parent, name);
+    sp = new SimpleFeedbackSharedBufferPolicy(config, &context, parent, name);
   } else {
-    std::cout << "Unknown buffer policy: " << buffer_policy << std::endl;
+    *(context.gDumpFile) << "Unknown buffer policy: " << buffer_policy << std::endl;
   }
   return sp;
 }
@@ -359,11 +359,12 @@ void BufferState::ShiftingDynamicLimitedSharedBufferPolicy::sendingFlit(Flit con
   assert(_max_held_slots > 0);
 }
 
-BufferState::FeedbackSharedBufferPolicy::FeedbackSharedBufferPolicy(Configuration const & config, BufferState * parent, const std::string & name)
+BufferState::FeedbackSharedBufferPolicy::FeedbackSharedBufferPolicy(Configuration const & config, const SimulationContext * context,  BufferState * parent, const std::string & name)
   : SharedBufferPolicy(config, parent, name)
 {
   _aging_scale = config.getIntField("feedback_aging_scale");
   _offset = config.getIntField("feedback_offset");
+  _context = context;
   _vcs = config.getIntField("num_vcs");
 
   _occupancy_limit.resize(_vcs, _buf_size);
@@ -385,7 +386,7 @@ void BufferState::FeedbackSharedBufferPolicy::setMinLatency(int min_latency)
 void BufferState::FeedbackSharedBufferPolicy::sendingFlit(Flit const * const f)
 {
   SharedBufferPolicy::sendingFlit(f);
-  _flit_sent_time[f->vc].push(GetSimTime());
+  _flit_sent_time[f->vc].push(GetSimTime(_context));
 }
 
 int BufferState::FeedbackSharedBufferPolicy::_computeRTT(int vc, int last_rtt) const
@@ -410,7 +411,7 @@ int BufferState::FeedbackSharedBufferPolicy::_computeMaxSlots(int vc) const
 {
   int max_slots = _occupancy_limit[vc];
   if(!_flit_sent_time[vc].empty()) {
-    int min_rtt = GetSimTime() - _flit_sent_time[vc].front();
+    int min_rtt = GetSimTime(_context) - _flit_sent_time[vc].front();
     int rtt = _computeRTT(vc, min_rtt);
     int limit = _computeLimit(rtt);
     max_slots = std::min(max_slots, limit);
@@ -422,7 +423,7 @@ void BufferState::FeedbackSharedBufferPolicy::freeSlotFor(int vc)
 {
   SharedBufferPolicy::freeSlotFor(vc);
   assert(!_flit_sent_time[vc].empty());
-  int const last_rtt = GetSimTime() - _flit_sent_time[vc].front();
+  int const last_rtt = GetSimTime(_context) - _flit_sent_time[vc].front();
 #ifdef DEBUG_FEEDBACK
   cerr << FullName() << ": Probe for VC "
        << vc << " came back after "
@@ -485,8 +486,8 @@ int BufferState::FeedbackSharedBufferPolicy::limitFor(int vc) const
   return std::min(SharedBufferPolicy::limitFor(vc), _computeMaxSlots(vc));
 }
 
-BufferState::SimpleFeedbackSharedBufferPolicy::SimpleFeedbackSharedBufferPolicy(Configuration const & config, BufferState * parent, const std::string & name)
-  : FeedbackSharedBufferPolicy(config, parent, name)
+BufferState::SimpleFeedbackSharedBufferPolicy::SimpleFeedbackSharedBufferPolicy(Configuration const & config, const SimulationContext * context ,BufferState * parent, const std::string & name)
+  : FeedbackSharedBufferPolicy(config, context, parent, name)
 {
   _pending_credits.resize(_vcs, 0);
 }
@@ -532,7 +533,7 @@ void BufferState::SimpleFeedbackSharedBufferPolicy::freeSlotFor(int vc)
   SharedBufferPolicy::freeSlotFor(vc);
 }
 
-BufferState::BufferState( const Configuration& config, Module *parent, const std::string& name ) : 
+BufferState::BufferState( const Configuration& config, const SimulationContext& context, Module *parent, const std::string& name ) : 
   Module( parent, name ), _occupancy(0)
 {
   _vcs = config.getIntField( "num_vcs" );
@@ -541,7 +542,7 @@ BufferState::BufferState( const Configuration& config, Module *parent, const std
     _size = _vcs * config.getIntField("vc_buf_size");
   }
 
-  _buffer_policy = BufferPolicy::New(config, this, "policy");
+  _buffer_policy = BufferPolicy::New(config, context, this, "policy");
 
   _wait_for_tail_credit = config.getIntField( "wait_for_tail_credit" );
 

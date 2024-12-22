@@ -56,7 +56,7 @@ class Buffer : public Module {
 
     public:
 
-        Buffer( const Configuration& config, int outputs, Module *parent, const std::string& name );
+        Buffer( const Configuration& config, const SimulationContext& context, const tRoutingParameters& par, int outputs, Module *parent, const std::string& name );
         ~Buffer();
 
         void addFlit( int vc, Flit *f );
@@ -161,7 +161,7 @@ class Buffer : public Module {
         }
         #endif
 
-        void display( std::ostream & os = std::cout ) const;
+        void display( std::ostream & os ) const;
 
 
 };

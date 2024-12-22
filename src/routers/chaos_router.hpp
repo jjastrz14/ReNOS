@@ -106,6 +106,8 @@ class ChaosRouter : public Router {
 
 public:
   ChaosRouter( const Configuration& config,
+      const SimulationContext& context,
+      const tRoutingParameters& par,
 	    Module *parent, const string & name, int id,
 	    int inputs, int outputs );
 

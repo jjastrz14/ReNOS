@@ -44,6 +44,10 @@ typedef Channel<Credit> CreditChannel;
 
 
 class Network : public TimedModule {
+
+public:
+ tRoutingParameters * par;
+ SimulationContext * context;
 protected:
 
   int _size;
@@ -70,10 +74,10 @@ protected:
   void _Alloc( );
 
 public:
-  Network( const Configuration &config, const string & name );
+  Network( const Configuration &config, SimulationContext& context, tRoutingParameters& par,  const string & name );
   virtual ~Network( );
 
-  static Network *New( const Configuration &config, const string & name );
+  static Network *New( const Configuration &config, SimulationContext& context, tRoutingParameters& par, const string & name );
 
   virtual void WriteFlit( Flit *f, int source );
   virtual Flit *ReadFlit( int dest );
