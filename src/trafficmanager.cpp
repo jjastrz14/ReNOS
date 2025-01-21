@@ -1920,9 +1920,11 @@ int TrafficManager::RunUserDefined(){
 
         ++total_steps;
 
-        if(total_steps % 1000 == 0){
-            _DisplayRemaining();
-        }
+        // Print activity
+        
+        // if(total_steps % 1000 == 0){
+        //     _DisplayRemaining();
+        // }
 
         packets_left = false;
         for(int c = 0; c < _classes; ++c) {
