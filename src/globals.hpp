@@ -35,9 +35,11 @@
 #ifndef GLOBALS_HPP
 #define GLOBALS_HPP
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include <iostream>
+#include "logger.hpp"
 
 /* forward definition of traffic manager*/
 class TrafficManager;
@@ -74,18 +76,37 @@ class SimulationContext {
     std::ostream *gWatchOut;
     // also defined a file to write the output
     std::ostream *gDumpFile;
+    // a logger object to later plot the activity of the network
+    EventLogger * logger;
+
     TrafficManager *trafficManager;
 
     NullStream nullStream;
 
     SimulationContext()
-        : gPrintActivity(false), gK(0), gN(0), gC(0), gNodes(0), gTrace(false), gWatchOut(NULL), gDumpFile(NULL), trafficManager(nullptr) {}
+        : gPrintActivity(false), gK(0), gN(0), gC(0), gNodes(0), gTrace(false), gWatchOut(NULL), gDumpFile(NULL), logger(NULL), trafficManager(nullptr) {}
 
     void setTrafficManager(TrafficManager *tm) {
         trafficManager = tm;
-    }
-};
+    };
+    
+    void setLogger(EventLogger * log) {
+        logger = log;
+    };
 
+    void PrintEvents( std::ostream & os = std::cout ) const {
+        if (logger) {
+            logger->print_events(os);
+        }
+        else {
+        os << "------------------------------\n";
+        os << "PrintEvents() is not available\n";
+        os << "------------------------------";
+        }
+    };
+
+
+};
 
 
 /* to be declared in main.cpp */

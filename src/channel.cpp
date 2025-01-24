@@ -32,7 +32,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "channel.hpp"
-
+#include "router.hpp" // line to include the Router class definition
 
 FlitChannel::FlitChannel(Module * parent, const SimulationContext& context, const std::string & name, const int & classes) : Channel<Flit>(parent, context, name), _src_router(nullptr), _snk_router(nullptr), _src_port(-1), _snk_port(-1), _idle(0){_active.resize(classes,0);};
 
@@ -54,9 +54,38 @@ void FlitChannel::send(Flit * flit) {
         ++_idle;
     }
 
+    if (_context->logger && flit &&flit->head) {
+        if (_src_router == nullptr) {
+            _context->logger->add_tevent_history(flit->rpid, flit->type, _snk_router->GetID(), _snk_router->GetID(), GetSimTime(_context));
+        }
+        else if (_snk_router == nullptr) {
+            _context->logger->add_tevent_history(flit->rpid, flit->type, _src_router->GetID(), _src_router->GetID(), GetSimTime(_context));
+        }
+        else {
+            _context->logger->add_tevent_history(flit->rpid, flit->type, _src_router->GetID(), _snk_router->GetID(), GetSimTime(_context));
+        }
+    }
+
     Channel<Flit>::send(flit);
 }
 
+
+Flit * FlitChannel::receive() {
+
+    if (_context->logger && _output_end && _output_end->tail) {
+        if (_src_router == nullptr) {
+            _context->logger->modify_tevent_history(_output_end->rpid, _output_end->type, _snk_router->GetID(), _snk_router->GetID(), GetSimTime(_context));
+        }
+        else if (_snk_router == nullptr) {
+            _context->logger->modify_tevent_history(_output_end->rpid, _output_end->type, _src_router->GetID(), _src_router->GetID(), GetSimTime(_context));
+        }
+        else {
+            _context->logger->modify_tevent_history(_output_end->rpid, _output_end->type, _src_router->GetID(), _snk_router->GetID(), GetSimTime(_context));
+        }
+    }
+    
+    return Channel<Flit>::receive();
+}
 
 
     

@@ -34,6 +34,21 @@
 
 using namespace std;
 
+
+commType intToCommType(int i)
+{
+  switch(i) {
+    case 1: return READ_REQ;
+    case 2: return WRITE_REQ;
+    case 3: return READ_ACK; 
+    case 4: return WRITE_ACK; 
+    case 5: return READ;
+    case 6: return WRITE;
+    case 0: return ANY; 
+    default: throw std::invalid_argument("Invalid integer value for commType");
+  }
+};
+
 InjectionProcess::InjectionProcess(int nodes, double rate)
   : _nodes(nodes), _rate(rate), reached_end(false)
 {
@@ -132,7 +147,7 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   return result;
 }
 
-InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets,
+InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
         Configuration const * const config)
 {
   string process_name;
@@ -159,7 +174,7 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
     // std::cout << "Clock: " << clock << std::endl;
     // std::cout << "Traffic: " << traffic << std::endl;
     // std::cout << "Landed packets: " << landed_packets << std::endl;
-    result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort);
+    result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort, logger);
   } else {
     cout << "Invalid injection process: " << inject << endl;
     exit(-1);
@@ -228,8 +243,8 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort)
-  : InjectionProcess(nodes, 0.0), _traffic(traffic), _processed(landed_packets), _clock(clock)
+DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort, EventLogger * logger) 
+  : InjectionProcess(nodes, 0.0), _traffic(traffic), _processed(landed_packets), _clock(clock), _logger(logger)
 {
   assert(_traffic);
   assert(_processed);
@@ -250,7 +265,7 @@ DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, T
 
   _resorting = resort;
   _buildStaticWaitingQueues();
-  //reset();
+    
 }
 
 void DependentInjectionProcess::reset()
@@ -276,6 +291,10 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
   // and build the waiting queues for each source node
   _traffic->reset();
 
+  if (_logger) {
+    _logger->initialize_event_info(_traffic->getPacketsSize() + _traffic->getWorkloadsSize());
+  }
+
   // STUPID COMPILING OPTION, MAY DECIDE TO UPGRADE LATER
   if (_traffic->getNextPacket() == nullptr){
     _traffic->reached_end_packets = true;
@@ -294,6 +313,16 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     // make space for the packet
     _waiting_packets[source].emplace_back(p);
     _traffic->updateNextPacket();
+
+    // create a EventInfo object for each packet
+    if (_logger) {
+
+      commType ctype = intToCommType(p->type);
+
+      TrafficEventInfo * tei = new TrafficEventInfo(p->id, ctype, p->src, p->dst, p->size);
+      _logger->add_tevent_info(tei);
+    }
+      
   }
 
   while(_traffic->reached_end_workloads == false){
@@ -304,6 +333,12 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     int source = w->node;
     _waiting_workloads[source].emplace_back(w);
     _traffic->updateNextWorkload();
+
+    // create a EventInfo object for each workload
+    if (_logger) {
+      ComputationEventInfo * cei = new ComputationEventInfo(w->id, w->node, w->ct_required);
+      _logger->add_tevent_info(cei);
+    }
   }
 
   _traffic->reset();
@@ -327,6 +362,12 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
   }
 
   _waiting_packets[source].insert(it, p); // INSERT AFTER
+
+  if (_logger) {
+    commType ctype = intToCommType(p->type);
+    TrafficEventInfo * tei = new TrafficEventInfo(p->id, ctype, p->src, p->dst, p->size);
+    _logger->add_tevent_info(tei);
+  }
 
 }
 
@@ -382,10 +423,14 @@ bool DependentInjectionProcess::test(int source)
     return valid;
   } else if (_timer[source] == 0 && _decur[source] == true && !(_pending_workloads[source] == nullptr)){
     // the workload has been processed
+    if (_logger) {
+      _logger->register_event(EventType::END_COMPUTATION, _clock->time(), _pending_workloads[source]->id);
+    }
     _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
     _pending_workloads[source] = nullptr;
     _decur[source] = false;
     // std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
+    
   }
   
   // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
@@ -398,7 +443,9 @@ bool DependentInjectionProcess::test(int source)
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
       _timer[source] = w->ct_required - 1 ; // update the timer for the required time
       _decur[source] = true;
-      // std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
+      if (_logger) {
+        _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
+      }
     }
   }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
     assert(_pending_workloads[source] == nullptr);

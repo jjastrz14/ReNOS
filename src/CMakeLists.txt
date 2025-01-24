@@ -38,6 +38,7 @@ set(network_SRC
     injection.cpp
     batchtrafficmanager.cpp
     booksim_config.cpp
+    simulation_bindings.cpp
 )
 
 # Include files list
@@ -64,6 +65,8 @@ set(network_INC
     injection.hpp
     batchtrafficmanager.hpp
     booksim_config.hpp
+    logger.hpp
+    simulation_fun.hpp
 )
 
 PREPEND(network_SRC)

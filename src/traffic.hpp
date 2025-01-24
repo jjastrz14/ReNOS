@@ -49,6 +49,8 @@ public:
   const ComputingWorkload * cur_workload;
   virtual bool check_user_defined() {return false;};
 
+  virtual int getPacketsSize() const {return 0;};
+  virtual int getWorkloadsSize() const {return 0;};
   virtual void updateNextPacket(){};
   virtual const Packet * getNextPacket(){return NULL;};
   virtual void updateNextWorkload(){};
@@ -210,7 +212,9 @@ class UserDefinedTrafficPattern : public TrafficPattern {
     virtual void reset();
     virtual int dest(int source);
     virtual bool check_user_defined() {return true;};
-
+    
+    virtual int getPacketsSize() const {return _packets->size();};
+    virtual int getWorkloadsSize() const {return _workloads->size();};
     virtual void updateNextPacket(){if(++_next_in_packet_list == _packets->end()){reached_end_packets = true;}};
     virtual const Packet * getNextPacket(){return &(*_next_in_packet_list);};
     virtual void updateNextWorkload(){if(++_next_in_workload_list == _workloads->end()){reached_end_workloads = true;}};

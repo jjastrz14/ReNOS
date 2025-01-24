@@ -46,7 +46,7 @@ add_library(restart STATIC ${network_SRC} ${routers_SRC} ${arbiters_SRC} ${alloc
 target_include_directories(restart PUBLIC src src/routers src/arbiters src/allocators src/power src/networks ${nlohmann_json_INCLUDE_DIR}) 
 
 add_executable(run_restart src/main.cpp)
-pybind11_add_module(nocsim src/main.cpp)
+pybind11_add_module(nocsim src/simulation_bindings.cpp)
 target_link_libraries(run_restart PRIVATE restart pybind11::module Python::Python)
 target_link_libraries(nocsim PRIVATE restart pybind11::module Python::Python)
 

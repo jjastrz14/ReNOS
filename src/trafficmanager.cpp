@@ -297,10 +297,9 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     _injection_process.resize(_classes);
 
     
-
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 
@@ -451,6 +450,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         _stats_out = new ofstream(stats_out_file.c_str());
         config.WriteMatlabFile(_stats_out);
     }
+
   
 #ifdef TRACK_FLOWS
     _injected_flits.resize(_classes, vector<int>(_nodes, 0));
@@ -783,7 +783,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 *(_context->gDumpFile) << " Read/Write packet arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", type: " << f->type << ", size: "<< f->size << std::endl;
                 auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
                 assert(it == _landed_packets[f->cl][dest].end());
-                _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type ,_clock._time));
+                _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type ,_clock.time()));
 
                 // ================ MANAGING OF PROCESSING TIMES FOR PACKETS ================ 
                 int processing_time = 0;
@@ -795,7 +795,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                     processing_time = (f->type == commType::WRITE_REQ) ? _write_request_time[f->cl] : _read_request_time[f->cl];
                     
                 }
-                _to_process_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock._time + processing_time));
+                _to_process_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time() + processing_time));
                 // ==========================================================================
             } else if (f->type == commType::READ_ACK || f->type == commType::WRITE_ACK) {
                 // search in the reply source node (destination node of the replied packet) landed packets list
@@ -813,8 +813,12 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             }
         }
 
+        if (_context->logger) {
+            _context->logger->register_event(EventType::IN_TRAFFIC, _clock.time(), f->rpid, f->type);
+        }
+
         //code the source of request, look carefully, its tricky ;
-        if (f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
+        if (/*f->type == commType::READ_REQ || f->type == commType::WRITE_REQ ||*/ f->type == commType::READ || f->type == commType::WRITE) {
             PacketReplyInfo* rinfo = PacketReplyInfo::newReply(packet_reply_pool);
             rinfo->source = f->src;
             rinfo->src = f->src;
@@ -824,6 +828,13 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             rinfo->type = f->type;
             rinfo->rpid = f->rpid;
             _repliesPending[dest].push_back(rinfo);
+
+            if (_context->logger) {
+                commType rtype = (f->type == commType::READ) ? commType::READ_ACK : commType::WRITE_ACK;
+                EventInfo* info = new TrafficEventInfo(f->rpid, rtype, f->src, f->dst, f->size);
+                _context->logger->add_tevent_info(info);
+            }
+
         }else {
             if(f->type == commType::READ_ACK || f->type == commType::WRITE_ACK ){
                 _requestsOutstanding[dest]--;
@@ -843,9 +854,9 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             std::vector<int> dep(1, -1);
             int type = (f->type == commType::WRITE_REQ) ? commType::READ_REQ : commType::WRITE;
             if (f->type == commType::WRITE_REQ){
-                *(_context->gDumpFile) << "Generating READ_REQ packet at time: " << _clock._time << " from node: " << dest << " to node: " << f->src << std::endl;
+                *(_context->gDumpFile) << "Generating READ_REQ packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             } else {
-                *(_context->gDumpFile) << "Generating WRITE packet at time: " << _clock._time << " from node: " << dest << " to node: " << f->src << std::endl;
+                *(_context->gDumpFile) << "Generating WRITE packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             }
             Packet* p = new Packet{f->rpid, f->dst, f->src, size, dep, f->cl, type, time}; 
             // append this new packet to the list of packets that are waiting to be processed
@@ -897,7 +908,7 @@ int TrafficManager::_IssuePacket( int source, int cl )
             // But in general this processing time is used to model the time it takes the processor
             // to elaborate the packet, not the node of the NOC. So it should still decur even when
             // the replies are being processed by the source.
-            if(_repliesPending[source].front()->time <= _clock._time) {
+            if(_repliesPending[source].front()->time <= _clock.time()) {
                 result = -1;
             }
         } else {
@@ -1104,17 +1115,17 @@ void TrafficManager::_Inject(){
             if ( _partial_packets[input][c].empty() ) {
                 bool generated = false;
                 int i = 0;
-                while( !generated && ( _qtime[input][c] <= _clock._time ) ) {
+                while( !generated && ( _qtime[input][c] <= _clock.time() ) ) {
                     // the way the while loop is written (with _qtime[input][c] <= _time)
                     // actually prevents us from using decurPTime, since each time the method test
                     // exectution is skipped, it is actually then made-up for by the execution of the while loop
                     int stype = _IssuePacket( input, c );
-                    //*(_context->gDumpFile) << "Time: " << _clock._time << " | Node: " << input << " | Class: " << c << " | Stype: " << stype << std::endl;
+                    //*(_context->gDumpFile) << "Time: " << _clock.time() << " | Node: " << input << " | Class: " << c << " | Stype: " << stype << std::endl;
             
                     if ( stype != 0 ) { //generate a packet (only requests)
                         _GeneratePacket( input, stype, c, 
                                          _include_queuing==1 ? 
-                                         _qtime[input][c] : _clock._time );
+                                         _qtime[input][c] : _clock.time() );
                         generated = true;
                     }
                     // only advance time if this is not a reply packet
@@ -1158,6 +1169,7 @@ void TrafficManager::_Step( )
                                << " from VC " << f->vc
                                << "." << endl;
                 }
+                
                 flits[subnet].insert(make_pair(n, f));
                 if((_sim_state == warming_up) || (_sim_state == running)) {
                     ++_accepted_flits[f->cl][n];
@@ -1397,7 +1409,7 @@ void TrafficManager::_Step( )
                 dest_buf->sendingFlit(f);
 	
                 if(_pri_type == network_age_based) {
-                    f->priority = numeric_limits<int>::max() - _clock._time;
+                    f->priority = numeric_limits<int>::max() - _clock.time();
                     assert(f->priority >= 0);
                 }
 	
@@ -1406,11 +1418,17 @@ void TrafficManager::_Step( )
                                << "node" << n << " | "
                                << "Injecting flit " << f->id
                                << " into subnet " << subnet
-                               << " at time " << _clock._time
+                               << " at time " << _clock.time()
                                << " with priority " << f->priority
                                << "." << endl;
                 }
-                f->itime = _clock._time;
+                f->itime = _clock.time();
+
+                if (_context->logger && f->head) {
+                    _context->logger->register_event(EventType::OUT_TRAFFIC, _clock.time(), f->rpid, f->type);
+                }
+                
+
 
                 // Pass VC "back"
                 if(!_partial_packets[n][c].empty() && !f->tail) {
@@ -1441,7 +1459,7 @@ void TrafficManager::_Step( )
             if(iter != flits[subnet].end()) {
                 Flit * const f = iter->second;
 
-                f->atime = _clock._time;
+                f->atime = _clock.time();
                 if(f->watch) {
                     *(_context->gWatchOut) << getTime() << " | "
                                << "node" << n << " | "
@@ -1490,7 +1508,7 @@ void TrafficManager::_Step( )
                 }
 
                 // // if the packet has elapsed the processing time, then it can be moved to the _processed_packets list
-                // if(get<2>(*it) <= _clock._time) {
+                // if(get<2>(*it) <= _clock.time()) {
                 //     _processed_packets[c][n].insert(*it);
                 //     it = _to_process_packets[c][n].erase(it);
                 // } else {
@@ -1502,7 +1520,7 @@ void TrafficManager::_Step( )
 
     // print the elements of processed packets at each time step
     // *(_context->gDumpFile) << "==================== Processed Packets ====================" << std::endl;
-    // *(_context->gDumpFile) << "                      Time: " << _clock._time << std::endl;
+    // *(_context->gDumpFile) << "                      Time: " << _clock.time() << std::endl;
     // for(int c = 0; c < _classes; ++c) {
     //     for(int n = 0; n < _nodes; ++n) {
     //         for(auto it = _processed_packets[c][n].begin(); it != _processed_packets[c][n].end(); ++it) {
@@ -1514,10 +1532,10 @@ void TrafficManager::_Step( )
         
     // ==========================================
 
-    ++_clock._time;
-    assert(_clock._time);
+    _clock.tick( );
+    assert(_clock.time());
     if(_context->gTrace){
-        *(_context->gDumpFile)<<"TIME "<<_clock._time<<endl;
+        *(_context->gDumpFile)<<"TIME "<<_clock.time()<<endl;
     }
 
 }
@@ -1532,7 +1550,7 @@ bool TrafficManager::_PacketsOutstanding( ) const
                     if ( !_qdrained[s][c] ) {
 #ifdef DEBUG_DRAIN
                         *(_context->gDumpFile) << "waiting on queue " << s << " class " << c;
-                        *(_context->gDumpFile) << ", time = " << _clock._time << " qtime = " << _qtime[s][c] << endl;
+                        *(_context->gDumpFile) << ", time = " << _clock.time() << " qtime = " << _qtime[s][c] << endl;
 #endif
                         return true;
                     }
@@ -1586,7 +1604,7 @@ void TrafficManager::_ClearStats( )
 
     }
 
-    _reset_time = _clock._time;
+    _reset_time = _clock.time();
 }
 
 void TrafficManager::_ComputeStats( const vector<int> & stats, int *sum, int *min, int *max, int *min_pos, int *max_pos ) const 
@@ -1705,7 +1723,7 @@ bool TrafficManager::_SingleSim( )
 
             int total_accepted_count;
             _ComputeStats( _accepted_flits[c], &total_accepted_count );
-            double total_accepted_rate = (double)total_accepted_count / (double)(_clock._time - _reset_time);
+            double total_accepted_rate = (double)total_accepted_count / (double)(_clock.time() - _reset_time);
             double cur_accepted = total_accepted_rate / (double)_nodes;
 
             double latency_change = fabs((cur_latency - prev_latency[c]) / cur_latency);
@@ -1721,7 +1739,7 @@ bool TrafficManager::_SingleSim( )
             for(iter = _total_in_flight_flits[c].begin(); 
                 iter != _total_in_flight_flits[c].end(); 
                 iter++) {
-                latency += (double)(_clock._time - iter->second->ctime);
+                latency += (double)(_clock.time() - iter->second->ctime);
                 count++;
             }
       
@@ -1765,7 +1783,7 @@ bool TrafficManager::_SingleSim( )
             *(_context->gDumpFile) << "Average latency for class " << lat_exc_class << " exceeded " << _latency_thres[lat_exc_class] << " cycles. Aborting simulation." << endl;
             converged = 0; 
             _sim_state = draining;
-            _drain_time = _clock._time;
+            _drain_time = _clock.time();
             if(_stats_out) {
                 WriteStats(*_stats_out);
             }
@@ -1778,7 +1796,7 @@ bool TrafficManager::_SingleSim( )
                  ( total_phases + 1 >= _warmup_periods ) :
                  ( ( !_measure_latency || ( lat_chg_exc_class < 0 ) ) &&
                    ( acc_chg_exc_class < 0 ) ) ) {
-                *(_context->gDumpFile) << "Warmed up ..." <<  "Time used is " << _clock._time << " cycles" <<endl;
+                *(_context->gDumpFile) << "Warmed up ..." <<  "Time used is " << _clock.time() << " cycles" <<endl;
                 clear_last = true;
                 _sim_state = running;
             }
@@ -1797,7 +1815,7 @@ bool TrafficManager::_SingleSim( )
         ++converged;
     
         _sim_state  = draining;
-        _drain_time = _clock._time;
+        _drain_time = _clock.time();
 
         if ( _measure_latency ) {
             *(_context->gDumpFile) << "Draining all recorded packets ..." << endl;
@@ -1826,7 +1844,7 @@ bool TrafficManager::_SingleSim( )
                         for(iter = _total_in_flight_flits[c].begin(); 
                             iter != _total_in_flight_flits[c].end(); 
                             iter++) {
-                            acc_latency += (double)(_clock._time - iter->second->ctime);
+                            acc_latency += (double)(_clock.time() - iter->second->ctime);
                             acc_count++;
                         }
 	    
@@ -1962,7 +1980,7 @@ int TrafficManager::RunUserDefined(){
     // Extract the stats as in the _SingleSim method
     //for the love of god don't ever say "Time taken" anywhere else
     //the power script depend on it
-    *(_context->gDumpFile) << "Time elapsed is " << _clock._time << " cycles" <<endl; 
+    *(_context->gDumpFile) << "Time elapsed is " << _clock.time() << " cycles" <<endl; 
 
     if(_stats_out) {
         WriteStats(*_stats_out);
@@ -1976,7 +1994,7 @@ int TrafficManager::RunUserDefined(){
     // }
   
     // return the total latency of the simulation
-    return _clock._time;
+    return _clock.time();
 
 }
 
@@ -1987,7 +2005,7 @@ int TrafficManager::Run( )
 
     for ( int sim = 0; sim < _total_sims; ++sim ) {
 
-        _clock._time = 0;
+        _clock.reset( );
 
         //remove any pending request from the previous simulations
         _requestsOutstanding.assign(_nodes, 0);
@@ -2054,7 +2072,7 @@ int TrafficManager::Run( )
 
         //for the love of god don't ever say "Time taken" anywhere else
         //the power script depend on it
-        *(_context->gDumpFile) << "Time taken is " << _clock._time << " cycles" <<endl; 
+        *(_context->gDumpFile) << "Time taken is " << _clock.time() << " cycles" <<endl; 
 
         if(_stats_out) {
             WriteStats(*_stats_out);
@@ -2067,7 +2085,7 @@ int TrafficManager::Run( )
         DisplayOverallStatsCSV();
     }
   
-    return _clock._time;
+    return _clock.time();
 }
 
 void TrafficManager::_UpdateOverallStats() {
@@ -2376,7 +2394,7 @@ void TrafficManager::DisplayStats(ostream & os) const {
         double rate_avg;
         int sent_packets, sent_flits, accepted_packets, accepted_flits;
         int min_pos, max_pos;
-        double time_delta = (double)(_clock._time - _reset_time);
+        double time_delta = (double)(_clock.time() - _reset_time);
         _ComputeStats(_sent_packets[c], &count_sum, &count_min, &count_max, &min_pos, &max_pos);
         rate_sum = (double)count_sum / time_delta;
         rate_min = (double)count_min / time_delta;

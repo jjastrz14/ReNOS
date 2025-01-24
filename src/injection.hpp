@@ -31,8 +31,11 @@
 #include "config.hpp"
 #include "base.hpp"
 #include "traffic.hpp"
+#include "logger.hpp"
 
 using namespace std;
+
+commType intToCommType(int i);
 
 class InjectionProcess {
 protected:
@@ -48,7 +51,7 @@ public:
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets,
+  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
         Configuration const * const config = NULL);
 
 };
@@ -87,9 +90,9 @@ class DependentInjectionProcess : public InjectionProcess {
     vector<deque<const ComputingWorkload * >> _waiting_workloads;
     vector<const ComputingWorkload *> _pending_workloads; // used as buffer for workloads being processed
 
-    // a pointer to the clock of traffic manager
+    EventLogger * _logger;
     Clock * _clock;
-    // finally, a pointer to the traffic object, holding the packets to be injected
+    //a pointer to the traffic object, holding the packets to be injected
     TrafficPattern * _traffic;
     
     // a method to check if the dependencies have been satisfied for the packet/workload
@@ -210,7 +213,7 @@ class DependentInjectionProcess : public InjectionProcess {
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0);
+    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0,EventLogger * logger = nullptr);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);

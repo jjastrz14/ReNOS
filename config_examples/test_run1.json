@@ -12,7 +12,8 @@
             "watch_out" : "-",
             "watch_file" : "../config_examples/watch_list",
             "sim_power" : 1,
-            "tech_file" : "../src/power/techfile.json"
+            "tech_file" : "../src/power/techfile.json",
+            "logger": 1
         },
         
     "workload" : [

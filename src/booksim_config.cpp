@@ -302,6 +302,8 @@ BookSimConfig::BookSimConfig( )
 
   addStrField("stats_out", "");
 
+  addIntField("logger", 0);
+
 #ifdef TRACK_FLOWS
   addStrField("injected_flits_out", "");
   addStrField("received_flits_out", "");

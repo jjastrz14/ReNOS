@@ -161,6 +161,7 @@ class FlitChannel : public Channel<Flit> {
         inline std::vector<int> const & getActivity() const { return _active; }
 
         void send(Flit * flit) override;
+        Flit * receive() override;
 
 
 };

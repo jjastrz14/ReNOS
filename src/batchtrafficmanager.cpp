@@ -78,7 +78,7 @@ int BatchTrafficManager::_IssuePacket( int source, int cl )
     //check queue for waiting replies.
     //check to make sure it is on time yet
     if(!_repliesPending[source].empty()) {
-      if(_repliesPending[source].front()->time <= _clock._time) {
+      if(_repliesPending[source].front()->time <= _clock.time()) {
 	result = -1;
       }
     } else {
@@ -120,7 +120,7 @@ bool BatchTrafficManager::_SingleSim( )
     _last_id = -1;
     _last_pid = -1;
     _sim_state = running;
-    int start_time = _clock._time;
+    int start_time = _clock.time();
     bool batch_complete;
     *(_context->gDumpFile) << "Sending batch " << batch_index + 1 << " (" << _batch_size << " packets)..." << endl;
     do {
@@ -136,9 +136,9 @@ bool BatchTrafficManager::_SingleSim( )
 	*_sent_packets_out << _packet_seq_no << endl;
       }
     } while(!batch_complete);
-    *(_context->gDumpFile) << "Batch injected. Time used is " << _clock._time - start_time << " cycles." << endl;
+    *(_context->gDumpFile) << "Batch injected. Time used is " << _clock.time() - start_time << " cycles." << endl;
 
-    int sent_time = _clock._time;
+    int sent_time = _clock.time();
     *(_context->gDumpFile) << "Waiting for batch to complete..." << endl;
 
     int empty_steps = 0;
@@ -164,10 +164,10 @@ bool BatchTrafficManager::_SingleSim( )
       }
     }
     *(_context->gDumpFile) << endl;
-    *(_context->gDumpFile) << "Batch received. Time used is " << _clock._time - sent_time << " cycles." << endl
+    *(_context->gDumpFile) << "Batch received. Time used is " << _clock.time() - sent_time << " cycles." << endl
 	 << "Last packet was " << _last_pid << ", last flit was " << _last_id << "." << endl;
 
-    _batch_time->AddSample(_clock._time - start_time);
+    _batch_time->AddSample(_clock.time() - start_time);
 
     *(_context->gDumpFile) << _sim_state << endl;
 
@@ -177,7 +177,7 @@ bool BatchTrafficManager::_SingleSim( )
     ++batch_index;
   }
   _sim_state = draining;
-  _drain_time = _clock._time;
+  _drain_time = _clock.time();
   return 1;
 }
 

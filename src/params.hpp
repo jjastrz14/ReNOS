@@ -34,18 +34,45 @@
 
 #ifndef PARAMS_HPP
 #define PARAMS_HPP
-// Maximum number of buffer elements per virtual channel
-// Each buffer element can store a flit
-#define MAX_BUFF_SIZE 5
 
-// Flit dimension in bits
-#define FLIT_SIZE 10 //64
+#include <vector>
+#include <map>
 
-// Packet dimension in bits
-#define PACKET_SIZE 1024
-
-// Communication delay for the channels
 #define COMM_DELAY 1
 
+// the following file is used to host the parameters:
+// - reconfiguration rates for a certain technological node
+// - the MAC/FLOP rate for a certain type of workload
+// to be used for the UserDefinedTrafficPattern class
 
+enum class WorkloadType{
+    conv, // convolutional wokload
+    fc, // fully connected workload
+};
+
+
+class NVMParams {
+    public:
+        // constructor
+        NVMParams(double reconf_rate, double clock_freq) : reconf_rate(reconf_rate), clock_freq(clock_freq) {}
+        
+        // a method to get the byte per cycles
+        double get_byte_per_cycles() const {
+            return reconf_rate / clock_freq;
+        }
+    private:
+        // the reconfiguration rate for a certain technological node
+        double reconf_rate;
+        // the clock frequency used for the NVM
+        double clock_freq;
+};
+        
+
+class NPUParams {
+    private:
+        // the MAC/FLOP rate for a certain type of workload
+        std::map<WorkloadType, double> mac_flop_rate;
+        // clock frequency used for the NPU
+        double clock_freq;
+};
 #endif

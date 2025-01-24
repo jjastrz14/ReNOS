@@ -49,8 +49,6 @@ class Clock {
         inline int  time() const { return _time; }
         inline void reset() { _time = 0; }
 
-    friend class TrafficManager;
-    friend class BatchTrafficManager;
     private: //accessed by the friend class TrafficManager
         int _time;
 };

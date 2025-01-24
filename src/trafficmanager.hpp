@@ -34,6 +34,7 @@
 #include <cassert>
 
 #include "base.hpp"
+#include "logger.hpp"
 #include "config.hpp"
 #include "network.hpp"
 #include "packet.hpp"
