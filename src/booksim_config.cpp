@@ -304,6 +304,16 @@ BookSimConfig::BookSimConfig( )
 
   addIntField("logger", 0);
 
+  // ============ Reconfiguration ============
+
+  addIntField("reconfiguration", 0);
+  addIntField("max_pe_mem", 256000);
+  addIntField("reconf_rate", 0);
+  addIntField("reconf_cycles", 0);
+  addIntField("reconf_freq", 0);
+
+  // ============ Reconfiguration ============
+
 #ifdef TRACK_FLOWS
   addStrField("injected_flits_out", "");
   addStrField("received_flits_out", "");

@@ -147,7 +147,7 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   return result;
 }
 
-InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
+InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic, const NVMPar * nvm_par, vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
         Configuration const * const config)
 {
   string process_name;
@@ -174,7 +174,7 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
     // std::cout << "Clock: " << clock << std::endl;
     // std::cout << "Traffic: " << traffic << std::endl;
     // std::cout << "Landed packets: " << landed_packets << std::endl;
-    result = new DependentInjectionProcess(nodes, clock, traffic, landed_packets, resort, logger);
+    result = new DependentInjectionProcess(nodes, clock, traffic, nvm_par ,landed_packets, resort, logger);
   } else {
     cout << "Invalid injection process: " << inject << endl;
     exit(-1);
@@ -243,8 +243,8 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort, EventLogger * logger) 
-  : InjectionProcess(nodes, 0.0), _traffic(traffic), _processed(landed_packets), _clock(clock), _logger(logger)
+DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, TrafficPattern * traffic, const NVMPar * nvm_par, vector<set<tuple<int,int,int>>> * landed_packets, int resort, EventLogger * logger) 
+  : InjectionProcess(nodes, 0.0), _traffic(traffic), _nvm_par(nvm_par), _processed(landed_packets), _clock(clock), _logger(logger)
 {
   assert(_traffic);
   assert(_processed);
@@ -252,13 +252,14 @@ DependentInjectionProcess::DependentInjectionProcess(int nodes, Clock * clock, T
   _executed.resize(nodes);
   _timer.resize(nodes, 0);
   _decur.resize(nodes, false);
+  _reconf_active.resize(nodes, false);
+  _scheduled_reconf.resize(nodes);
   _waiting_packets.resize(nodes);
-  for (int i = 0; i < nodes; ++i){
-    _waiting_packets[i].resize(0);
-  }
-  //_pending_packets.resize(nodes);
   _waiting_workloads.resize(nodes);
+
   for (int i = 0; i < nodes; ++i){
+    _scheduled_reconf[i].resize(0);
+    _waiting_packets[i].resize(0);
     _waiting_workloads[i].resize(0);
   }
   _pending_workloads.resize(nodes);
@@ -284,12 +285,21 @@ void DependentInjectionProcess::_setProcessingTime(int node, int value)
 }
 
 
+
 // the method is to be called within the constructor
 void DependentInjectionProcess::_buildStaticWaitingQueues(){
 
   // starting from the first packet in the list, loop over the packets
   // and build the waiting queues for each source node
   _traffic->reset();
+
+  // ==================  RECONFIGURATION ==================
+  // buffers to compute the scheduled reconfigurations
+  std::vector<int> running_filled_iospace(_nodes, 0); // for input/output
+  std::vector<int> running_filled_wspace(_nodes, 0); // for weights
+  bool use_freed_up_space = false; // a flag to enable the use of the freed up space
+  // ==================  RECONFIGURATION ==================
+  
 
   if (_logger) {
     _logger->initialize_event_info(_traffic->getPacketsSize() + _traffic->getWorkloadsSize());
@@ -316,9 +326,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
 
     // create a EventInfo object for each packet
     if (_logger) {
-
       commType ctype = intToCommType(p->type);
-
       TrafficEventInfo * tei = new TrafficEventInfo(p->id, ctype, p->src, p->dst, p->size);
       _logger->add_tevent_info(tei);
     }
@@ -334,10 +342,69 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     _waiting_workloads[source].emplace_back(w);
     _traffic->updateNextWorkload();
 
+    // ==================  RECONFIGURATION ==================
+    if (_nvm_par){
+      // if the reconfiguration is enabled, for each workload appended to the waiting queues,
+      // we check that the space on that node does not exceed the maximum local space
+      int io_space = w->size - w->wsize; // input/output space needed by the workload
+      int w_space = w->wsize; // weight space needed by the workload
+      bool end = _traffic->reached_end_workloads;
+      
+
+      if (io_space > running_filled_iospace[source] + (use_freed_up_space? running_filled_wspace[source] : 0)){
+        // in this case, we take into account the possibility of freeing up space occupied by the weights after
+        // the corresponding task is performed:
+        // This means that, when considreting the space needed for input/output by each of the workloads coming after
+        // the first one, we must also consider the available space that will be freed up by the weights progressively
+        // after each task 
+        running_filled_iospace[source] = use_freed_up_space? io_space - running_filled_wspace[source] : io_space;
+      }
+      running_filled_wspace[source] += w_space;
+
+      if (running_filled_iospace[source] + running_filled_wspace[source] > _nvm_par->get_max_pe_memory()){
+
+        ReconfigBit rb;
+        // if the space needed by the weights exceeds the maximum local space, schedule a reconfiguration
+        // for after the workload before the current one
+        const ComputingWorkload * cut = _waiting_workloads[source].end()[-2];
+        rb.id = cut->id;
+        rb.wsize = 0;
+        _scheduled_reconf[source].push_back(rb);
+        if (_scheduled_reconf[source].size() > 1){
+          // fill the wsize field of the previous scheduled ReconfigBit
+          // with the estimation of the space that will be occupied by the weights
+          // of the next batch of workloads
+          auto prev = _scheduled_reconf[source].end() - 2;
+          (*prev).wsize = running_filled_wspace[source] - w_space;
+        }
+        running_filled_iospace[source] = io_space;
+        running_filled_wspace[source] = w_space; 
+      }
+      if (_traffic->reached_end_workloads && _scheduled_reconf[source].size() != 0){
+        // if the end of the workloads has been reached, fill the wsize field of the last scheduled ReconfigBit
+        // with the estimation of the space that will be occupied by the weights
+        // of the next batch of workloads
+        auto last = _scheduled_reconf[source].end() - 1;
+        std::cout << "Last scheduled reconfiguration for node " << source << " is for workload " << (*last).id << ", wsize" << (*last).wsize <<std::endl;
+        (*last).wsize = running_filled_wspace[source];
+      }
+    }
+    // ==================  RECONFIGURATION ==================
+
     // create a EventInfo object for each workload
     if (_logger) {
       ComputationEventInfo * cei = new ComputationEventInfo(w->id, w->node, w->ct_required);
       _logger->add_tevent_info(cei);
+    }
+  }
+
+  // print the scheduled reconfigurations
+  for (int i = 0; i < _nodes; ++i){
+    if (_scheduled_reconf[i].size() > 0){
+      std::cout << "Scheduled reconfigurations for node " << i << std::endl;
+      for (auto & rb : _scheduled_reconf[i]){
+        std::cout << "Workload id: " << rb.id << " wsize: " << rb.wsize << std::endl;
+      }
     }
   }
 
@@ -418,19 +485,47 @@ bool DependentInjectionProcess::test(int source)
 
   // if there are pending workloads, the timer should be decremented
   if (_timer[source] > 0){
-    assert(!(_pending_workloads[source] == nullptr));
+    assert(!(_pending_workloads[source] == nullptr) || _reconf_active[source]);
     --_timer[source];
     return valid;
   } else if (_timer[source] == 0 && _decur[source] == true && !(_pending_workloads[source] == nullptr)){
     // the workload has been processed
+    _decur[source] = false;
+    // std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
+    // logger
     if (_logger) {
       _logger->register_event(EventType::END_COMPUTATION, _clock->time(), _pending_workloads[source]->id);
     }
     _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
+
+    // ==================  RECONFIGURATION ==================
+    if (_nvm_par) {
+      
+      // check if the workload is scheduled for reconfiguration
+      auto match = std::find_if(_scheduled_reconf[source].begin(), _scheduled_reconf[source].end(), [this, source](const ReconfigBit & rb) {
+        return rb.id == _pending_workloads[source]->id;
+      });
+      if (match != _scheduled_reconf[source].end()){
+        // the workload is scheduled for reconfiguration
+        _scheduled_reconf[source].erase(match);
+        _reconf_active[source] = true;
+        // compute the reconfiguration time needed based on the dimensions of the weights to be
+        // pulled from the NVM
+        int reconf_time = _nvm_par->cycles_reconf(_pending_workloads[source]->wsize);
+        _timer[source] = reconf_time;
+        _decur[source] = true;
+        // std::cout << "Reconfiguration at node " << source << " has started at time " << _clock->time() << std::endl;
+        // std::cout << "Reconfiguration time: " << reconf_time << std::endl;
+      }
+    }
+
     _pending_workloads[source] = nullptr;
-    _decur[source] = false;
-    // std::cout << "Workload at node " << source << " has finished processing at time " << _clock->time() << std::endl;
+    // ==================  RECONFIGURATION ==================
     
+  } else if (_timer[source] == 0 && _decur[source] == true && _reconf_active[source]){
+    // the reconfiguration has been completed
+    _reconf_active[source] = false;
+    // std::cout << "Reconfiguration at node " << source << " has finished at time " << _clock->time() << std::endl;
   }
   
   // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
@@ -446,11 +541,11 @@ bool DependentInjectionProcess::test(int source)
       if (_logger) {
         _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
       }
+      // std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
     }
   }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
     assert(_pending_workloads[source] == nullptr);
     //assert(_pending_packets[source] == nullptr);
-    //std::cout << "HERE (Time: "<< _clock->time() <<") injected a packet" << std::endl;
     // the node is ideal and can process the packet request
     if(_timer[source]==0){
       

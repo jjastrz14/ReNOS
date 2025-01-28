@@ -30,6 +30,8 @@
         {
             "id" : 1,
             "node" : 1,
+            "size" : 8,
+            "weight_size" : 3,
             "type" : "COMP_OP",
             "ct_required" : 20,
             "dep" : [-1]

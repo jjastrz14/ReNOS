@@ -75,6 +75,10 @@ protected:
   vector<Network *> _net;
   vector<vector<Router *> > _router;
 
+  // ============ Reconfiguration ============
+  
+  const NVMPar *  _nvm_par;
+
   // ============ Traffic ============ 
 
   int    _classes;

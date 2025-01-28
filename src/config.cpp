@@ -117,10 +117,10 @@ void Configuration::addPacket(int src, int dst, int size, int id, const std::vec
     _packets.push_back(newPacket);
 }
 
-void Configuration::addComputingWorkload(int node, int id, const std::vector<int> & dep, int ct_required, const std::string & type){
+void Configuration::addComputingWorkload(int node, int id, int size, int wsize, const std::vector<int> & dep, int ct_required, const std::string & type){
      
     int tp = -1;
-    const ComputingWorkload newWorkload = ComputingWorkload{id, node, dep, ct_required, tp};
+    const ComputingWorkload newWorkload = ComputingWorkload{id, node, size, wsize, dep, ct_required, tp};
     _workloads.push_back(newWorkload);
 }
 
@@ -432,7 +432,8 @@ void Configuration::parseJSONFile(const std::string & filename){
                                 parseError("Invalid dependency in the workload document");
                             }
                         }
-                        addComputingWorkload(it->at("node"), it->at("id"), it->at("dep"), it->at("ct_required"), it->at("type"));
+                        assert (it->at("size") >= it->at("weight_size"));
+                        addComputingWorkload(it->at("node"), it->at("id"), it->at("size"), it->at("weight_size"), it->at("dep"), it->at("ct_required"), it->at("type"));
                     }
                     else{
                         parseError("Invalid workload element in the workload document");

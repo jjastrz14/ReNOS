@@ -51,6 +51,8 @@
         {
             "id" : 3,
             "node" : 0,
+            "size" : 4,
+            "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 40,
             "dep" : [0]
@@ -58,6 +60,8 @@
         {
             "id" : 4,
             "node" : 1,
+            "size" : 5,
+            "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 30,
             "dep" : [1]
@@ -65,6 +69,8 @@
         {
             "id" : 5,
             "node" : 2,
+            "size" : 6,
+            "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 20,
             "dep" : [2]
@@ -122,6 +128,8 @@
         {
             "id" : 11,
             "node" : 3,
+            "size" : 3,
+            "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 10,
             "dep" : [6,7,9]
@@ -129,6 +137,8 @@
         {
             "id" : 12,
             "node" : 4,
+            "size" : 3,
+            "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 10,
             "dep" : [8,10]
@@ -156,6 +166,8 @@
         {
             "id" : 15,
             "node" : 7,
+            "size" : 2,
+            "weight_size" : 1,
             "type" : "COMP_OP",
             "ct_required" : 10,
             "dep" : [13,14]

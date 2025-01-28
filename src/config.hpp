@@ -82,6 +82,8 @@ struct Packet {
 struct ComputingWorkload {
     int id; // computing workload id
     int node; // node id
+    int size; // the total size of parameters needed for the computation (input/output/weights)
+    int wsize; // the size of the weights (needed to compute the reconfigurations)
     std::vector<int> dep; // list of dependencies
     int ct_required; // computing time required
     int type; // type to identify the workload (always converted to -1)
@@ -120,7 +122,7 @@ class Configuration {
         void addFloatArray(std::string const & field, std::vector<double> const & value);
         void addStrArray(std::string const & field, std::vector<std::string> const & value);
         void addPacket(int src, int dst,int size, int id, const std::vector<int> & dep, const std::string & type, int cl, int pt_required);
-        void addComputingWorkload(int node, int id, const std::vector<int> & dep, int ct_required, const std::string & type);
+        void addComputingWorkload(int node, int id, int size, int wsize, const std::vector<int> & dep, int ct_required, const std::string & type);
 
         void assignArch(std::string const &field, std::string const &value);
         void assignArch(std::string const &field, int value); 

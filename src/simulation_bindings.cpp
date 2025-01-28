@@ -70,7 +70,7 @@ PYBIND11_MODULE(nocsim, m) {
         .def_property_readonly("type", &Event::get_type)
         .def_property_readonly("cycle", &Event::get_cycle)
         .def_property_readonly("additional_info", &Event::get_additional_info)
-        .def_property_readonly("ttype", &Event::get_ctype)
+        .def_property_readonly("ctype", &Event::get_ctype)
         .def_property_readonly("info", &Event::get_event_info)
         .def("print", [](const Event &event) {
             std::ostringstream oss;
@@ -79,6 +79,8 @@ PYBIND11_MODULE(nocsim, m) {
         });
 
     py::enum_<EventType>(m, "EventType")
+        .value("START_SIMULATION", EventType::START_SIMULATION)
+        .value("END_SIMULATION", EventType::END_SIMULATION)
         .value("IN_TRAFFIC", EventType::IN_TRAFFIC)
         .value("OUT_TRAFFIC", EventType::OUT_TRAFFIC)
         .value("START_RECONFIGURATION", EventType::START_RECONFIGURATION)

@@ -23,6 +23,8 @@
 
 
 enum class EventType {
+    START_SIMULATION,
+    END_SIMULATION,
     IN_TRAFFIC,
     OUT_TRAFFIC,
     START_RECONFIGURATION,
@@ -159,6 +161,12 @@ class Event {
             
             std::string type;
             switch (_type) {
+                case EventType::START_SIMULATION:
+                    type = "START_SIMULATION";
+                    break;
+                case EventType::END_SIMULATION:
+                    type = "END_SIMULATION";
+                    break;
                 case EventType::IN_TRAFFIC:
                     type = "IN_TRAFFIC";
                     break;
@@ -242,6 +250,13 @@ class EventLogger {
 
         void initialize_event_info(int size) {
             _event_info.resize(size);
+            _events.emplace_back(Event(_id_counter, EventType::START_SIMULATION, 0, -1));
+            _id_counter++;
+        }
+
+        void end_simulation(int clock_cycle) {
+            _events.emplace_back(Event(_id_counter, EventType::END_SIMULATION, clock_cycle , -1));
+            _id_counter++;
         }
 
         void add_tevent_info(EventInfo* info) {
@@ -269,7 +284,7 @@ class EventLogger {
         void register_event(EventType type, int start_cycle, int additional_info = -1, int ctype = -1) {
             _events.emplace_back(Event(_id_counter, type, start_cycle, additional_info, ctype));
             assert (_event_info[additional_info][ctype > -1 ? ctype : 0]);
-            _events.back().set_event_info(_event_info[additional_info][ctype]);
+            _events.back().set_event_info(_event_info[additional_info][ctype > -1 ? ctype : 0]);
             _id_counter++;
         }
 

@@ -51,7 +51,7 @@ public:
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic,  vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
+  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic, const NVMPar * nvm_par, vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
         Configuration const * const config = NULL);
 
 };
@@ -79,10 +79,25 @@ public:
 // ------ additions to support user defined injection processes ------
 
 class DependentInjectionProcess : public InjectionProcess {
+
+  struct ReconfigBit {
+    int id; // the id of the task after which to perform reconfiguration
+    int wsize; // the size of the weights to be pulled from the NVM
+  };
+
   private:
     int _resorting;
-    vector<int> _timer; // timer only used for workloads, packets processing time is managaed in trafficmanager
+    vector<int> _timer; // timer only used for workloads (eventually reconfiguration), packets processing time is managed in trafficmanager
     vector<bool> _decur;
+
+    // ==================  RECONFIGURATION ==================
+    vector<bool> _reconf_active; // a vector of booleans to check if the PE is being reconfigured: this is used only if the reconfiguration is enabled
+    vector<std::deque<ReconfigBit>> _scheduled_reconf; // a vector of queues to store the ids of the workload after which a reconfiguration will have to be performed
+                                               // OSS: a reconfiguration is simply simulated by incrementing the timer of the PE by the time required to
+                                               // perform the reconf. i.e. bring down the new weights from the top NVM to the PE. The unit of time ([flit size / cycle])
+                                                // is given by the NVMPar object
+    // ==================  RECONFIGURATION ==================
+
     vector<set<tuple<int, int, int>>> * _processed;
     vector<set<tuple<int, int, int>>> _executed;
     vector<deque<const Packet *>> _waiting_packets;
@@ -94,6 +109,7 @@ class DependentInjectionProcess : public InjectionProcess {
     Clock * _clock;
     //a pointer to the traffic object, holding the packets to be injected
     TrafficPattern * _traffic;
+    const NVMPar * _nvm_par;
     
     // a method to check if the dependencies have been satisfied for the packet/workload
     template <typename T>
@@ -213,7 +229,7 @@ class DependentInjectionProcess : public InjectionProcess {
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic , vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0,EventLogger * logger = nullptr);
+    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic ,const NVMPar * nvm_par ,  vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0,EventLogger * logger = nullptr);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);

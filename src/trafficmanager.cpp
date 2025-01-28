@@ -81,6 +81,28 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     // ============ Message priorities ============ 
 
+
+    // ============  Reconfiguration ============
+    int reconf = config.getIntField("reconfiguration");
+    int max_pe_mem = config.getIntField("max_pe_mem");
+    int reconf_rate = config.getIntField("reconf_rate");
+    int reconf_cycles = config.getIntField("reconf_cycles");
+    int reconf_freq = config.getIntField("reconf_freq");
+    if (reconf){
+        if (reconf_rate != 0 && reconf_freq != 0){
+            _nvm_par = new NVMPar(reconf_rate, reconf_freq);
+        }
+        else if (reconf_cycles != 0){
+
+            _nvm_par = new NVMPar(max_pe_mem, reconf_cycles);
+        }
+        else{
+            error("Reconfiguration requires both ['reconf_rate' and 'reconf_frequency'] or ['reconf_cycles'] to be set");
+        }
+    }else{
+        _nvm_par = nullptr;
+    }
+
     string priority = config.getStrField( "priority" );
 
     if ( priority == "class" ) {
@@ -299,7 +321,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], _nvm_par, &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 
@@ -659,6 +681,8 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
 TrafficManager::~TrafficManager( )
 {
+
+    delete _nvm_par;
 
     for ( int source = 0; source < _nodes; ++source ) {
         for ( int subnet = 0; subnet < _subnets; ++subnet ) {
@@ -1992,6 +2016,10 @@ int TrafficManager::RunUserDefined(){
     // if(_print_csv_results) {
     //     DisplayOverallStatsCSV();
     // }
+
+    if (_context->logger) {
+        _context->logger->end_simulation(_clock.time());
+    }
   
     // return the total latency of the simulation
     return _clock.time();
