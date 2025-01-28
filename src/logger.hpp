@@ -241,15 +241,14 @@ class EventLogger {
         EventLogger() : _events(), _id_counter(0) {}
 
         ~EventLogger() {
-            for (auto& info : _event_info) {
-                for (auto& elem : info) {
-                    delete elem.second;
+            for (auto& [id, info] : _event_info) {
+                for (auto& [ctype, event_info] : info) {
+                    delete event_info;
                 }
             }
         }
 
         void initialize_event_info(int size) {
-            _event_info.resize(size);
             _events.emplace_back(Event(_id_counter, EventType::START_SIMULATION, 0, -1));
             _id_counter++;
         }
@@ -270,7 +269,10 @@ class EventLogger {
         }
 
         void add_tevent_history(int id, commType ctype, int source, int sink, int start_cycle) {
-            assert(_event_info[id][ctype]);
+            if (!_event_info[id][ctype]) {
+                TrafficEventInfo* info = new TrafficEventInfo(id, ctype, source, sink, 0);
+                _event_info[id][ctype] = info;
+            }
             TrafficEventInfo* info = dynamic_cast<TrafficEventInfo*>(_event_info[id][ctype]);
             info->add_history(source, sink, start_cycle);
         }
@@ -312,7 +314,7 @@ class EventLogger {
     private:
         std::deque<Event> _events; // chrono timeline
         int _id_counter;
-        std::vector<std::map<int,EventInfo*>> _event_info; // to store the info of the events
+        std::map<int,std::map<int,EventInfo*>> _event_info; // to store the info of the events
 
 };
 
