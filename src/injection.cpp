@@ -528,12 +528,47 @@ bool DependentInjectionProcess::test(int source)
     // std::cout << "Reconfiguration at node " << source << " has finished at time " << _clock->time() << std::endl;
   }
   
-  // the new workload can be executed only if its dependecies (packets and workloads) have been satisfied
-  if(dep_time_w>=0 && source == w->node && !(w==nullptr)){
+  // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
+  if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
+    assert(_pending_workloads[source] == nullptr);
+    // the node is ideal and can process the packet request
+    if(_timer[source]==0){
+      
+      assert(!_decur[source]);
+      // the packet has already been cleared for the dependencies, 
+      // we can inject directly
+
+      // fist check if src and dst are equal
+      if (p->src == p->dst){
+        // in this case, there is no actual need to inject the packet
+        // on the NoC, but we have to mark it as processed
+
+        int type = p->type;
+        if (type == 1 || type == 2){
+          // if the packet is a write request or a read request, we change the type to the corresponding bulk message
+          type = type == 1 ? 5 : 6;
+        }        
+        _processed->at(source).insert(make_tuple(p->id, type, _clock->time()));
+        _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
+        // std::cout << " ---- HERE Packet with ID:" << p->id <<" and type " << p->type << " at node " << source << " has been processed at time " << _clock->time() << std::endl;
+
+      }
+      else{
+        _traffic->cur_packet = p;
+        _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
+        //no need to set p to pending packet, as it will be injected direcly
+        valid = true;
+        // std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
+      }
+      
+    }
+    else{
+      exit(-1);
+    }
+  }else if(dep_time_w>=0 && source == w->node && !(w==nullptr)){
     if(_timer[source] == 0){
       // the node is idle and can process the workload
       assert(_pending_workloads[source] == nullptr);
-      //if (_decur[source] == false) assert(_pending_packets[source] == nullptr);
       _pending_workloads[source] = w;
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
       _timer[source] = w->ct_required - 1 ; // update the timer for the required time
@@ -542,24 +577,6 @@ bool DependentInjectionProcess::test(int source)
         _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
       }
       // std::cout << "Workload at node " << source << " has started processing at time " << _clock->time() << std::endl;
-    }
-  }else if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
-    assert(_pending_workloads[source] == nullptr);
-    //assert(_pending_packets[source] == nullptr);
-    // the node is ideal and can process the packet request
-    if(_timer[source]==0){
-      
-      assert(!_decur[source]);
-      // the packet has already been cleared for the dependencies, 
-      // we can inject directly --> bypass _pending_packets
-      _traffic->cur_packet = p;
-      _waiting_packets[source].pop_front(); // remove the packet from the waiting queue
-      //no need to set p to pending packet, as it will be injected direcly
-      valid = true;
-      // std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
-    }
-    else{
-      exit(-1);
     }
   }
 
