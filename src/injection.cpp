@@ -571,7 +571,7 @@ bool DependentInjectionProcess::test(int source)
       assert(_pending_workloads[source] == nullptr);
       _pending_workloads[source] = w;
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
-      _timer[source] = w->ct_required - 1 ; // update the timer for the required time
+      _timer[source] = w->ct_required +1 ; // update the timer for the required time
       _decur[source] = true;
       if (_logger) {
         _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
