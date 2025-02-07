@@ -40,6 +40,7 @@
 #include <cassert>
 
 #define COMM_DELAY 1
+#define FLIT_SIZE 64 // in bytes
 #define MAX_LOCAL_MEMORY 56 // in flit size
 #define MAX_NVM_MEMORY 1024 // in flit size
 
@@ -53,12 +54,11 @@ enum class WorkloadType{
     FC, // fully connected workload
 };
 
-
 class NVMPar {
     public:
         // constructor
-        NVMPar(int max_pe_mem, double reconf_rate /* [flit size / s] */, double clock_freq /* [Hz] */) :_max_pe_memory(max_pe_mem), _reconf_rate(reconf_rate), _clock_freq(clock_freq) {} 
-        NVMPar(int max_pe_mem, double reconf_cycles /* [flit size / cycle] */) : _max_pe_memory(max_pe_mem), _reconf_cycles(reconf_cycles) {}
+        NVMPar( double reconf_rate /* [flit size / s] */, double clock_freq /* [Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) {} 
+        NVMPar( double reconf_cycles /* [flit size / cycle] */) : _reconf_cycles(reconf_cycles) {}
 
         int cycles_reconf(int size /* [ flit size ] */, int noc_freq = -1) const {
             assert(_reconf_rate > 0 || _reconf_cycles > 0);
@@ -80,9 +80,6 @@ class NVMPar {
             return _reconf_rate * scale;
         }
 
-        int get_max_pe_memory() const {
-            return _max_pe_memory;
-        }
         
     private:
         // the reconfiguration rate for a certain technological node [bytes/s]
@@ -90,7 +87,6 @@ class NVMPar {
         double _reconf_cycles;
         // the clock frequency used for the NVM [Hz]
         double _clock_freq;
-        int _max_pe_memory = MAX_LOCAL_MEMORY;
 };
         
 

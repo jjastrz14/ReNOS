@@ -69,6 +69,7 @@ struct Packet {
     int pt_required; // estimation for the required time to process the data, assuming all the operations/processing phases have already
     // been divided between PEs
     int priority; // priority of the packet
+    int data_dep = -1; // data dependency (USED TO PRESERVE DATA DEPENDENCIES while passing packets)
 };
 // ======================================================================
 
@@ -80,10 +81,21 @@ struct Packet {
 // will update a register of performed operations for the node, and a WRITE_REQ will be passed to the node of
 // the next PE that will need to further process the data
 struct ComputingWorkload {
+    
+    struct Bounds {
+        std::vector<int> lower_sp; // lower bounds for the spatial dimensions
+        std::vector<int> upper_sp; // upper bounds for the spatial dimensions
+        std::vector<int> channels; // number of channels
+    };
+
+
     int id; // computing workload id
     int node; // node id
+    int layer; // layer id
     int size; // the total size of parameters needed for the computation (input/output/weights)
     int wsize; // the size of the weights (needed to compute the reconfigurations)
+    Bounds input_range; // the range of the input space
+    Bounds output_range; // the range of the output space
     std::vector<int> dep; // list of dependencies
     int ct_required; // computing time required
     int type; // type to identify the workload (always converted to -1)
@@ -122,7 +134,7 @@ class Configuration {
         void addFloatArray(std::string const & field, std::vector<double> const & value);
         void addStrArray(std::string const & field, std::vector<std::string> const & value);
         void addPacket(int src, int dst,int size, int id, const std::vector<int> & dep, const std::string & type, int cl, int pt_required);
-        void addComputingWorkload(int node, int id, int size, int wsize, const std::vector<int> & dep, int ct_required, const std::string & type);
+        void addComputingWorkload(int node, int id, int layer, int size, int wsize, const ComputingWorkload::Bounds input_range, const ComputingWorkload::Bounds output_range, const std::vector<int> & dep, int ct_required, const std::string & type);
 
         void assignArch(std::string const &field, std::string const &value);
         void assignArch(std::string const &field, int value); 

@@ -54,6 +54,7 @@ public:
   bool record;
   int rpid;
   commType type;
+  int data_dep;
 
   static PacketReplyInfo* newReply(PacketReplyPool &pool);
   void freeReply(PacketReplyPool &pool);

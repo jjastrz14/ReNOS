@@ -1,4 +1,3 @@
-// $Id$
 
 /*
  Copyright (c) 2007-2015, Trustees of The Leland Stanford Junior University
@@ -47,11 +46,15 @@ public:
   virtual bool test(int source) = 0;
   virtual bool isIdle(int source) { return false; }
   virtual void addToWaitingQueue(int source, Packet * p){};
+  virtual int getAvailableMemory(int source){return 0;};
+  virtual void removeFromRequiringOutputDeallocation(int source, int id, int packet_id){}
+  virtual bool isRequiringOutputDeallocationEmpty(int source, int id){return false;}
+  virtual void deallocateMemory(int source, const ComputingWorkload * w){};
   virtual void reset();
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, Clock * clock, TrafficPattern * traffic, const NVMPar * nvm_par, vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
+  static InjectionProcess * NewUserDefined(string const & inject, int nodes, int local_memory_size, int reconfig_cycles, Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
         Configuration const * const config = NULL);
 
 };
@@ -81,9 +84,428 @@ public:
 class DependentInjectionProcess : public InjectionProcess {
 
   struct ReconfigBit {
+    /* 
+    The struct will be used to schedule an online reconfiguration (if reconfiguraitons are enabled).
+    The information needed for the reconfigurations are:
+    - the id of the task after which to perform the reconfiguration
+    - the size of the weights to be pulled from the NVM using TSVs: this information
+      is then used to estimate the number of reconfiguration cycles needed to actually perform 
+      the reconfiguration during the simulation
+      */
     int id; // the id of the task after which to perform reconfiguration
     int wsize; // the size of the weights to be pulled from the NVM
   };
+
+  class MemoryUnit {
+    // The following class will be used to model the memory unit of the PE.
+    // For initialization, the class will be given an integer, representing the size (in bytes/flit) of the local 
+    // memory unit available to the single NPU. It provides a very high level abstraction of the memory unit.
+    public:
+      MemoryUnit(int size, float threshold = 0.9) : _size(size), _available(size), _threshold(threshold) {}
+      int getSize() const { return _size; }
+      int getAvailable() const { return _available; }
+      int getAvailableForReconf() const { return _threshold * _size - (_size-_available); }
+      int getNumCurAllocatedWorkloads() const { return _cur_allocated_workload.size(); }
+      std::deque<const ComputingWorkload *> & getCurAllocatedWorkloads() { return _cur_allocated_workload; }
+
+      void reset() { 
+        _available = _size; 
+        for (auto & w : _cur_allocated_workload){
+          delete w;
+        }
+        _cur_allocated_workload.clear();
+      }
+
+      bool check_mem_avail(int size){
+        /*
+        the method will be used to check if the memory is available
+        if the memory is available, the method will return true
+        and the available memory will be decreased by the size of the memory to be allocated.
+        If the memory is not available, the method will return false
+        */
+        if (size <= _available){
+          return true;
+        }
+        return false;
+      }
+
+      bool is_allocated(const ComputingWorkload * w){
+        /*
+        the method is used to check if the workload is already allocated in the memory
+        */
+        auto it = std::find(_cur_allocated_workload.begin(), _cur_allocated_workload.end(), w);
+        return it != _cur_allocated_workload.end();
+      }
+
+      bool already_allocated(const ComputingWorkload * w, const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
+        /*
+        the method is used to check if the destionation already has loaded the corresponding
+        partition that will use the result of w, passed by p, as its input. In this case, the packet
+        can be sent direcly to the destination. Otherwise, the result of the computation will have to 
+        be stored in the memory of the destination 
+        */
+
+
+        // make sure that the packet is direcly dependent on the workload
+        auto it = std::find(p->dep.begin(), p->dep.end(), w->id);
+        assert(it != p->dep.end());
+
+        bool already_allocated = false;
+        for (auto & ow : _cur_allocated_workload){
+          // check if the workload is dependent on the current workload via the packet
+          auto it = std::find(ow->dep.begin(), ow->dep.end(), p->id);
+          if (it != ow->dep.end()){
+            already_allocated = true;
+            return already_allocated;
+          }
+        }
+
+        // we must also check that a depending workload is actually going to be scheduled
+        // on the PE at a certain point
+        for (auto & w : waiting_workloads){
+          auto it = std::find(w->dep.begin(), w->dep.end(), p->id);
+          if (it == w->dep.end()){
+            already_allocated = true;
+            return already_allocated;
+          }
+        }
+
+        return !already_allocated;
+      }
+
+
+      bool is_empty(){
+        return _cur_allocated_workload.empty();
+      }
+
+      bool allocate_(int size){
+        /*
+        the method will be used to allocate the memory not direcly assocated
+        with a workload but needed to store the results of the computations
+        coming from others NPUs. If the memory is available, the method will return true
+        and the available memory will be decreased by the size of the memory to be allocated.
+        If the memory is not available, the method will return false
+        */
+        assert(size <= _size && size <= _available);
+        if (size <= _available){
+          _available -= size;
+          return true;
+        }
+        return false;
+
+      }
+
+      bool deallocate_(int size){
+        /*
+        the method will be used to deallocate the memory not direcly assocated
+        with a workload but needed to store the results of the computations
+        coming from others NPUs. If the memory is found in the list of allocated memory,
+        the memory will be removed from the list and the available memory will be increased by the size of the memory. In this case,
+        the method will return true. If the memory is not found in the list of allocated memory, the method will return false
+        */
+        assert(size <= _size && _available + size <= _size);
+        if (_available + size <= _size){
+          _available += size;
+          return true;
+        }
+        return false;
+      }
+
+      bool allocate(const ComputingWorkload * w, bool optimize = false){
+        /*
+        the method will be used to allocate the memory for the workload
+        if the memory is available, the workload will be added to the list of allocated workloads
+        and the available memory will be decreased by the size of the workload. In this case,
+        the method will return true. If the memory is not available, the method will return false
+
+        Additionally, if the optimize flag is set to true, the method will try to optimize memory allocation
+        and this will be taken into account in the available memory calculation: specifically, if optimize is set to 
+        true, the method will snoop at the input_range of the workload and compare it with the input_range 
+        of the already allocated workloads. If some input overlapping is detected
+        the method will subtract the overlapping size from the size of memory that needs to be allocated
+         for the workload and then proceed with the allocation.
+        */
+
+
+        int size_to_allocate = w->size;
+        int scale = FLIT_SIZE;
+
+        if (optimize){
+          // check for overlapping in the input space
+          int in_overlap = 0;
+          for (auto & ow : _cur_allocated_workload){
+            if ( w->layer == ow->layer){
+              int in_overlap_with_workload = 0;
+              in_overlap_with_workload = in_overlap_in(w, ow);
+              assert(in_overlap_with_workload > 0);
+              in_overlap += in_overlap_with_workload;
+            }
+          }
+          // subtract the overlapping space from the size of the workload
+          size_to_allocate -= in_overlap;
+        }
+
+        if (size_to_allocate <= _available){
+          _cur_allocated_workload.push_back(w);
+          return allocate_(size_to_allocate);
+        }
+        return false;
+      };
+
+      bool deallocate_output(const ComputingWorkload * w){
+        /*
+        The method will be used to deallocate the memory for the output of the workload
+        if the workload is found in the list of allocated workloads, the workload will be removed
+        from the list and the available memory will be increased by the size of the workload. In this case,
+        the method will return true. If the workload is not found in the list of allocated workloads, the method will return false.
+        */
+
+        int output_size = 1;
+        for (int i = 0; i < w->output_range.lower_sp.size(); ++i){
+          output_size *= (w->output_range.upper_sp[i] - w->output_range.lower_sp[i]);
+        }
+        if (w->output_range.channels.size() > 0)
+          output_size *= (w->output_range.channels[1] - w->output_range.channels[0]);
+        int scale = FLIT_SIZE;
+        output_size /= scale;
+        output_size = output_size > 0 ? output_size : 1;
+
+        return deallocate_(output_size);
+      };
+
+      bool deallocate(const ComputingWorkload * w, bool keep_output, bool optimize = false){
+        /*
+        The method will be used to deallocate the memory for the workload
+        if the workload is found in the list of allocated workloads, the workload will be removed
+        from the list and the available memory will be increased by the size of the workload. In this case,
+        the method will return true. If the workload is not found in the list of allocated workloads, the method will return false.
+        */
+
+       // first, we check if any other waiting workload is 
+
+        int output_size = 1;
+        for (int i = 0; i < w->output_range.lower_sp.size(); ++i){
+          output_size *= (w->output_range.upper_sp[i] - w->output_range.lower_sp[i]);
+        }
+        if (w->output_range.channels.size() > 0)
+          output_size *= (w->output_range.channels[1] - w->output_range.channels[0]);
+        int scale = FLIT_SIZE;
+        output_size /= scale;
+        output_size = output_size > 0 ? output_size : 1;
+
+
+        int size_to_deallocate = w->size - output_size;
+        
+        auto it = std::find(_cur_allocated_workload.begin(), _cur_allocated_workload.end(), w);
+        if (it != _cur_allocated_workload.end()){
+        // Additionally, if the optimize flag is set to true, the method will optimize memory deallocation
+        // i.e. it simply avoid to deallocate the memory that is shared with other workloads. This is done by checking
+        // the input_range and output_range of the workload and compare it with the input_range and output_range
+        // of the already allocated workloads. If some input overlapping is detected, or if any output can be direcly added to some other output,
+        // the method will subtract the overlapping size from the size of memory that needs to be deallocated for the workload and then proceed with the deallocation.
+          if (optimize){
+            // check for overlapping in the input space
+            int in_overlap = 0;
+            for (auto & ow : _cur_allocated_workload){
+              if ( w->layer == ow->layer){
+                int in_overlap_with_workload = 0;
+                in_overlap_with_workload = in_overlap_in(w, ow);
+                assert(in_overlap_with_workload > 0);
+                in_overlap += in_overlap_with_workload;
+              }
+            }
+            size_to_deallocate -= in_overlap;
+          }
+
+          _cur_allocated_workload.erase(it);
+          bool output_deallocation = false;
+          if (!keep_output){
+            output_deallocation = deallocate_(output_size);
+          } else {
+            output_deallocation = true;
+          }
+          return deallocate_(size_to_deallocate) && output_deallocation;
+        }
+        return false;
+      };
+
+
+      static int in_overlap_in(const ComputingWorkload * w1,const ComputingWorkload * w2){
+        /*
+        The method will be used to check if two workloads (belonging to the same level) have overlapping in the input space.
+        The method will return the size of the overlapping space, if any, otherwise it will return 0.
+        */
+
+        int overlap = 0;
+        int scale = FLIT_SIZE;
+        // check for overlapping in the input space
+        for (int i = 0; i < w1->input_range.lower_sp.size(); ++i){
+          if (w2->input_range.lower_sp[i] <= w1->input_range.upper_sp[i] && w2->input_range.upper_sp[i] >= w1->input_range.lower_sp[i]){
+            if (overlap == 0){
+              int contribution = min(w2->input_range.upper_sp[i], w1->input_range.upper_sp[i]) - max(w2->input_range.lower_sp[i], w1->input_range.lower_sp[i]);
+              overlap += contribution;
+            } else {
+              int contribution = min(w2->input_range.upper_sp[i], w1->input_range.upper_sp[i]) - max(w2->input_range.lower_sp[i], w1->input_range.lower_sp[i]);
+              overlap *= contribution;
+            }
+          }
+        }
+        // multiply by the number of channels
+        if (w1->input_range.channels.size() > 0 && w2->input_range.channels.size() > 0){
+          overlap *= (w1->input_range.channels[1]- w1->input_range.channels[0]);
+        }
+        overlap /= scale;
+        return overlap;
+      };
+
+      static int out_overlap_in(const ComputingWorkload * w1,const ComputingWorkload * w2){
+        /*
+        The method will be used to check if two workloads (belonging to adjacent levels) have overlapping between the output of the first
+        and the input of the second. The method will return the size of the overlapping space, if any, otherwise it will return 0.
+        */
+
+        int overlap = 0;
+        int scale = FLIT_SIZE;
+
+        for (int i = 0; i < w1->output_range.lower_sp.size(); ++i){
+          if (w2->input_range.lower_sp[i] <= w1->output_range.upper_sp[i] && w2->input_range.upper_sp[i] >= w1->output_range.lower_sp[i]){
+            if (overlap == 0){
+              int contribution = min(w2->input_range.upper_sp[i], w1->output_range.upper_sp[i]) - max(w2->input_range.lower_sp[i], w1->output_range.lower_sp[i]);
+              overlap += contribution;
+            } else {
+              int contribution = min(w2->input_range.upper_sp[i], w1->output_range.upper_sp[i]) - max(w2->input_range.lower_sp[i], w1->output_range.lower_sp[i]);
+              overlap *= contribution;
+            }
+          }
+        }
+        // multiply by the number of channels
+        if (w1->output_range.channels.size() > 0 && w2->input_range.channels.size() > 0){
+          overlap *= min(w1->output_range.channels[1], w2->input_range.channels[1]) - max(w1->output_range.channels[0], w2->input_range.channels[0]);
+        }
+
+        overlap /= scale;
+        return overlap;
+        
+      };
+      
+
+    private:
+      int _size;
+      int _available; // total memory available
+      float _threshold; // to avoid deadlocks
+      // int _available_for_reconf; // the memory available for reconfigurations
+      std::deque<const ComputingWorkload *> _cur_allocated_workload;
+  };
+
+
+
+  class MemorySet {
+    /*
+    The class will be used to manage the set of local memories for the PEs, acting as a central manager for 
+    the memory units. This is required for correct the allocation of memory across different nodes as result messages
+    are exchanged: if a node has completed the processing of a workload and has to send the results to another node, we will 
+    first need to check if the memory of the destination processor is enough to store the results. If it is not, sending of
+    results packets will have to be postponed untill the memory of the destination processor is freed up. Untill then, the space
+    allotted to the finished partition in the source processor will have to be preserved.
+    */
+
+   public: 
+    MemorySet(int nodes, int size) : _nodes(nodes), _size(size) {
+      _pointed_workload_in_queue.resize(_nodes, nullptr);
+      for (int i = 0; i < _nodes; ++i){
+        _memory_units.push_back(MemoryUnit(size));
+      }
+    }
+
+    void init(vector<deque<const ComputingWorkload * >> & waiting_workloads){
+      for (int i = 0; i < _nodes; ++i){
+        _pointed_workload_in_queue[i] = waiting_workloads[i].size() > 0 ? waiting_workloads[i][0] : nullptr;
+      }
+    }
+
+    DependentInjectionProcess::MemoryUnit & getMemoryUnit(int node){
+      return _memory_units[node];
+    }
+
+    bool is_allocated(int node, const ComputingWorkload * w){
+      return _memory_units[node].is_allocated(w);
+    }
+
+    bool already_allocated(const ComputingWorkload * w, const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
+      return _memory_units[p->dst].already_allocated(w, p, waiting_workloads);
+    }
+
+    const ComputingWorkload *  get_current_workload(int node){
+      return _pointed_workload_in_queue[node];
+    }
+
+    void set_current_workload(int node, const ComputingWorkload * w){
+      _pointed_workload_in_queue[node] = w;
+    }
+
+    int getSize() const { return _size; }
+
+    int getAvailable(int source){
+      return _memory_units[source].getAvailable();
+    }
+
+    bool all_empty(){
+      for (int i = 0; i < _nodes; ++i){
+        if (!_memory_units[i].is_empty()){
+          return false;
+        }
+      }
+      return true;
+    }
+
+    bool is_empty(int node){
+      return _memory_units[node].is_empty();
+    }
+
+    void all_reset(){
+      for (int i = 0; i < _nodes; ++i){
+        _memory_units[i].reset();
+      }
+    }
+
+    void reset(int node){
+      _memory_units[node].reset();
+    }
+
+    bool check_mem_avail(int node, int size){
+      return _memory_units[node].check_mem_avail(size);
+    }
+
+    bool allocate_(int node, int size){
+      return _memory_units[node].allocate_(size);
+    }
+
+    bool deallocate_(int node, int size){
+      return _memory_units[node].deallocate_(size);
+    }
+
+    bool allocate(int node, const ComputingWorkload * w, bool optimize = false){
+      return _memory_units[node].allocate(w, optimize);
+    }
+
+    bool deallocate_output(int node, const ComputingWorkload * w){
+      return _memory_units[node].deallocate_output(w);
+    }
+
+    bool deallocate(int node, const ComputingWorkload * w, bool keep_output , bool optimize = false){
+      return _memory_units[node].deallocate(w, keep_output, optimize);
+    }
+
+
+    private:
+      int _nodes;
+      int _size;
+      std::vector<const ComputingWorkload *> _pointed_workload_in_queue; // a pointer to the next workload in the queue to be included in the next reconfiguration
+      std::vector<MemoryUnit> _memory_units;
+
+  };
+
+
 
   private:
     int _resorting;
@@ -91,17 +513,19 @@ class DependentInjectionProcess : public InjectionProcess {
     vector<bool> _decur;
 
     // ==================  RECONFIGURATION ==================
-    vector<bool> _reconf_active; // a vector of booleans to check if the PE is being reconfigured: this is used only if the reconfiguration is enabled
-    vector<std::deque<ReconfigBit>> _scheduled_reconf; // a vector of queues to store the ids of the workload after which a reconfiguration will have to be performed
-                                               // OSS: a reconfiguration is simply simulated by incrementing the timer of the PE by the time required to
-                                               // perform the reconf. i.e. bring down the new weights from the top NVM to the PE. The unit of time ([flit size / cycle])
-                                                // is given by the NVMPar object
+    bool _enable_reconf;
+    std::vector<int> _reconf_deadlock_timer;
+    std::vector<bool> _reconf_active;
+    std::vector<std::map<int,set<int>>> _requiring_ouput_deallocation; // a datastructure to manage the deallocation of the output space for the workloads
+    DependentInjectionProcess::MemorySet _memory_set;
+    const NVMPar * _nvm;
     // ==================  RECONFIGURATION ==================
 
     vector<set<tuple<int, int, int>>> * _processed;
     vector<set<tuple<int, int, int>>> _executed;
     vector<deque<const Packet *>> _waiting_packets;
-    //vector<const Packet *> _pending_packets; // used as buffer for packets being processed
+    vector<deque<std::tuple<const ComputingWorkload *, const Packet *>>> _pending_packets; // used as buffer to store packets whose dependecies have been cleared, but which cannot
+    // be injected directly because of memory constraints on receiving node 
     vector<deque<const ComputingWorkload * >> _waiting_workloads;
     vector<const ComputingWorkload *> _pending_workloads; // used as buffer for workloads being processed
 
@@ -109,7 +533,6 @@ class DependentInjectionProcess : public InjectionProcess {
     Clock * _clock;
     //a pointer to the traffic object, holding the packets to be injected
     TrafficPattern * _traffic;
-    const NVMPar * _nvm_par;
     
     // a method to check if the dependencies have been satisfied for the packet/workload
     template <typename T>
@@ -223,18 +646,40 @@ class DependentInjectionProcess : public InjectionProcess {
         return resorted;
     }
 
+    //================ RECONFIGURATION =================
+    // a method to manage the reconfiguration of the PEs
+    int _reconfigure(int source);
+    // a method to check if the a reconfiguration should be performed
+    bool _checkReconfNeed(int source);
+    // a method to manage end of computation and integration with reconfiguration
+    bool _manageReconfPacketInjection(const Packet * p);
+    //================ RECONFIGURATION =================
+
+    bool _managePacketInjection(const Packet * p);
     // a method to build the waiting queues
     void _buildStaticWaitingQueues();
     // a method to set the clock to a specific value
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes,Clock * clock, TrafficPattern * traffic ,const NVMPar * nvm_par ,  vector<set<tuple<int,int,int>>> * landed_packets, int resort = 0,EventLogger * logger = nullptr);
+    DependentInjectionProcess(int nodes, int local_memory_size , int reconfig_cycles , Clock * clock, TrafficPattern * traffic ,  vector<set<tuple<int,int,int>>> * landed_packets , int resort = 0,EventLogger * logger = nullptr);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);
+    // a method to remove a packet id from _requiring_ouput_deallocation
+    void removeFromRequiringOutputDeallocation(int source, int id, int packet_id){
+      _requiring_ouput_deallocation[source].at(id).erase(packet_id);
+    }
+    // a method to check if the set of packets corresponding to a workload in _requiring_ouput_deallocation is empty
+    bool isRequiringOutputDeallocationEmpty(int source, int id){
+      return _requiring_ouput_deallocation[source].at(id).empty();
+    }
     // a method to test if the landed packets can be processed
     virtual bool isIdle(int source){return _timer[source] == 0;};
+    // a method to get the total available memory
+    virtual int getAvailableMemory(int source){return _memory_set.getAvailable(source);};
+    // a method to deallocate memory
+    virtual void deallocateMemory(int source, const ComputingWorkload * w){_memory_set.deallocate_output(source, w);};
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     

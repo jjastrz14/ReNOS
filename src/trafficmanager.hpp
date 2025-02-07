@@ -77,7 +77,8 @@ protected:
 
   // ============ Reconfiguration ============
   
-  const NVMPar *  _nvm_par;
+  int _local_mem_size;
+  int _reconfig_cycles;
 
   // ============ Traffic ============ 
 
@@ -136,7 +137,7 @@ protected:
 
   // =================== Additions for User-Defined Traffic ====================
   bool _user_defined_traffic;
-  vector<vector<set<tuple<int,int,int>>>> _landed_packets;
+  vector<vector<set<tuple<int,int, int,int>>>> _landed_packets;
   vector<vector<int>> _useful_pocessing_spots;
   vector<vector<set<tuple<int,int,int>>>> _to_process_packets;
   vector<vector<set<tuple<int,int,int>>>> _processed_packets;

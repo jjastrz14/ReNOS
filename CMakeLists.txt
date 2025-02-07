@@ -42,6 +42,8 @@ include_directories(${Python_INCLUDE_DIRS} ${pybind11_INCLUDE_DIRS})
 
 # find the header file for json parsing
 find_path(nlohmann_json_INCLUDE_DIR nlohmann/json.hpp PATHS ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# print the path
+message(STATUS "nlohmann_json_INCLUDE_DIR: ${nlohmann_json_INCLUDE_DIR}")
 add_library(restart STATIC ${network_SRC} ${routers_SRC} ${arbiters_SRC} ${allocators_SRC} ${power_SRC} ${topologies_SRC}   ${network_INC} ${routers_INC} ${arbiters_INC} ${allocators_INC} ${power_INC} ${topologies_INC})
 target_include_directories(restart PUBLIC src src/routers src/arbiters src/allocators src/power src/networks ${nlohmann_json_INCLUDE_DIR}) 
 

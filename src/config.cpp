@@ -113,14 +113,14 @@ void Configuration::addPacket(int src, int dst, int size, int id, const std::vec
         parseError("Invalid packet type");
         exit(-1);
     }
-    const Packet newPacket = Packet{ id, src, dst, size, dep, cl, tp, pt_required, 0};
+    const Packet newPacket = Packet{ id, src, dst, size, dep, cl, tp, pt_required, 0, dep.empty() ? -1 : dep[0]};
     _packets.push_back(newPacket);
 }
 
-void Configuration::addComputingWorkload(int node, int id, int size, int wsize, const std::vector<int> & dep, int ct_required, const std::string & type){
+void Configuration::addComputingWorkload(int node, int id, int layer, int size, int wsize, const ComputingWorkload::Bounds input_range, const ComputingWorkload::Bounds output_range, const std::vector<int> & dep, int ct_required, const std::string & type){
      
     int tp = -1;
-    const ComputingWorkload newWorkload = ComputingWorkload{id, node, size, wsize, dep, ct_required, tp};
+    const ComputingWorkload newWorkload = ComputingWorkload{id, node, layer, size, wsize, input_range, output_range ,dep, ct_required, tp};
     _workloads.push_back(newWorkload);
 }
 
@@ -433,7 +433,41 @@ void Configuration::parseJSONFile(const std::string & filename){
                             }
                         }
                         assert (it->at("size") >= it->at("weight_size"));
-                        addComputingWorkload(it->at("node"), it->at("id"), it->at("size"), it->at("weight_size"), it->at("dep"), it->at("ct_required"), it->at("type"));
+
+                        int layer_id = -1;
+                        if (it->find("layer_id") != it->end()){
+                            layer_id = it->at("layer_id");
+                        }
+                        
+                        // if the workload also has a input_range and output_range field, fill them in:
+                        // the structure of those fields it the following:
+                        // input_range: { "spatial_min" : [x, y], "spatial_max" : [x, y], "ch_bounds" : [min, max] } 
+                        // OSS: in geeral spatial_min and spatial_max have the same dimensions (either 2 or 1), while ch_bounds is a 2-element array only for
+                        // convolutional layers, while is an empty array for fully connected layers
+                        if(it->find("input_range") != it->end() && it->find("output_range") != it->end()){
+                            // assume the input_range and output_range fields are correctly formatted
+                            std::vector<int> spatial_min = it->at("input_range").at("spatial_min");
+                            std::vector<int> spatial_max = it->at("input_range").at("spatial_max");
+                            std::vector<int> ch_bounds = it->at("input_range").at("ch_bounds");
+                            std::vector<int> spatial_min_out = it->at("output_range").at("spatial_min");
+                            std::vector<int> spatial_max_out = it->at("output_range").at("spatial_max");
+                            std::vector<int> ch_bounds_out = it->at("output_range").at("ch_bounds");
+                            
+                            ComputingWorkload::Bounds input_range = ComputingWorkload::Bounds{spatial_min, spatial_max, ch_bounds};
+                            ComputingWorkload::Bounds output_range = ComputingWorkload::Bounds{spatial_min_out, spatial_max_out, ch_bounds_out};
+
+
+
+                            addComputingWorkload(it->at("node"), it->at("id"),layer_id , it->at("size"), it->at("weight_size"), input_range, output_range, it->at("dep"), it->at("ct_required"), it->at("type"));
+                        }
+                        else 
+                        {
+                            std::vector<int> empty;
+                            ComputingWorkload::Bounds input_range = ComputingWorkload::Bounds{empty, empty, empty};
+                            ComputingWorkload::Bounds output_range = ComputingWorkload::Bounds{empty, empty, empty};
+                            addComputingWorkload(it->at("node"), it->at("id"),layer_id , it->at("size"), it->at("weight_size"), input_range, output_range, it->at("dep"), it->at("ct_required"), it->at("type"));
+                        }
+                        
                     }
                     else{
                         parseError("Invalid workload element in the workload document");

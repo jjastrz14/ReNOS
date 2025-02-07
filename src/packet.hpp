@@ -134,6 +134,7 @@ class Flit {
 
         // Fields for arbitrary data
         void* data ;
+        int data_dep;
 
         // Lookahead route info
         OutSet la_route_set;

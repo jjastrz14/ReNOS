@@ -89,18 +89,11 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     int reconf_cycles = config.getIntField("reconf_cycles");
     int reconf_freq = config.getIntField("reconf_freq");
     if (reconf){
-        if (reconf_rate != 0 && reconf_freq != 0){
-            _nvm_par = new NVMPar(reconf_rate, reconf_freq);
-        }
-        else if (reconf_cycles != 0){
-
-            _nvm_par = new NVMPar(max_pe_mem, reconf_cycles);
-        }
-        else{
-            error("Reconfiguration requires both ['reconf_rate' and 'reconf_frequency'] or ['reconf_cycles'] to be set");
-        }
+        _local_mem_size = max_pe_mem;
+        _reconfig_cycles = reconf_cycles; // fix for now
     }else{
-        _nvm_par = nullptr;
+        _local_mem_size = 0;
+        _reconfig_cycles = -1;// fix for now
     }
 
     string priority = config.getStrField( "priority" );
@@ -321,7 +314,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, &_clock ,_traffic_pattern[c], _nvm_par, &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 
@@ -682,7 +675,6 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 TrafficManager::~TrafficManager( )
 {
 
-    delete _nvm_par;
 
     for ( int source = 0; source < _nodes; ++source ) {
         for ( int subnet = 0; subnet < _subnets; ++subnet ) {
@@ -805,9 +797,9 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             if(f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
                 // search in the destination node landed packets list
                 *(_context->gDumpFile) << " Read/Write packet arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", type: " << f->type << ", size: "<< f->size << std::endl;
-                auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
+                auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
                 assert(it == _landed_packets[f->cl][dest].end());
-                _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type ,_clock.time()));
+                _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time(),f->size));
 
                 // ================ MANAGING OF PROCESSING TIMES FOR PACKETS ================ 
                 int processing_time = 0;
@@ -832,8 +824,28 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                     req_type2 = commType::WRITE;
                 }
                 *(_context->gDumpFile) << " Reply packet arrieved at: "<< f->dst <<" at time: "<< _clock.time() << " from node: " << f->src <<", type: "<< f->type << std::endl;
-                auto it = std::find_if(_landed_packets[f->cl][f->src].begin(), _landed_packets[f->cl][f->src].end(), [f, req_type1, req_type2](const std::tuple<int, int, int> & p) { return get<0>(p) == f->rpid && (get<1>(p) == req_type1 || get<1>(p) == req_type2); });
+                auto it = std::find_if(_landed_packets[f->cl][f->src].begin(), _landed_packets[f->cl][f->src].end(), [f, req_type1, req_type2](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && (get<1>(p) == req_type1 || get<1>(p) == req_type2); });
                 assert(it != _landed_packets[f->cl][f->src].end());
+                // if the packet is a reply and its corresponding request if a WRITE, deallocate from 
+                // the local memory the space used to store the output data (packet size)
+                if (_local_mem_size > 0 && f->type == commType::WRITE_ACK && f->data_dep != -1) {
+                    
+                    // when a write reply is received, we go look in the reply destination node
+                    // _require_output_deallocation data strucure of the injection process and 
+                    // remove the reply rpid from the set corresponding to the key == f->data_dep
+                    _injection_process[f->cl]->removeFromRequiringOutputDeallocation(f->dst, f->data_dep, f->rpid);
+
+                    // we then check if the set is empty: if so, we can deallocate the memory corresponding
+                    // to the output of the data_dep workload
+                    auto w = _traffic_pattern[f->cl]->workloadByID(f->data_dep);
+                    if (_injection_process[f->cl]->isRequiringOutputDeallocationEmpty(f->dst, f->data_dep)) {
+                        int prev_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
+                        _injection_process[f->cl]->deallocateMemory(f->dst, w);
+                        int new_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
+                        *(_context->gDumpFile) << "DEALLOCATED OUTPUT " << w->id << " from node: " << f->dst << " at time: " << _clock.time() << " (prev mem: " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+                        
+                    }
+                }
             }
         }
 
@@ -851,6 +863,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             rinfo->record = f->record;
             rinfo->type = f->type;
             rinfo->rpid = f->rpid;
+            rinfo->data_dep = f->data_dep;
             _repliesPending[dest].push_back(rinfo);
 
             if (_context->logger) {
@@ -876,13 +889,15 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             int time = f->data_ptime_expected;
             // no dependecies to be resolved
             std::vector<int> dep(1, -1);
+            dep[0] = f->type == commType::READ_REQ ? f->data_dep : -1;
+            int data_dep = f->data_dep;
             int type = (f->type == commType::WRITE_REQ) ? commType::READ_REQ : commType::WRITE;
             if (f->type == commType::WRITE_REQ){
                 *(_context->gDumpFile) << "Generating READ_REQ packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             } else {
                 *(_context->gDumpFile) << "Generating WRITE packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             }
-            Packet* p = new Packet{f->rpid, f->dst, f->src, size, dep, f->cl, type, time}; 
+            Packet* p = new Packet{f->rpid, f->dst, f->src, size, dep, f->cl, type, time, 0 , data_dep}; 
             // append this new packet to the list of packets that are waiting to be processed
             _injection_process[f->cl]->addToWaitingQueue(f->dst, p);
         }
@@ -985,6 +1000,7 @@ void TrafficManager::_GeneratePacket( int source, int stype,
         packet_destination = _traffic_pattern[cl]->dest(source);
     }
     int rpid = -1;
+    int data_dep = -1;
     
 
     bool record = false;
@@ -993,12 +1009,14 @@ void TrafficManager::_GeneratePacket( int source, int stype,
         if(stype > 0) {    
             packet_destination = _traffic_pattern[cl]->dest(source);
             rpid = _traffic_pattern[cl]->cur_packet->id;
+            data_dep = _traffic_pattern[cl]->cur_packet->data_dep;
             if (stype == 1) {
                 packet_type = commType::READ_REQ;
                 size = _read_request_size[cl];
             } else if (stype == 2) {
                 packet_type = commType::WRITE_REQ;
                 size = _write_request_size[cl];
+                // data_dep = _traffic_pattern[cl]->cur_packet->dep[0];
             } else if (stype == 5) {
                 packet_type = commType::READ;
                 size = (_traffic_pattern[cl]->check_user_defined()) ? _traffic_pattern[cl]->cur_packet->size : _read_request_size[cl];
@@ -1028,6 +1046,7 @@ void TrafficManager::_GeneratePacket( int source, int stype,
             time = rinfo->time;
             record = rinfo->record;
             rpid = rinfo->rpid;
+            data_dep = rinfo->data_dep;
             _repliesPending[source].pop_front();
             rinfo->freeReply(packet_reply_pool);
         }
@@ -1073,6 +1092,7 @@ void TrafficManager::_GeneratePacket( int source, int stype,
         f->ctime  = time;
         f->record = record;
         f->cl     = cl;
+        f->data_dep = data_dep;
 
         _total_in_flight_flits[f->cl].insert(make_pair(f->id, f));
         if(record) {
@@ -1516,8 +1536,9 @@ void TrafficManager::_Step( )
             while(it != _to_process_packets[c][n].end()) {
 
                 // find the corresponding packet in the landed packets list
-                auto it_land = std::find_if(_landed_packets[c][n].begin(), _landed_packets[c][n].end(), [it](const std::tuple<int, int, int> & p) { return (get<0>(*it) == get<0>(p)) && (get<1>(*it) == get<1>(p));});
+                auto it_land = std::find_if(_landed_packets[c][n].begin(), _landed_packets[c][n].end(), [it](const std::tuple<int, int, int, int> & p) { return (get<0>(*it) == get<0>(p)) && (get<1>(*it) == get<1>(p));});
                 _useful_pocessing_spots[c][n] += (_injection_process[c]->isIdle(n) ? 1 : 0);
+
 
                 // if the two times match, then the packet has elapsed the processing time
                 if(get<2>(*it) < get<2>(*it_land) + _useful_pocessing_spots[c][n]) {
