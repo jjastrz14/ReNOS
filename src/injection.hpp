@@ -104,6 +104,7 @@ class DependentInjectionProcess : public InjectionProcess {
       MemoryUnit(int size, float threshold = 0.9) : _size(size), _available(size), _threshold(threshold) {}
       int getSize() const { return _size; }
       int getAvailable() const { return _available; }
+      int getTotalAvailableForReconf() const { return _size*_threshold; }
       int getAvailableForReconf() const { return _threshold * _size - (_size-_available); }
       int getNumCurAllocatedWorkloads() const { return _cur_allocated_workload.size(); }
       std::deque<const ComputingWorkload *> & getCurAllocatedWorkloads() { return _cur_allocated_workload; }

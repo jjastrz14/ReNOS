@@ -306,7 +306,7 @@ int DependentInjectionProcess::_reconfigure(int source){
   });
   while (it != _waiting_workloads[source].end()){
     w = *it;
-    assert (w->size <= avail_mem_for_reconf);
+    assert (w->size <= _memory_set.getMemoryUnit(source).getTotalAvailableForReconf());
     if (total_size + w->size <= avail_mem_for_reconf){
       _memory_set.allocate(source, w);
       total_size += w->size;
