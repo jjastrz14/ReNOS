@@ -314,7 +314,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context->logger, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 

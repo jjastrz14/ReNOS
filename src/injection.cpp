@@ -147,7 +147,7 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   return result;
 }
 
-InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, int local_memory_size, int reconfig_cycles, Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, EventLogger * logger,
+InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, int local_memory_size, int reconfig_cycles, Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,
         Configuration const * const config)
 {
   string process_name;
@@ -174,7 +174,7 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
     // std::cout << "Clock: " << clock << std::endl;
     // std::cout << "Traffic: " << traffic << std::endl;
     // std::cout << "Landed packets: " << landed_packets << std::endl;
-    result = new DependentInjectionProcess(nodes, local_memory_size, reconfig_cycles, clock, traffic,landed_packets, resort, logger);
+    result = new DependentInjectionProcess(nodes, local_memory_size, reconfig_cycles, clock, traffic,landed_packets, context, resort);
   } else {
     cout << "Invalid injection process: " << inject << endl;
     exit(-1);
@@ -243,12 +243,13 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, int local_mem_size, int reconfig_cycles ,Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, int resort, EventLogger * logger) 
-  : InjectionProcess(nodes, 0.0), _traffic(traffic), _memory_set(nodes,local_mem_size), _processed(landed_packets), _clock(clock), _logger(logger)
+DependentInjectionProcess::DependentInjectionProcess(int nodes, int local_mem_size, int reconfig_cycles ,Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,int resort) 
+  : InjectionProcess(nodes, 0.0), _traffic(traffic), _memory_set(nodes,local_mem_size), _processed(landed_packets), _clock(clock), _logger(context->logger), _context(context)
 {
   assert(_traffic);
   assert(_processed);
   assert(_clock);
+  assert(context);
   _enable_reconf = local_mem_size > 0 ? true : false;
   _nvm = new NVMPar(reconfig_cycles);
   _executed.resize(nodes);
@@ -330,17 +331,11 @@ bool DependentInjectionProcess::_checkReconfNeed(int source){
   // 3. the aforementioned workload has been processed
 
   bool valid = false;
+  int allocated_workloads = _memory_set.getMemoryUnit(source).getNumCurAllocatedWorkloads();
   // when all of the above conditions are met, we can toggle the reconfiguration flag
-  if (_waiting_workloads[source].size() > 0 && 
-      _memory_set.get_current_workload(source) != *_waiting_workloads[source].end() &&
-      _memory_set.getMemoryUnit(source).getNumCurAllocatedWorkloads() == 1){
-        auto it = std::find_if(_executed[source].begin(), _executed[source].end(), [this,source](const tuple<int,int,int> & p){
-          return std::get<0>(p) == this->_memory_set.getMemoryUnit(source).getCurAllocatedWorkloads()[0]->id;
-        }); 
-
-        if (it != _executed[source].end()){
+  if (allocated_workloads < 1 &&
+      _waiting_workloads[source].size() > 0){
           valid = true;
-        }
       };
   return valid;
 }
@@ -431,7 +426,6 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
           if (dep != -1){
               _requiring_ouput_deallocation[i].at(dep).insert(p->id);
             }
-            
         }
       }
     }
@@ -440,12 +434,18 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     for (int i = 0; i < _nodes; ++i){
       _reconfigure(i); // for the first recofiguration, we don't care about the 
       // time the reconfiguration takes: we are assuming the workload are preloaded
-      if(_memory_set.getMemoryUnit(i).getNumCurAllocatedWorkloads() > 0){
-        for (auto & w : _memory_set.getMemoryUnit(i).getCurAllocatedWorkloads()){
-        }
-      }
     }
 
+    // print the memory status
+    *(_context->gDumpFile) << "MEMORY STATUS at INITIALIZATION" << std::endl;
+    for (int i = 0; i < _nodes; ++i){
+      *(_context->gDumpFile) <<"======================" << std::endl;
+      *(_context->gDumpFile) << "Node " << i << std::endl;
+      for (auto & w : _memory_set.getMemoryUnit(i).getCurAllocatedWorkloads()){
+        *(_context->gDumpFile) << "Workload " << w->id << " with size " << w->size << std::endl;
+      }
+      *(_context->gDumpFile) <<"======================" << std::endl;
+    }
   }
 }
 
@@ -463,7 +463,7 @@ bool DependentInjectionProcess::_managePacketInjection(const Packet * p){
     }        
     _processed->at(p->src).insert(make_tuple(p->id, type, _clock->time()));
     _waiting_packets[p->src].pop_front(); // remove the packet from the waiting queue
-    // std::cout << " ---- HERE Packet with ID:" << p->id <<" and type " << p->type << " at node " << source << " has been processed at time " << _clock->time() << std::endl;
+    *(_context->gDumpFile) << " ---- HERE Packet with ID:" << p->id <<" and type " << p->type << " at node " << p->src << " has been processed at time " << _clock->time() << std::endl;
 
   }
   else{
@@ -472,7 +472,7 @@ bool DependentInjectionProcess::_managePacketInjection(const Packet * p){
     //no need to set p to pending packet, as it will be injected direcly
     valid = true;
 
-    // std::cout << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
+    *(_context->gDumpFile) << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << p->src << " has been injected at time " << _clock->time() << std::endl;
   }
   return valid;
 
@@ -508,12 +508,10 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
           type = type == 1 ? 5 : 6;
         }       
         _processed->at(packet->src).insert(make_tuple(packet->id, packet->type, _clock->time()));
+        *(_context->gDumpFile) << " ---- HERE Packet with ID:" << packet->id <<" and type " << packet->type << " at node " << packet->src << " has been processed at time " << _clock->time() << std::endl;
 
 
         if (type == 6){
-          int prev_mem = _memory_set.getAvailable(packet->src);
-          _memory_set.deallocate(packet->src, std::get<0>(*it), true);
-          int new_mem = _memory_set.getAvailable(packet->src);
           // check _requiring_output_deallocation for the packet
           auto it = _requiring_ouput_deallocation[packet->src].at(packet->dep[0]).find(packet->id);
           assert(it != _requiring_ouput_deallocation[packet->src].at(packet->dep[0]).end());
@@ -526,6 +524,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
             auto w = _traffic->workloadByID(packet->dep[0]);
             _memory_set.deallocate_output(packet->src, w);
             int new_mem = _memory_set.getAvailable(packet->src);
+            *(_context->gDumpFile) <<"DEALLOCATED OUTPUT " << new_mem - prev_mem << " from node: " << packet->src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
           }
 
         }
@@ -534,16 +533,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
       else{
         _traffic->cur_packet = packet;
         valid = true;
-        // no need to set p to pending packet, as it will be injected direcly.
-        // in this case, the result of the workload computation needs to be stored in the memory as long as
-        // the tail of the packet leaves the node
-        // the space worth for the output of the workload will be deallocated when the packet received is 
-        // the write reply to the packet sent
-        if (packet->type == 6){
-          int prev_mem = _memory_set.getAvailable(packet->src);
-          _memory_set.deallocate(packet->src, std::get<0>(*it), true);
-          int new_mem = _memory_set.getAvailable(packet->src);
-        }
+        *(_context->gDumpFile) << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << p->src << " has been injected at time " << _clock->time() << std::endl;
       }
 
       break;
@@ -582,13 +572,9 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
       }        
       _processed->at(src).insert(make_tuple(p->id, type, _clock->time()));
       _waiting_packets[src].pop_front(); // remove the packet from the waiting queue
+     *(_context->gDumpFile) << " ---- HERE Packet with ID:" << p->id <<" and type " << p->type << " at node " << p->src << " has been processed at time " << _clock->time() << std::endl;
 
-      // in this case, the output of the previous layer is alredy presen on the same node where the input for the next layer
-      // has already been allocated, so we can dirctly deallocate the memory worth for the entire workload
       if (type == 6){
-        int prev_mem = _memory_set.getAvailable(src);
-        _memory_set.deallocate(src, associated_workload, true);
-        int new_mem = _memory_set.getAvailable(src);
         // check _requiring_output_deallocation for the packet
         auto it = _requiring_ouput_deallocation[src].at(p->dep[0]).find(p->id);
         assert(it != _requiring_ouput_deallocation[src].at(p->dep[0]).end());
@@ -600,25 +586,16 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
           int prev_mem = _memory_set.getAvailable(src);
           _memory_set.deallocate_output(src, associated_workload);
           int new_mem = _memory_set.getAvailable(src);
-          
+          *(_context->gDumpFile) <<"DEALLOCATED OUTPUT " << new_mem - prev_mem << " from node: " << src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
         }
       }
-
     }
     else{
       _traffic->cur_packet = p;
       _waiting_packets[src].pop_front(); // remove the packet from the waiting queue
       //no need to set p to pending packet, as it will be injected direcly
       valid = true;
-      // in this case, the result of the workload computation needs to be stored in the memory as long as
-      // the tail of the packet leaves the node
-      // the space worth for the output of the workload will be deallocated when the packet received is 
-      // the write reply to the packet sent
-      if (p->type == 6){
-        int prev_mem = _memory_set.getAvailable(src);
-        _memory_set.deallocate(src, associated_workload, true);
-        int new_mem = _memory_set.getAvailable(src);
-      }
+      *(_context->gDumpFile) << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << p->src << " has been injected at time " << _clock->time() << std::endl;
     }
   }
   else{
@@ -631,7 +608,6 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p){
   return valid;
 
 }
-
 
 
 void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
@@ -662,6 +638,8 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
 
 bool DependentInjectionProcess::test(int source)
 {
+
+
   bool valid = false;
   const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
@@ -704,6 +682,7 @@ bool DependentInjectionProcess::test(int source)
     dep_time_p = _dependenciesSatisfied(&(*p), source);
   }
 
+
   // if there are pending workloads, the timer should be decremented
   if (_timer[source] > 0){
     assert(!(_pending_workloads[source] == nullptr) || _reconf_active[source]);
@@ -713,6 +692,7 @@ bool DependentInjectionProcess::test(int source)
   else if (_timer[source] == 0 && _decur[source] == true && _reconf_active[source]){
     _reconf_active[source] = false;
     _decur[source] = false;
+    *(_context->gDumpFile) << "Reconfiguration of node " << source << " has been completed at time " << _clock->time() << std::endl;
     if (_logger){
         _logger->register_event(EventType::END_RECONFIGURATION, _clock->time(), source);
     }
@@ -725,11 +705,21 @@ bool DependentInjectionProcess::test(int source)
       if (_logger) {
         _logger->register_event(EventType::END_COMPUTATION, _clock->time(), _pending_workloads[source]->id);
       }
+      *(_context->gDumpFile) << "Workload with ID:" << _pending_workloads[source]->id << " at node " << source << " has been processed at time " << _clock->time() << std::endl;
       _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
     }
     
     // check for reconfiguration need
     if (_enable_reconf){
+      // delete from memory the workload that has been processed
+      if (_pending_workloads[source] != nullptr){
+        assert (_reconf_deadlock_timer[source] == 0);
+        int prev_mem = _memory_set.getAvailable(source);
+        _memory_set.deallocate(source, _pending_workloads[source], true);
+        int new_mem = _memory_set.getAvailable(source);
+        *(_context->gDumpFile) << "DEALLOCATED WORKLOAD " << new_mem - prev_mem << " from node: " << source << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+      }
+
       bool ready_for_reconf = _checkReconfNeed(source);
       if (ready_for_reconf){
         // if the reconfiguration is needed, we can allocate the memory for the next workloads
@@ -737,6 +727,10 @@ bool DependentInjectionProcess::test(int source)
         if (total_size == 0){
           // increment the deadlock timer
           _reconf_deadlock_timer[source]++; // to retrigger the reconfiguration
+          *(_context->gDumpFile) << "Reconfiguration of node " << source << " has been delayed" << std::endl;
+          if (_reconf_deadlock_timer[source] % 10 == 0){
+            *(_context->gDumpFile) << "POSSIBLE DEADLOCK DETECTED" << std::endl;
+          }
         }
         else{
           int time_needed = _nvm->cycles_reconf(total_size);
@@ -747,8 +741,8 @@ bool DependentInjectionProcess::test(int source)
           if (_logger) {
             _logger->register_event(EventType::START_RECONFIGURATION, _clock->time(), source);
           }
+          *(_context->gDumpFile) << "Reconfiguration of node " << source << " has started at time " << _clock->time() << std::endl;
         }
-        
       }
     }
     _pending_workloads[source] = nullptr;
@@ -780,6 +774,7 @@ bool DependentInjectionProcess::test(int source)
       if (_logger) {
         _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
       }
+      *(_context->gDumpFile) << "Workload with ID:" << w->id << " at node " << source << " has started processing at time " << _clock->time() << std::endl;
     }
   }
 

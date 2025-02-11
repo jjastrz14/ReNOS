@@ -14,7 +14,7 @@
             "logger": 1,
             "reconfiguration": 1,
             "reconf_cycles": 2,
-            "max_pe_mem": 15
+            "max_pe_mem": 8
         },
         
     "workload" : [
