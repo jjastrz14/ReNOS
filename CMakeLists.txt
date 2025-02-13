@@ -6,6 +6,15 @@ project(restart VERSION 0.1.0 LANGUAGES CXX)
 include(CTest)
 enable_testing()
 
+# check the system, if its apple and arm64, then set the architecture to arm64,
+# also activate debug mode
+if(APPLE)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64")
+        set(CMAKE_BUILD_TYPE Debug)
+    endif()
+endif()
+
 
 # python version required 3.11
 find_package(Python EXACT 3.11 REQUIRED COMPONENTS Interpreter Development)

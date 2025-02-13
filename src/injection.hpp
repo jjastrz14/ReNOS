@@ -47,6 +47,7 @@ public:
   virtual bool isIdle(int source) { return false; }
   virtual void addToWaitingQueue(int source, Packet * p){};
   virtual int getAvailableMemory(int source){return 0;};
+  virtual void stageReconfiguration(int source, bool bypass_empty_memory_check = false) {};
   virtual void removeFromRequiringOutputDeallocation(int source, int id, int packet_id){}
   virtual bool isRequiringOutputDeallocationEmpty(int source, int id){return false;}
   virtual void deallocateMemory(int source, const ComputingWorkload * w){};
@@ -138,7 +139,30 @@ class DependentInjectionProcess : public InjectionProcess {
         return it != _cur_allocated_workload.end();
       }
 
-      bool already_allocated(const ComputingWorkload * w, const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
+      bool is_in_next_reconfig_batch(const ComputingWorkload * w, const std::deque<const ComputingWorkload *> & waiting_workloads){
+        /*
+        the method is used to check if the workload is in the next reconfiguration batch:
+        */
+        int total_size = 0;
+        int avail_mem_for_reconf = getAvailableForReconf();
+        auto it = waiting_workloads.begin();
+        while (it != waiting_workloads.end()){
+          const ComputingWorkload * n = *it;
+          if (total_size + n->size <= avail_mem_for_reconf){
+            total_size += n->size;
+            it = std::next(it);
+            if (n->id == w->id){
+              return true;
+            }
+          }
+          else{
+            break;
+          }
+        }
+        return false;
+      }
+
+      bool is_ready(const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
         /*
         the method is used to check if the destionation already has loaded the corresponding
         partition that will use the result of w, passed by p, as its input. In this case, the packet
@@ -146,37 +170,50 @@ class DependentInjectionProcess : public InjectionProcess {
         be stored in the memory of the destination 
         */
 
-
-        // make sure that the packet is direcly dependent on the workload
-        auto it = std::find(p->dep.begin(), p->dep.end(), w->id);
-        assert(it != p->dep.end());
-
-        bool already_allocated = false;
+      
+        // CASE 1. check if the workload is already allocated
+        bool ready = false;
         for (auto & ow : _cur_allocated_workload){
           // check if the workload is dependent on the current workload via the packet
           auto it = std::find(ow->dep.begin(), ow->dep.end(), p->id);
           if (it != ow->dep.end()){
-            already_allocated = true;
-            return already_allocated;
+            ready = true;
+            return ready;
           }
         }
 
-        // we must also check that a depending workload is actually going to be scheduled
-        // on the PE at a certain point
+        
         for (auto & w : waiting_workloads){
           auto it = std::find(w->dep.begin(), w->dep.end(), p->id);
-          if (it == w->dep.end()){
-            already_allocated = true;
-            return already_allocated;
+
+          // CASE 2. if the packet is addressed to a partition that is scheduled to be reconfigured
+          // right after on the same node, we can mark the packet as ready to be sent (DEADLOCK AVOIDANCE: reconfiguration
+          // is performed when the memory is empty, this means that also the output of previous workloads that
+          // is waiting to be sent needs to be purged, by actually sending the packet. If the packet and next workload
+          // are addressed to the same node, this created a deadlock situation)
+          if (it != w->dep.end() && w->node == p->dst){
+            if (is_in_next_reconfig_batch(w, waiting_workloads)){
+              ready = true;
+              return ready;
+            }
+            else{
+              std::cout << "DEADLOCK AVOIDANCE: before leaving, the packet needs the receiving workload to be reconfigured.\n This can not happen because this is not scheduled in the next reconfiguration batch." << std::endl;
+              exit(-1);
+            }
+          }
+
+          // CASE 3. we must also check that a depending workload is actually going to be scheduled
+          // on the PE at a certain point
+          if (it != w->dep.end()){
+            ready = true;
           }
         }
-
-        return !already_allocated;
+        return !ready;
       }
 
 
       bool is_empty(){
-        return _cur_allocated_workload.empty();
+        return _available == _size;
       }
 
       bool allocate_(int size){
@@ -432,8 +469,8 @@ class DependentInjectionProcess : public InjectionProcess {
       return _memory_units[node].is_allocated(w);
     }
 
-    bool already_allocated(const ComputingWorkload * w, const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
-      return _memory_units[p->dst].already_allocated(w, p, waiting_workloads);
+    bool is_ready(const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
+      return _memory_units[p->dst].is_ready( p, waiting_workloads);
     }
 
     const ComputingWorkload *  get_current_workload(int node){
@@ -525,7 +562,7 @@ class DependentInjectionProcess : public InjectionProcess {
     vector<set<tuple<int, int, int>>> * _processed;
     vector<set<tuple<int, int, int>>> _executed;
     vector<deque<const Packet *>> _waiting_packets;
-    vector<deque<std::tuple<const ComputingWorkload *, const Packet *>>> _pending_packets; // used as buffer to store packets whose dependecies have been cleared, but which cannot
+    vector<deque< const Packet *>> _pending_packets; // used as buffer to store packets whose dependecies have been cleared, but which cannot
     // be injected directly because of memory constraints on receiving node 
     vector<deque<const ComputingWorkload * >> _waiting_workloads;
     vector<const ComputingWorkload *> _pending_workloads; // used as buffer for workloads being processed
@@ -652,9 +689,9 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method to manage the reconfiguration of the PEs
     int _reconfigure(int source);
     // a method to check if the a reconfiguration should be performed
-    bool _checkReconfNeed(int source);
+    bool _checkReconfNeed(int source, bool bypass_empty_memory_check = false);
     // a method to manage end of computation and integration with reconfiguration
-    bool _manageReconfPacketInjection(const Packet * p);
+    bool _manageReconfPacketInjection(const Packet * p, int source);
     //================ RECONFIGURATION =================
 
     bool _managePacketInjection(const Packet * p);
@@ -682,6 +719,8 @@ class DependentInjectionProcess : public InjectionProcess {
     virtual int getAvailableMemory(int source){return _memory_set.getAvailable(source);};
     // a method to deallocate memory
     virtual void deallocateMemory(int source, const ComputingWorkload * w){_memory_set.deallocate_output(source, w);};
+    // a method to stage reconfiguration
+    virtual void stageReconfiguration(int source, bool bypass_empty_memory_check = false);
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     
