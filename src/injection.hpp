@@ -170,7 +170,6 @@ class DependentInjectionProcess : public InjectionProcess {
         be stored in the memory of the destination 
         */
 
-      
         // CASE 1. check if the workload is already allocated
         bool ready = false;
         for (auto & ow : _cur_allocated_workload){
@@ -191,13 +190,14 @@ class DependentInjectionProcess : public InjectionProcess {
           // is performed when the memory is empty, this means that also the output of previous workloads that
           // is waiting to be sent needs to be purged, by actually sending the packet. If the packet and next workload
           // are addressed to the same node, this created a deadlock situation)
-          if (it != w->dep.end() && w->node == p->dst){
+          if (it != w->dep.end() && w->node == p->src){
             if (is_in_next_reconfig_batch(w, waiting_workloads)){
               ready = true;
               return ready;
             }
             else{
               std::cout << "DEADLOCK AVOIDANCE: before leaving, the packet needs the receiving workload to be reconfigured.\n This can not happen because this is not scheduled in the next reconfiguration batch." << std::endl;
+              std::cout << "Error triggered for packet with id: " << p->id << " and destination: " << p->dst << std::endl;
               exit(-1);
             }
           }
@@ -225,11 +225,8 @@ class DependentInjectionProcess : public InjectionProcess {
         If the memory is not available, the method will return false
         */
         assert(size <= _size && size <= _available);
-        if (size <= _available){
-          _available -= size;
-          return true;
-        }
-        return false;
+        _available -= size;
+        return true;
 
       }
 
@@ -241,12 +238,13 @@ class DependentInjectionProcess : public InjectionProcess {
         the memory will be removed from the list and the available memory will be increased by the size of the memory. In this case,
         the method will return true. If the memory is not found in the list of allocated memory, the method will return false
         */
-        assert(size <= _size && _available + size <= _size);
-        if (_available + size <= _size){
-          _available += size;
-          return true;
+        if (_available + size > _size){
+          std::cout  << _available << std::endl;
+          std::cout << size << std::endl;
         }
-        return false;
+        assert(size <= _size && _available + size <= _size);
+        _available += size;
+        return true;
       }
 
       bool allocate(const ComputingWorkload * w, bool optimize = false){
@@ -305,8 +303,7 @@ class DependentInjectionProcess : public InjectionProcess {
         if (w->output_range.channels.size() > 0)
           output_size *= (w->output_range.channels[1] - w->output_range.channels[0]);
         int scale = FLIT_SIZE;
-        output_size /= scale;
-        output_size = output_size > 0 ? output_size : 1;
+        output_size = output_size / scale;
 
         return deallocate_(output_size);
       };
@@ -329,10 +326,10 @@ class DependentInjectionProcess : public InjectionProcess {
           output_size *= (w->output_range.channels[1] - w->output_range.channels[0]);
         int scale = FLIT_SIZE;
         output_size /= scale;
-        output_size = output_size > 0 ? output_size : 1;
-
 
         int size_to_deallocate = w->size - output_size;
+        assert(size_to_deallocate >= 0);
+
         
         auto it = std::find(_cur_allocated_workload.begin(), _cur_allocated_workload.end(), w);
         if (it != _cur_allocated_workload.end()){
@@ -688,6 +685,8 @@ class DependentInjectionProcess : public InjectionProcess {
     //================ RECONFIGURATION =================
     // a method to manage the reconfiguration of the PEs
     int _reconfigure(int source);
+    // a method to compute the total memory neede for the next reconfiguration batch
+    int _computeReconfMem(int source);
     // a method to check if the a reconfiguration should be performed
     bool _checkReconfNeed(int source, bool bypass_empty_memory_check = false);
     // a method to manage end of computation and integration with reconfiguration

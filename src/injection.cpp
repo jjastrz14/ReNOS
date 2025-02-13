@@ -289,6 +289,31 @@ void DependentInjectionProcess::_setProcessingTime(int node, int value)
   _decur[node] = false;
 }
 
+int DependentInjectionProcess::_computeReconfMem(int source){
+
+  int total_size = 0;
+  int avail_mem_for_reconf = _memory_set.getMemoryUnit(source).getAvailableForReconf();
+
+  // find the element if waiting_queue that is referenced by w
+  auto it = _waiting_workloads[source].begin();
+  if (it != _waiting_workloads[source].end()) assert ((*it)->id == _memory_set.get_current_workload(source)->id);
+  while (it != _waiting_workloads[source].end()){
+    const ComputingWorkload * w = *it;
+    assert (w->size <= _memory_set.getMemoryUnit(source).getAvailableForReconf());
+    if (total_size + w->size <= avail_mem_for_reconf){
+      total_size += w->size;
+      it = std::next(it);
+    }
+    else{
+      break;
+    }
+  }
+
+  return total_size;
+
+
+}
+
 int DependentInjectionProcess::_reconfigure(int source){
   
   // starting from the first valid workload, we allocate the memory of the next ones in the queue
@@ -309,6 +334,7 @@ int DependentInjectionProcess::_reconfigure(int source){
     assert (w->size <= _memory_set.getMemoryUnit(source).getTotalAvailableForReconf());
     if (total_size + w->size <= avail_mem_for_reconf){
       _memory_set.allocate(source, w);
+      *(_context->gDumpFile) << "ALLOCATING WORKLOAD " << w->id << " of size " << w->size << " at node " << source << " at time " << _clock->time() << std::endl;
       total_size += w->size;
       it = std::next(it);
     }
@@ -347,7 +373,7 @@ void DependentInjectionProcess::stageReconfiguration(int source, bool bypass_emp
   // if the conditions are met, we can start the reconfiguration
   if (_checkReconfNeed(source, bypass_empty_memory_check)){
     // if the reconfiguration is needed, we can allocate the memory for the next workloads
-    int total_size = _reconfigure(source);
+    int total_size = _computeReconfMem(source);
     if (total_size == 0){
       // increment the deadlock timer
       _reconf_deadlock_timer[source]++; // to retrigger the reconfiguration
@@ -517,6 +543,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
   bool valid = false;
   const Packet * elem = nullptr;
 
+  
   // first, we check for pending packets that needs to be injected: we loop over them
   // and check if the memory has been allocated for the corresponding workload
   // if so, we can inject the packet: this takes precedence over the packets in the waiting queue
@@ -535,15 +562,17 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
       
       _traffic->cur_packet = packet;
       valid = true;
-      *(_context->gDumpFile) << "Packet with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
+      *(_context->gDumpFile) << "INJECTING PENDING PACKET with ID:" << _traffic->cur_packet->id <<" and type " << _traffic->cur_packet->type << " at node " << source << " has been injected at time " << _clock->time() << std::endl;
       break;
     }
   }
   if (elem != nullptr){
     // remove the packet from the pending packets queue and return
-    _pending_packets[p->src].erase(std::find(_pending_packets[p->src].begin(), _pending_packets[p->src].end(), elem));
+    _pending_packets[source].erase(std::find(_pending_packets[source].begin(), _pending_packets[source].end(), elem));
+    (*(_context->gDumpFile)) << "REMOVED PACKET WITH ID: " << elem->id << " from pending packets" << std::endl;
     return valid;
   }
+
 
   if (p){
     // if there are no eligible pending packets, we can check the waiting queue:
@@ -588,7 +617,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
             int prev_mem = _memory_set.getAvailable(src);
             _memory_set.deallocate_output(src, associated_workload);
             int new_mem = _memory_set.getAvailable(src);
-            *(_context->gDumpFile) <<"DEALLOCATED OUTPUT " << new_mem - prev_mem << " from node: " << src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+            *(_context->gDumpFile) <<"DEALLOCATED OUTPUT - id : " << associated_workload->id << " from node: " << src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
           }
           
           // after the output deallocation, we stage the reconfiguration
@@ -607,6 +636,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
       // in case the space has not been allocated yet, we have preserve the result in 
       // the memory until the packer can be injected and append the packet to the pending packets
       _pending_packets[src].emplace_back(p);
+      *(_context->gDumpFile) << "APPENDING PACKET WITH ID: " << p->id << " to pending packets of source " << src << std::endl; 
       // remove the packet from the waiting queue
       _waiting_packets[src].pop_front();
 
@@ -676,7 +706,7 @@ bool DependentInjectionProcess::test(int source)
   }
 
   
-  if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr){
+  if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr && _pending_packets[source].size() == 0){
     return valid;
   }
 
@@ -706,6 +736,8 @@ bool DependentInjectionProcess::test(int source)
   else if (_timer[source] == 0 && _decur[source] == true && _reconf_active[source]){
     _reconf_active[source] = false;
     _decur[source] = false;
+    // actually reconfigure
+    _reconfigure(source);
     *(_context->gDumpFile) << "Reconfiguration of node " << source << " has been completed at time " << _clock->time() << std::endl;
     if (_logger){
         _logger->register_event(EventType::END_RECONFIGURATION, _clock->time(), source);
@@ -730,7 +762,7 @@ bool DependentInjectionProcess::test(int source)
         int prev_mem = _memory_set.getAvailable(source);
         _memory_set.deallocate(source, _pending_workloads[source], true);
         int new_mem = _memory_set.getAvailable(source);
-        *(_context->gDumpFile) << "DEALLOCATED WORKLOAD " << new_mem - prev_mem << " from node: " << source << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+        *(_context->gDumpFile) << "DEALLOCATED WORKLOAD -  size : " << new_mem - prev_mem << " from node: " << source << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
       }
 
       // print the _requiring_output_deallocation data structure
@@ -760,10 +792,10 @@ bool DependentInjectionProcess::test(int source)
   }
 
   
+
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
-  if (dep_time_p>=0 && source == p->src && !(p == nullptr) || (_pending_packets[source].size() > 0)){
-    assert(_pending_workloads[source] == nullptr);
-    // the node is ideal and can process the packet request
+  if ((dep_time_p>=0 && source == p->src && !(p == nullptr)) || (_pending_packets[source].size() > 0)){
+    // the node is idle and can process the packet request
     if(_timer[source]==0){
       assert(!_decur[source]);
       // the packet has already been cleared for the dependencies, we can inject

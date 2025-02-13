@@ -842,7 +842,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                         int prev_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
                         _injection_process[f->cl]->deallocateMemory(f->dst, w);
                         int new_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
-                        *(_context->gDumpFile) << "DEALLOCATED OUTPUT " << w->id << " from node: " << f->dst << " at time: " << _clock.time() << " (prev mem: " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+                        *(_context->gDumpFile) << "DEALLOCATED OUTPUT - id : " << w->id << " from node: " << f->dst << " at time: " << _clock.time() << " (prev mem: " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
                     }
 
                     // also, stage the reconfiguraton if needed
@@ -953,6 +953,7 @@ int TrafficManager::_IssuePacket( int source, int cl )
                 result = -1;
             }
         } else {
+
             
             // if the traffic pattern is user defined, the injection process
             // cannot be simply modeled using injection rate, but must take into account
