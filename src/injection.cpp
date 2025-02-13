@@ -656,13 +656,17 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
   p->priority = 1;
 
   auto it = _waiting_packets[source].begin();
-  while (it != _waiting_packets[source].end() && (*it)->priority != 0) {
-    //check that the packet is not a dependency for the packets already in the queue
-    ++it;
-  }
-
-  if (it != _waiting_packets[source].end() && (*it)->priority != 0){
-    it++;
+  while (it != _waiting_packets[source].end()){
+    // first check if the packet dependecy as been cleared
+    if (_dependenciesSatisfied(*it, source) == -1){
+      // if the dependency for the packet in the waiting queue has not been satisfied,
+      // we can insert the packet before it
+      break; 
+    }
+    if ((*it)->priority == 0){
+      break;
+    }
+    it = std::next(it);
   }
 
   _waiting_packets[source].insert(it, p); // INSERT AFTER
@@ -790,8 +794,6 @@ bool DependentInjectionProcess::test(int source)
     }
     _pending_workloads[source] = nullptr;
   }
-
-  
 
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
   if ((dep_time_p>=0 && source == p->src && !(p == nullptr)) || (_pending_packets[source].size() > 0)){

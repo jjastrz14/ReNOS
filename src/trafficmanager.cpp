@@ -796,7 +796,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
         if(_use_read_write[f->cl]) {
             if(f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
                 // search in the destination node landed packets list
-                *(_context->gDumpFile) << " Read/Write packet arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", type: " << f->type << ", size: "<< f->size << std::endl;
+                *(_context->gDumpFile) << " Read/Write packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", size: "<< f->size << std::endl;
                 auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
                 assert(it == _landed_packets[f->cl][dest].end());
                 _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time(),f->size));
@@ -823,7 +823,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                     req_type1 = commType::WRITE_REQ;
                     req_type2 = commType::WRITE;
                 }
-                *(_context->gDumpFile) << " Reply packet arrieved at: "<< f->dst <<" at time: "<< _clock.time() << " from node: " << f->src <<", type: "<< f->type << std::endl;
+                *(_context->gDumpFile) << " Reply packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << std::endl;
                 auto it = std::find_if(_landed_packets[f->cl][f->src].begin(), _landed_packets[f->cl][f->src].end(), [f, req_type1, req_type2](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && (get<1>(p) == req_type1 || get<1>(p) == req_type2); });
                 assert(it != _landed_packets[f->cl][f->src].end());
                 // if the packet is a reply and its corresponding request if a WRITE, deallocate from 
@@ -895,13 +895,14 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
             int data_dep = f->data_dep;
             int type = (f->type == commType::WRITE_REQ) ? commType::READ_REQ : commType::WRITE;
             if (f->type == commType::WRITE_REQ){
-                *(_context->gDumpFile) << "Generating READ_REQ packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
+                *(_context->gDumpFile) << "Generating READ_REQ (id: "<< f->rpid <<") packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             } else {
-                *(_context->gDumpFile) << "Generating WRITE packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
+                *(_context->gDumpFile) << "Generating WRITE (id: "<< f->rpid <<") packet at time: " << _clock.time() << " from node: " << dest << " to node: " << f->src << std::endl;
             }
             Packet* p = new Packet{f->rpid, f->dst, f->src, size, dep, f->cl, type, time, 0 , data_dep}; 
             // append this new packet to the list of packets that are waiting to be processed
             _injection_process[f->cl]->addToWaitingQueue(f->dst, p);
+            
         }
 
         // Only record statistics once per packet (at tail)
