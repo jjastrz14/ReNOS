@@ -170,6 +170,11 @@ class DependentInjectionProcess : public InjectionProcess {
         be stored in the memory of the destination 
         */
 
+        // CASE 0. if the packet is addressed to the same node, we can send it directly
+        if (p->src == p->dst){
+          return true;
+        }
+
         // CASE 1. check if the workload is already allocated
         bool ready = false;
         for (auto & ow : _cur_allocated_workload){
@@ -181,10 +186,11 @@ class DependentInjectionProcess : public InjectionProcess {
           }
         }
 
-        
+            
         for (auto & w : waiting_workloads){
           auto it = std::find(w->dep.begin(), w->dep.end(), p->id);
-
+          
+          /*    
           // CASE 2. if the packet is addressed to a partition that is scheduled to be reconfigured
           // right after on the same node, we can mark the packet as ready to be sent (DEADLOCK AVOIDANCE: reconfiguration
           // is performed when the memory is empty, this means that also the output of previous workloads that
@@ -206,6 +212,7 @@ class DependentInjectionProcess : public InjectionProcess {
               exit(-1);
             }
           }
+          */
 
           // CASE 3. we must also check that a depending workload is actually going to be scheduled
           // on the PE at a certain point
@@ -557,6 +564,7 @@ class DependentInjectionProcess : public InjectionProcess {
     std::vector<int> _reconf_deadlock_timer;
     std::vector<bool> _reconf_active;
     std::vector<std::map<int,set<int>>> _requiring_ouput_deallocation; // a datastructure to manage the deallocation of the output space for the workloads
+    vector<set<pair<int , const ComputingWorkload * >>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
     DependentInjectionProcess::MemorySet _memory_set;
     const NVMPar * _nvm;
     // ==================  RECONFIGURATION ==================

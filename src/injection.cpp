@@ -260,6 +260,7 @@ DependentInjectionProcess::DependentInjectionProcess(int nodes, int local_mem_si
   _waiting_workloads.resize(nodes);
   _pending_packets.resize(nodes);
   _requiring_ouput_deallocation.resize(nodes);
+  _output_left_to_deallocate.resize(nodes);
   _reconf_deadlock_timer.resize(nodes, 0);
 
   for (int i = 0; i < nodes; ++i){
@@ -335,6 +336,24 @@ int DependentInjectionProcess::_reconfigure(int source){
     if (total_size + w->size <= avail_mem_for_reconf){
       _memory_set.allocate(source, w);
       *(_context->gDumpFile) << "ALLOCATING WORKLOAD " << w->id << " of size " << w->size << " at node " << source << " at time " << _clock->time() << std::endl;
+
+      // when a workload is allocated, we have a look in the _output_left_to_deallocate
+      // we check if there are any packets addressed to the workload being allocated
+      // if so, we deallocate the output space of the previous workload, stored together with
+      // the packet in the _output_left_to_deallocate buffer
+      
+      for ( int pid : w->dep){
+        auto it = std::find_if(_output_left_to_deallocate[source].begin(), _output_left_to_deallocate[source].end(), [pid](const pair<int, const ComputingWorkload *> & p){
+          return p.first == pid;
+        });
+        if (it != _output_left_to_deallocate[source].end()){
+          const ComputingWorkload * ow = it->second;
+          _memory_set.deallocate_output(source, ow);
+          *(_context->gDumpFile) << "DEALLOCATING OUTPUT SPACE OF WORKLOAD " << ow->id << " at node " << source << " at time " << _clock->time() << std::endl;
+          _output_left_to_deallocate[source].erase(it);
+        }
+      }
+
       total_size += w->size;
       it = std::next(it);
     }
@@ -612,13 +631,27 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
           // and check if the set for the dependency is empty: in this case, we can deallocate the memory
           // for the output
           if (_requiring_ouput_deallocation[src].at(p->dep[0]).size() == 0){
+            // check if the workload that is dependent of the packet is going to be included in the next reconfiguration
             const ComputingWorkload * associated_workload = nullptr;
             associated_workload = _traffic->workloadByID(p->dep[0]);
             assert(associated_workload);
-            int prev_mem = _memory_set.getAvailable(src);
-            _memory_set.deallocate_output(src, associated_workload);
-            int new_mem = _memory_set.getAvailable(src);
-            *(_context->gDumpFile) <<"DEALLOCATED OUTPUT - id : " << associated_workload->id << " from node: " << src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+            for (auto & w : _waiting_workloads[dst]){
+              auto it = std::find(w->dep.begin(), w->dep.end(), p->id);
+              if (it != w->dep.end() && w->node == p->src && _memory_set.getMemoryUnit(dst).is_in_next_reconfig_batch(w, _waiting_workloads[dst])){
+                // if yes, we can deallocate the output space
+                int prev_mem = _memory_set.getAvailable(src);
+                _memory_set.deallocate_output(src, associated_workload);
+                int new_mem = _memory_set.getAvailable(src);
+                *(_context->gDumpFile) <<"DEALLOCATED OUTPUT - id : " << associated_workload->id << " from node: " << src << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
+              }
+              else{
+                // if not, we append the associated workload to _ouput_left_to_deallocate, 
+                // which will be deallocated as soon as the receiving workload of the packet will
+                // be loaded in memory
+                _output_left_to_deallocate[src].insert(make_pair(p->id, associated_workload));
+              }
+            }
+            
           }
           
           // after the output deallocation, we stage the reconfiguration
@@ -682,6 +715,18 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
 
 bool DependentInjectionProcess::test(int source)
 {
+
+  // check that there are still waiting packets to inject
+  // if there are none, _reached_end is set to true
+  int count = 0;
+  for(int i = 0; i < _nodes; i++){
+    if(_waiting_packets[i].empty() && _waiting_workloads[i].empty() && _pending_workloads[i] == nullptr && _pending_packets[i].size() == 0){
+      count++;
+    }
+    if(count == _nodes  && _timer[source] == 0 && _decur[source] == false){
+      reached_end = true;
+    }   
+  }
 
 
   bool valid = false;
@@ -799,15 +844,15 @@ bool DependentInjectionProcess::test(int source)
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
   if ((dep_time_p>=0 && source == p->src && !(p == nullptr)) || (_pending_packets[source].size() > 0)){
     // the node is idle and can process the packet request
-    if(_timer[source]==0){
-      assert(!_decur[source]);
-      // the packet has already been cleared for the dependencies, we can inject
-      valid = _enable_reconf ? _manageReconfPacketInjection(p, dep_time_p, source) : _managePacketInjection(p);
+    assert(!_decur[source]);
+    // the packet has already been cleared for the dependencies, we can inject
+    valid = _enable_reconf ? _manageReconfPacketInjection(p, dep_time_p, source) : _managePacketInjection(p);
+    if (valid == true){
+      return valid;
     }
-    else{
-      exit(-1);
-    }
-  }else if(dep_time_w>=0 && source == w->node && !(w==nullptr) && ((_enable_reconf)?_memory_set.is_allocated(source, w):1)){
+    
+  }
+  if(dep_time_w>=0 && source == w->node && !(w==nullptr) && ((_enable_reconf)?_memory_set.is_allocated(source, w):1)){
     if(_timer[source] == 0){
       // the node is idle and can process the workload
       assert(_pending_workloads[source] == nullptr);
@@ -823,17 +868,6 @@ bool DependentInjectionProcess::test(int source)
     }
   }
 
-  // check that there are still waiting packets to inject
-  // if there are none, _reached_end is set to true
-  int count = 0;
-  for(int i = 0; i < _nodes; i++){
-    if(_waiting_packets[i].empty() && _waiting_workloads[i].empty() && _pending_workloads[i] == nullptr){ // && _pending_packets[i] == nullptr
-      count++;
-    }
-    if(count == _nodes  && _timer[source] == 0 && _decur[source] == false){
-      reached_end = true;
-    }   
-  }
   return valid;
 }
 
