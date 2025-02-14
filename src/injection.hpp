@@ -280,9 +280,9 @@ class DependentInjectionProcess : public InjectionProcess {
         int scale = FLIT_SIZE;
         output_size = output_size / scale;
 
-        std::cout << "_available: " << _available << std::endl;
-        std::cout << "output_size: " << output_size << std::endl;
-        std::cout << "_size: " << _size << std::endl;
+        // std::cout << "_available: " << _available << std::endl;
+        // std::cout << "output_size: " << output_size << std::endl;
+        // std::cout << "_size: " << _size << std::endl;
 
         return allocate_(output_size);
       };
@@ -602,7 +602,7 @@ class DependentInjectionProcess : public InjectionProcess {
     std::vector<int> _reconf_deadlock_timer;
     std::vector<bool> _reconf_active;
     std::vector<std::map<int,set<int>>> _requiring_ouput_deallocation; // a datastructure to manage the deallocation of the output space for the workloads
-    vector<set<pair<int, const ComputingWorkload *>>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
+    std::vector<std::map<int, set<const ComputingWorkload *>>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
     DependentInjectionProcess::MemorySet _memory_set;
     const NVMPar * _nvm;
     // ==================  RECONFIGURATION ==================
@@ -801,16 +801,22 @@ class DependentInjectionProcess : public InjectionProcess {
       _memory_set.allocate_output(dest, associated_workload);
       (*_context->gDumpFile) << " ALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << dest << std::endl;
 
-      // include the ouput in the list of outputs to be deallocated
+      // include the ouput in the list of outputs to be deallocated for the w_next workload
       // on the destination node when the next reconfiguration is performed
-      auto it =  std::find_if(_output_left_to_deallocate[dest].begin(), _output_left_to_deallocate[dest].end(), [associated_workload](const pair<int, const ComputingWorkload *> & p){
-        return p.second == associated_workload;
-      });
+      
+      // 1. check if the entry for w_next already exists, if not create it
+      auto it = _output_left_to_deallocate[dest].find((*w_next)->id);
       if (it == _output_left_to_deallocate[dest].end()){
-        // search for the next workload in the queue that is dependent on the packet
-        _output_left_to_deallocate[dest].insert(std::make_pair( (*w_next)->id, associated_workload));
-        *(_context->gDumpFile) << "Output of workload " << associated_workload->id << " to be deallocated on reconfiguration of workload " << (*w_next)->id << " at node " << dest << std::endl;
+        _output_left_to_deallocate[dest][(*w_next)->id] = std::set<const ComputingWorkload *>();
       }
+      // 2. assert that no other entry for the same workload is present
+      auto it2 = _output_left_to_deallocate[dest][(*w_next)->id].find(associated_workload);
+      assert(it2 == _output_left_to_deallocate[dest][(*w_next)->id].end());
+
+      // 3. insert the entry in the set
+      _output_left_to_deallocate[dest].at((*w_next)->id).insert(associated_workload);
+      *(_context->gDumpFile) << "Output of workload " << associated_workload->id << " to be deallocated on reconfiguration of workload " << (*w_next)->id << " at node " << dest << std::endl;
+      
     }
     
     

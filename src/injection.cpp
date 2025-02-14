@@ -338,22 +338,25 @@ int DependentInjectionProcess::_reconfigure(int source){
     w = *it;
     assert (w->size <= _memory_set.getMemoryUnit(source).getTotalAvailableForReconf());
     if (total_size + w->size <= avail_mem_for_reconf){
-      _memory_set.allocate(source, w);
-      *(_context->gDumpFile) << "ALLOCATING WORKLOAD " << w->id << " of size " << w->size << " at node " << source << " at time " << _clock->time() << std::endl;
-
+      
       // when a workload is allocated, we have a look in the _output_left_to_deallocate
       // we check if there are any entries related to the workload that is going to be reconfigured
       // if there are, we deallocate the output space of the workload associated to the entry
-      auto prev = std::find_if(_output_left_to_deallocate[source].begin(), _output_left_to_deallocate[source].end(), [w](const pair<int, const ComputingWorkload *> & p){
-        return p.first == w->id;
-      });
-      if (prev != _output_left_to_deallocate[source].end()){
-        const ComputingWorkload * ow = prev->second;
-        _memory_set.deallocate_output(source, ow);
-        *(_context->gDumpFile) << "DEALLOCATING OUTPUT SPACE OF WORKLOAD " << ow->id << " for workload " << w->id <<" at node " << source << " at time " << _clock->time() << std::endl;
-        _output_left_to_deallocate[source].erase(prev);
-      }
       
+      // 1. if the workload has a key in _output_left_to_deallocate[source], we deallocate the outputs
+      // for all te workloads in the set corresponding to the key
+      auto wit = _output_left_to_deallocate[source].find(w->id);
+      if (wit != _output_left_to_deallocate[source].end()){
+        for (auto & ow : wit->second){
+          _memory_set.deallocate_output(source, ow);
+          *(_context->gDumpFile) << " DEALLOCATING OUTPUT FOR WORKLOAD " << ow->id << " to host WORKLOAD " <<  w->id << " at node " << source << " at time " << _clock->time() << std::endl;
+        }
+        _output_left_to_deallocate[source].erase(wit);
+      }
+
+      _memory_set.allocate(source, w);
+      *(_context->gDumpFile) << "ALLOCATING WORKLOAD " << w->id << " of size " << w->size << " at node " << source << " at time " << _clock->time() << std::endl;
+
 
       total_size += w->size;
       it = std::next(it);
