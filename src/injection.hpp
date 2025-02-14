@@ -48,8 +48,8 @@ public:
   virtual void addToWaitingQueue(int source, Packet * p){};
   virtual int getAvailableMemory(int source){return 0;};
   virtual void stageReconfiguration(int source, bool bypass_empty_memory_check = false) {};
-  virtual void removeFromRequiringOutputDeallocation(int source, int id, int packet_id){}
-  virtual bool isRequiringOutputDeallocationEmpty(int source, int id){return false;}
+  virtual void finalizeCommunication(int source, int w_id, int packet_id){}
+  virtual void finalizeWrite(int dest, int w_prev_id, int packet_id){};
   virtual void deallocateMemory(int source, const ComputingWorkload * w){};
   virtual void reset();
   bool reached_end;
@@ -108,7 +108,9 @@ class DependentInjectionProcess : public InjectionProcess {
       int getTotalAvailableForReconf() const { return _size*_threshold; }
       int getAvailableForReconf() const { return _threshold * _size - (_size-_available); }
       int getNumCurAllocatedWorkloads() const { return _cur_allocated_workload.size(); }
+      int getNumCurAllocatedOutputs() const { return _cur_allocated_output.size(); }
       std::deque<const ComputingWorkload *> & getCurAllocatedWorkloads() { return _cur_allocated_workload; }
+      std::set<const ComputingWorkload *> & getCurAllocatedOutputs() { return _cur_allocated_output; }
 
       void reset() { 
         _available = _size; 
@@ -116,6 +118,18 @@ class DependentInjectionProcess : public InjectionProcess {
           delete w;
         }
         _cur_allocated_workload.clear();
+        _cur_allocated_output.clear();
+      }
+
+      bool remove_output_placeholder(int w_id){
+        auto it = std::find_if(_cur_allocated_output.begin(), _cur_allocated_output.end(), [w_id](const ComputingWorkload * w){
+          return w->id == w_id;
+        });
+        if (it != _cur_allocated_output.end()){
+          _cur_allocated_output.erase(it);
+          return true;
+        }
+        return false;
       }
 
       bool check_mem_avail(int size){
@@ -131,12 +145,20 @@ class DependentInjectionProcess : public InjectionProcess {
         return false;
       }
 
-      bool is_allocated(const ComputingWorkload * w){
+      bool is_workload_allocated(const ComputingWorkload * w){
         /*
         the method is used to check if the workload is already allocated in the memory
         */
         auto it = std::find(_cur_allocated_workload.begin(), _cur_allocated_workload.end(), w);
         return it != _cur_allocated_workload.end();
+      }
+
+      bool is_output_allocated(const ComputingWorkload * w){
+        /*
+        the method is used to check if the output of the workload is already allocated in the memory
+        */
+        auto it = _cur_allocated_output.find(w);
+        return it != _cur_allocated_output.end();
       }
 
       bool is_in_next_reconfig_batch(const ComputingWorkload * w, const std::deque<const ComputingWorkload *> & waiting_workloads){
@@ -170,6 +192,10 @@ class DependentInjectionProcess : public InjectionProcess {
         be stored in the memory of the destination 
         */
 
+        return true;
+
+        /*
+
         // CASE 0. if the packet is addressed to the same node, we can send it directly
         if (p->src == p->dst){
           return true;
@@ -190,37 +216,16 @@ class DependentInjectionProcess : public InjectionProcess {
         for (auto & w : waiting_workloads){
           auto it = std::find(w->dep.begin(), w->dep.end(), p->id);
           
-          /*    
-          // CASE 2. if the packet is addressed to a partition that is scheduled to be reconfigured
-          // right after on the same node, we can mark the packet as ready to be sent (DEADLOCK AVOIDANCE: reconfiguration
-          // is performed when the memory is empty, this means that also the output of previous workloads that
-          // is waiting to be sent needs to be purged, by actually sending the packet. If the packet and next workload
-          // are addressed to the same node, this created a deadlock situation)
-          if (it != w->dep.end() && w->node == p->src){
-            if (is_in_next_reconfig_batch(w, waiting_workloads)){
-              ready = true;
-              return ready;
-            }
-            else{
-              std::cout << "Waiting workloads: " << std::endl;
-              for (auto & w : waiting_workloads){
-                std::cout << w->id << " " << w->size << std::endl;
-              }
 
-              std::cout << "DEADLOCK AVOIDANCE: before leaving, the packet needs the receiving workload to be reconfigured.\n This can not happen because this is not scheduled in the next reconfiguration batch." << std::endl;
-              std::cout << "Error triggered for packet with id: " << p->id << " and destination: " << p->dst << std::endl;
-              exit(-1);
-            }
-          }
-          */
-
-          // CASE 3. we must also check that a depending workload is actually going to be scheduled
+          // CASE 2. we must also check that a depending workload is actually going to be scheduled
           // on the PE at a certain point
           if (it != w->dep.end()){
             ready = true;
           }
         }
         return !ready;
+
+        */
       }
 
 
@@ -259,6 +264,29 @@ class DependentInjectionProcess : public InjectionProcess {
         return true;
       }
 
+      bool allocate_output(const ComputingWorkload * w){
+        /*
+        the method will be used to allocate the memory for the output of the workload
+        if the memory is available, the workload will be added to the list of allocated workloads
+        and the available memory will be decreased by the size of the workload. In this case,
+        the method will return true. If the memory is not available, the method will return false
+        */
+        int output_size = 1;
+        for (int i = 0; i < w->output_range.lower_sp.size(); ++i){
+          output_size *= (w->output_range.upper_sp[i] - w->output_range.lower_sp[i]);
+        }
+        if (w->output_range.channels.size() > 0)
+          output_size *= (w->output_range.channels[1] - w->output_range.channels[0]);
+        int scale = FLIT_SIZE;
+        output_size = output_size / scale;
+
+        std::cout << "_available: " << _available << std::endl;
+        std::cout << "output_size: " << output_size << std::endl;
+        std::cout << "_size: " << _size << std::endl;
+
+        return allocate_(output_size);
+      };
+
       bool allocate(const ComputingWorkload * w, bool optimize = false){
         /*
         the method will be used to allocate the memory for the workload
@@ -295,6 +323,7 @@ class DependentInjectionProcess : public InjectionProcess {
 
         if (size_to_allocate <= _available){
           _cur_allocated_workload.push_back(w);
+          _cur_allocated_output.insert(w);
           return allocate_(size_to_allocate);
         }
         return false;
@@ -442,6 +471,7 @@ class DependentInjectionProcess : public InjectionProcess {
       float _threshold; // to avoid deadlocks
       // int _available_for_reconf; // the memory available for reconfigurations
       std::deque<const ComputingWorkload *> _cur_allocated_workload;
+      std::set<const ComputingWorkload *> _cur_allocated_output;
   };
 
 
@@ -474,8 +504,12 @@ class DependentInjectionProcess : public InjectionProcess {
       return _memory_units[node];
     }
 
-    bool is_allocated(int node, const ComputingWorkload * w){
-      return _memory_units[node].is_allocated(w);
+    bool is_workload_allocated(int node, const ComputingWorkload * w){
+      return _memory_units[node].is_workload_allocated(w);
+    }
+
+    bool is_output_allocated(int node, const ComputingWorkload * w){
+      return _memory_units[node].is_output_allocated(w);
     }
 
     bool is_ready(const Packet * p, const std::deque<const ComputingWorkload *> & waiting_workloads){
@@ -531,6 +565,10 @@ class DependentInjectionProcess : public InjectionProcess {
       return _memory_units[node].deallocate_(size);
     }
 
+    bool allocate_output(int node, const ComputingWorkload * w){
+      return _memory_units[node].allocate_output(w);
+    }
+
     bool allocate(int node, const ComputingWorkload * w, bool optimize = false){
       return _memory_units[node].allocate(w, optimize);
     }
@@ -564,7 +602,7 @@ class DependentInjectionProcess : public InjectionProcess {
     std::vector<int> _reconf_deadlock_timer;
     std::vector<bool> _reconf_active;
     std::vector<std::map<int,set<int>>> _requiring_ouput_deallocation; // a datastructure to manage the deallocation of the output space for the workloads
-    vector<set<pair<int , const ComputingWorkload * >>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
+    vector<set<pair<int, const ComputingWorkload *>>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
     DependentInjectionProcess::MemorySet _memory_set;
     const NVMPar * _nvm;
     // ==================  RECONFIGURATION ==================
@@ -701,7 +739,7 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method to compute the total memory neede for the next reconfiguration batch
     int _computeReconfMem(int source);
     // a method to check if the a reconfiguration should be performed
-    bool _checkReconfNeed(int source, bool bypass_empty_memory_check = false);
+    bool _checkReconfNeed(int source, bool bypass_output_check = false);
     // a method to manage end of computation and integration with reconfiguration
     bool _manageReconfPacketInjection(const Packet * p, int p_dep_time, int source);
     //================ RECONFIGURATION =================
@@ -718,13 +756,64 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);
     // a method to remove a packet id from _requiring_ouput_deallocation
-    void removeFromRequiringOutputDeallocation(int source, int id, int packet_id){
-      _requiring_ouput_deallocation[source].at(id).erase(packet_id);
+    void finalizeCommunication(int source, int w_id, int packet_id){
+      _requiring_ouput_deallocation[source].at(w_id).erase(packet_id);
+      if (_requiring_ouput_deallocation[source].at(w_id).empty()){
+        // remove the output placeholder from memory
+        assert(_memory_set.getMemoryUnit(source).remove_output_placeholder(w_id));
+        // deallocate the memory of the output of the correspoindig workload from the 
+        // memory unit
+        const ComputingWorkload * associated_workload = _traffic->workloadByID(w_id);
+        assert(associated_workload);
+        _memory_set.deallocate_output(source, associated_workload);
+
+        // stage reconfiguration
+        stageReconfiguration(source);
+      }
+    };
+
+    // a method to allocate space for the receiving ouput on the destination node
+    // when the write packet is received by a node: this happens only if
+    // the receiving workload is not already allocated on the destination node
+    void finalizeWrite(int dest, int w_prev_id, int packet_id){
+      
+      // check if the workload is already allocated on the destination node
+      // if so, we can skip the allocation of the output space
+      auto w_next = std::find_if(_waiting_workloads[dest].begin(), _waiting_workloads[dest].end(), [packet_id](const ComputingWorkload * w){
+        for (auto & d : w->dep){
+          if (d == packet_id){
+            return true;
+          }
+        }
+        return false;
+      });
+      if (w_next == _waiting_workloads[dest].end()){
+        return;
+      }
+      if (_memory_set.getMemoryUnit(dest).is_workload_allocated(*w_next)){
+        return;
+      }
+
+      // if not, allocate the memory for the output of the workload on 
+      // the destination node
+      const ComputingWorkload * associated_workload = _traffic->workloadByID(w_prev_id);
+      assert(associated_workload);
+      _memory_set.allocate_output(dest, associated_workload);
+      (*_context->gDumpFile) << " ALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << dest << std::endl;
+
+      // include the ouput in the list of outputs to be deallocated
+      // on the destination node when the next reconfiguration is performed
+      auto it =  std::find_if(_output_left_to_deallocate[dest].begin(), _output_left_to_deallocate[dest].end(), [associated_workload](const pair<int, const ComputingWorkload *> & p){
+        return p.second == associated_workload;
+      });
+      if (it == _output_left_to_deallocate[dest].end()){
+        // search for the next workload in the queue that is dependent on the packet
+        _output_left_to_deallocate[dest].insert(std::make_pair( (*w_next)->id, associated_workload));
+        *(_context->gDumpFile) << "Output of workload " << associated_workload->id << " to be deallocated on reconfiguration of workload " << (*w_next)->id << " at node " << dest << std::endl;
+      }
     }
-    // a method to check if the set of packets corresponding to a workload in _requiring_ouput_deallocation is empty
-    bool isRequiringOutputDeallocationEmpty(int source, int id){
-      return _requiring_ouput_deallocation[source].at(id).empty();
-    }
+    
+    
     // a method to test if the landed packets can be processed
     virtual bool isIdle(int source){return _timer[source] == 0;};
     // a method to get the total available memory
@@ -732,10 +821,12 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method to deallocate memory
     virtual void deallocateMemory(int source, const ComputingWorkload * w){_memory_set.deallocate_output(source, w);};
     // a method to stage reconfiguration
-    virtual void stageReconfiguration(int source, bool bypass_empty_memory_check = false);
+    virtual void stageReconfiguration(int source, bool bypass_output_check = false);
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     
 };
+
+
 
 #endif 

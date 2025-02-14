@@ -806,6 +806,10 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 if(f->type == commType::WRITE || f->type == commType::READ){
                     processing_time = f->data_ptime_expected;
                     *(_context->gDumpFile) << "Processing time: " << processing_time << std::endl;
+                    if (_local_mem_size > 0 && f->type == commType::WRITE && f->data_dep != -1) {
+                        // finalize the write for reconfiguration
+                        _injection_process[f->cl]->finalizeWrite(dest, f->data_dep, f->rpid);
+                    }
                 }
                 else{
                     processing_time = (f->type == commType::WRITE_REQ) ? _write_request_time[f->cl] : _read_request_time[f->cl];
@@ -830,23 +834,9 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 // the local memory the space used to store the output data (packet size)
                 if (_local_mem_size > 0 && f->type == commType::WRITE_ACK && f->data_dep != -1) {
                     
-                    // when a write reply is received, we go look in the reply destination node
-                    // _require_output_deallocation data strucure of the injection process and 
-                    // remove the reply rpid from the set corresponding to the key == f->data_dep
-                    _injection_process[f->cl]->removeFromRequiringOutputDeallocation(f->dst, f->data_dep, f->rpid);
+                    // when a write reply is received, we finalize the communication for reconfiguration
+                    _injection_process[f->cl]->finalizeCommunication(f->dst, f->data_dep, f->rpid);
 
-                    // we then check if the set is empty: if so, we can deallocate the memory corresponding
-                    // to the output of the data_dep workload
-                    auto w = _traffic_pattern[f->cl]->workloadByID(f->data_dep);
-                    if (_injection_process[f->cl]->isRequiringOutputDeallocationEmpty(f->dst, f->data_dep)) {
-                        int prev_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
-                        _injection_process[f->cl]->deallocateMemory(f->dst, w);
-                        int new_mem = _injection_process[f->cl]->getAvailableMemory(f->dst);
-                        *(_context->gDumpFile) << "DEALLOCATED OUTPUT - id : " << w->id << " from node: " << f->dst << " at time: " << _clock.time() << " (prev mem: " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
-                    }
-
-                    // also, stage the reconfiguraton if needed
-                    _injection_process[f->cl]->stageReconfiguration(f->dst);
                 }
             }
         }
