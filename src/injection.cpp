@@ -502,6 +502,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
       }
       *(_context->gDumpFile) <<"======================" << std::endl;
     }
+    // exit(-1);
   }
 }
 
@@ -535,7 +536,7 @@ bool DependentInjectionProcess::_managePacketInjection(const Packet * p){
 }
 
 
-bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, int source){
+bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, int p_dep_time, int source){
   // this method gets called each time a packet can be sent by the NPU.
   // it will then manage the seding of packets based on the space in the destination
   // memory.
@@ -574,7 +575,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
   }
 
 
-  if (p){
+  if (p && p_dep_time >=0){
     // if there are no eligible pending packets, we can check the waiting queue:
     // check if the the packet can be sent directly to the destination
     int src = p->src;
@@ -658,7 +659,7 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
   auto it = _waiting_packets[source].begin();
   while (it != _waiting_packets[source].end()){
     // first check if the packet dependecy as been cleared
-    if (_dependenciesSatisfied(*it, source) == -1){
+    if (_dependenciesSatisfied(*it, source) == -1 && _dependenciesSatisfied(p, source) >= 0){
       // if the dependency for the packet in the waiting queue has not been satisfied,
       // we can insert the packet before it
       break; 
@@ -801,7 +802,7 @@ bool DependentInjectionProcess::test(int source)
     if(_timer[source]==0){
       assert(!_decur[source]);
       // the packet has already been cleared for the dependencies, we can inject
-      valid = _enable_reconf ? _manageReconfPacketInjection(p, source) : _managePacketInjection(p);
+      valid = _enable_reconf ? _manageReconfPacketInjection(p, dep_time_p, source) : _managePacketInjection(p);
     }
     else{
       exit(-1);

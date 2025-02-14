@@ -1,0 +1,6991 @@
+{
+    "arch": {
+        "topology": "torus",
+        "k": 3,
+        "n": 2,
+        "use_read_write": 1,
+        "routing_function": "dim_order",
+        "num_vcs": 16,
+        "user_defined_traffic": 1,
+        "watch_out": "-",
+        "reconfiguration": 1,
+        "reconf_cycles": 1,
+        "max_pe_mem": 11000
+    },
+    "workload": [
+        {
+            "id": 100,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 0,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 413,
+            "weight_size": 19,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    15,
+                    15
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                100
+            ],
+            "node": 4
+        },
+        {
+            "id": 101,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 1,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 404,
+            "weight_size": 10,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    15,
+                    15
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                101
+            ],
+            "node": 1
+        },
+        {
+            "id": 102,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 8
+        },
+        {
+            "id": 2,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 413,
+            "weight_size": 19,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    28,
+                    15
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                102
+            ],
+            "node": 8
+        },
+        {
+            "id": 103,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 3,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 404,
+            "weight_size": 10,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    28,
+                    15
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                103
+            ],
+            "node": 4
+        },
+        {
+            "id": 104,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 8
+        },
+        {
+            "id": 4,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 413,
+            "weight_size": 19,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    15,
+                    28
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                104
+            ],
+            "node": 8
+        },
+        {
+            "id": 105,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 0
+        },
+        {
+            "id": 5,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 404,
+            "weight_size": 10,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    15,
+                    28
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                105
+            ],
+            "node": 0
+        },
+        {
+            "id": 106,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 6,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 413,
+            "weight_size": 19,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    28,
+                    28
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                106
+            ],
+            "node": 1
+        },
+        {
+            "id": 107,
+            "size": 3,
+            "dep": [
+                -1
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 7,
+            "type": "COMP_OP",
+            "layer_id": 1,
+            "size": 404,
+            "weight_size": 10,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    28,
+                    28
+                ],
+                "ch_bounds": [
+                    0,
+                    1
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 457,
+            "dep": [
+                107
+            ],
+            "node": 1
+        },
+        {
+            "id": 108,
+            "size": 5,
+            "dep": [
+                0
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 4,
+            "dst": 8
+        },
+        {
+            "id": 109,
+            "size": 2,
+            "dep": [
+                0
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 5
+        },
+        {
+            "id": 110,
+            "size": 5,
+            "dep": [
+                0
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 4,
+            "dst": 2
+        },
+        {
+            "id": 111,
+            "size": 2,
+            "dep": [
+                0
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 2
+        },
+        {
+            "id": 112,
+            "size": 2,
+            "dep": [
+                1
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 8
+        },
+        {
+            "id": 8,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 218,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    7,
+                    7
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                108,
+                112
+            ],
+            "node": 8
+        },
+        {
+            "id": 113,
+            "size": 2,
+            "dep": [
+                1
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 5
+        },
+        {
+            "id": 9,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 218,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    7,
+                    7
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                109,
+                113
+            ],
+            "node": 5
+        },
+        {
+            "id": 114,
+            "size": 2,
+            "dep": [
+                1
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 2
+        },
+        {
+            "id": 10,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 218,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    7,
+                    7
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                110,
+                114
+            ],
+            "node": 2
+        },
+        {
+            "id": 115,
+            "size": 2,
+            "dep": [
+                1
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 2
+        },
+        {
+            "id": 11,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 218,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    7,
+                    7
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                111,
+                115
+            ],
+            "node": 2
+        },
+        {
+            "id": 116,
+            "size": 5,
+            "dep": [
+                2
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 8,
+            "dst": 5
+        },
+        {
+            "id": 117,
+            "size": 2,
+            "dep": [
+                2
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 0
+        },
+        {
+            "id": 118,
+            "size": 5,
+            "dep": [
+                2
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 8,
+            "dst": 7
+        },
+        {
+            "id": 119,
+            "size": 2,
+            "dep": [
+                2
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 2
+        },
+        {
+            "id": 120,
+            "size": 2,
+            "dep": [
+                3
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 5
+        },
+        {
+            "id": 12,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    7
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                116,
+                120
+            ],
+            "node": 5
+        },
+        {
+            "id": 121,
+            "size": 2,
+            "dep": [
+                3
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 0
+        },
+        {
+            "id": 13,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    7
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                117,
+                121
+            ],
+            "node": 0
+        },
+        {
+            "id": 122,
+            "size": 2,
+            "dep": [
+                3
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 7
+        },
+        {
+            "id": 14,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    7
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                118,
+                122
+            ],
+            "node": 7
+        },
+        {
+            "id": 123,
+            "size": 2,
+            "dep": [
+                3
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 4,
+            "dst": 2
+        },
+        {
+            "id": 15,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    0
+                ],
+                "spatial_max": [
+                    26,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    7
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                119,
+                123
+            ],
+            "node": 2
+        },
+        {
+            "id": 124,
+            "size": 5,
+            "dep": [
+                4
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 8,
+            "dst": 1
+        },
+        {
+            "id": 125,
+            "size": 2,
+            "dep": [
+                4
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 6
+        },
+        {
+            "id": 126,
+            "size": 5,
+            "dep": [
+                4
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 8,
+            "dst": 0
+        },
+        {
+            "id": 127,
+            "size": 2,
+            "dep": [
+                4
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 0
+        },
+        {
+            "id": 128,
+            "size": 2,
+            "dep": [
+                5
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 16,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    7
+                ],
+                "spatial_max": [
+                    7,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                124,
+                128
+            ],
+            "node": 1
+        },
+        {
+            "id": 129,
+            "size": 2,
+            "dep": [
+                5
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 17,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    7
+                ],
+                "spatial_max": [
+                    7,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                125,
+                129
+            ],
+            "node": 6
+        },
+        {
+            "id": 130,
+            "size": 2,
+            "dep": [
+                5
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 0
+        },
+        {
+            "id": 18,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    7
+                ],
+                "spatial_max": [
+                    7,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                126,
+                130
+            ],
+            "node": 0
+        },
+        {
+            "id": 131,
+            "size": 2,
+            "dep": [
+                5
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 0,
+            "dst": 0
+        },
+        {
+            "id": 19,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 211,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    13
+                ],
+                "spatial_max": [
+                    13,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    7
+                ],
+                "spatial_max": [
+                    7,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                127,
+                131
+            ],
+            "node": 0
+        },
+        {
+            "id": 132,
+            "size": 5,
+            "dep": [
+                6
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 1,
+            "dst": 7
+        },
+        {
+            "id": 133,
+            "size": 2,
+            "dep": [
+                6
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 134,
+            "size": 5,
+            "dep": [
+                6
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 135,
+            "size": 2,
+            "dep": [
+                6
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 136,
+            "size": 2,
+            "dep": [
+                7
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 7
+        },
+        {
+            "id": 20,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 205,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    7
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                132,
+                136
+            ],
+            "node": 7
+        },
+        {
+            "id": 137,
+            "size": 2,
+            "dep": [
+                7
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 21,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 205,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    7
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                133,
+                137
+            ],
+            "node": 0
+        },
+        {
+            "id": 138,
+            "size": 2,
+            "dep": [
+                7
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 22,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 205,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    7
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                134,
+                138
+            ],
+            "node": 1
+        },
+        {
+            "id": 139,
+            "size": 2,
+            "dep": [
+                7
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 23,
+            "type": "COMP_OP",
+            "layer_id": 2,
+            "size": 205,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    13,
+                    13
+                ],
+                "spatial_max": [
+                    26,
+                    26
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    7,
+                    7
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                135,
+                139
+            ],
+            "node": 3
+        },
+        {
+            "id": 140,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 3
+        },
+        {
+            "id": 141,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 1
+        },
+        {
+            "id": 142,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 4
+        },
+        {
+            "id": 143,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 5
+        },
+        {
+            "id": 144,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 3
+        },
+        {
+            "id": 145,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 7
+        },
+        {
+            "id": 146,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 6
+        },
+        {
+            "id": 147,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 1
+        },
+        {
+            "id": 148,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 6
+        },
+        {
+            "id": 149,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 3
+        },
+        {
+            "id": 150,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 1
+        },
+        {
+            "id": 151,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 3
+        },
+        {
+            "id": 152,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 6
+        },
+        {
+            "id": 153,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 3
+        },
+        {
+            "id": 154,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 2
+        },
+        {
+            "id": 155,
+            "size": 1,
+            "dep": [
+                8
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 8,
+            "dst": 1
+        },
+        {
+            "id": 156,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 157,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 158,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 4
+        },
+        {
+            "id": 159,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 5
+        },
+        {
+            "id": 160,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 161,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 7
+        },
+        {
+            "id": 162,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 163,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 164,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 165,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 166,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 167,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 168,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 169,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 170,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 2
+        },
+        {
+            "id": 171,
+            "size": 1,
+            "dep": [
+                9
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 172,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 173,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 174,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 4
+        },
+        {
+            "id": 175,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 5
+        },
+        {
+            "id": 176,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 177,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 7
+        },
+        {
+            "id": 178,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 179,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 180,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 181,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 182,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 183,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 184,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 185,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 186,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 2
+        },
+        {
+            "id": 187,
+            "size": 1,
+            "dep": [
+                10
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 188,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 189,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 190,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 4
+        },
+        {
+            "id": 191,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 5
+        },
+        {
+            "id": 192,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 193,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 7
+        },
+        {
+            "id": 194,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 195,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 196,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 197,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 198,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 199,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 200,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 201,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 202,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 2
+        },
+        {
+            "id": 203,
+            "size": 1,
+            "dep": [
+                11
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 204,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 205,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 206,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 4
+        },
+        {
+            "id": 207,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 5
+        },
+        {
+            "id": 208,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 209,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 7
+        },
+        {
+            "id": 210,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 211,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 212,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 213,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 214,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 215,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 216,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 6
+        },
+        {
+            "id": 217,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 3
+        },
+        {
+            "id": 218,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 2
+        },
+        {
+            "id": 219,
+            "size": 1,
+            "dep": [
+                12
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 220,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 221,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 222,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 223,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 5
+        },
+        {
+            "id": 224,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 225,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 7
+        },
+        {
+            "id": 226,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 227,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 228,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 229,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 230,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 231,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 232,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 233,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 234,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 2
+        },
+        {
+            "id": 235,
+            "size": 1,
+            "dep": [
+                13
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 236,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 237,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 238,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 4
+        },
+        {
+            "id": 239,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 5
+        },
+        {
+            "id": 240,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 241,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 7
+        },
+        {
+            "id": 242,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 243,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 244,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 245,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 246,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 247,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 248,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 249,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 250,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 2
+        },
+        {
+            "id": 251,
+            "size": 1,
+            "dep": [
+                14
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 252,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 253,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 254,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 4
+        },
+        {
+            "id": 255,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 5
+        },
+        {
+            "id": 256,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 257,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 7
+        },
+        {
+            "id": 258,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 259,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 260,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 261,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 262,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 263,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 264,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 6
+        },
+        {
+            "id": 265,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 3
+        },
+        {
+            "id": 266,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 2
+        },
+        {
+            "id": 267,
+            "size": 1,
+            "dep": [
+                15
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 268,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 269,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 270,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 271,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 5
+        },
+        {
+            "id": 272,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 273,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 7
+        },
+        {
+            "id": 274,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 275,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 276,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 277,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 278,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 279,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 280,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 281,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 282,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 2
+        },
+        {
+            "id": 283,
+            "size": 1,
+            "dep": [
+                16
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 284,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 3
+        },
+        {
+            "id": 285,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 286,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 287,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 5
+        },
+        {
+            "id": 288,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 3
+        },
+        {
+            "id": 289,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 7
+        },
+        {
+            "id": 290,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 6
+        },
+        {
+            "id": 291,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 292,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 6
+        },
+        {
+            "id": 293,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 3
+        },
+        {
+            "id": 294,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 295,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 3
+        },
+        {
+            "id": 296,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 6
+        },
+        {
+            "id": 297,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 3
+        },
+        {
+            "id": 298,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 2
+        },
+        {
+            "id": 299,
+            "size": 1,
+            "dep": [
+                17
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 300,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 301,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 302,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 303,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 5
+        },
+        {
+            "id": 304,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 305,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 7
+        },
+        {
+            "id": 306,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 307,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 308,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 309,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 310,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 311,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 312,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 313,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 314,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 2
+        },
+        {
+            "id": 315,
+            "size": 1,
+            "dep": [
+                18
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 316,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 317,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 318,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 319,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 5
+        },
+        {
+            "id": 320,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 321,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 7
+        },
+        {
+            "id": 322,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 323,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 324,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 325,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 326,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 327,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 328,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 329,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 330,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 2
+        },
+        {
+            "id": 331,
+            "size": 1,
+            "dep": [
+                19
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 332,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 333,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 334,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 4
+        },
+        {
+            "id": 335,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 5
+        },
+        {
+            "id": 336,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 337,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 7
+        },
+        {
+            "id": 338,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 339,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 340,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 341,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 342,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 343,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 344,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 6
+        },
+        {
+            "id": 345,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 3
+        },
+        {
+            "id": 346,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 2
+        },
+        {
+            "id": 347,
+            "size": 1,
+            "dep": [
+                20
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 348,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 349,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 350,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 4
+        },
+        {
+            "id": 351,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 5
+        },
+        {
+            "id": 352,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 353,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 7
+        },
+        {
+            "id": 354,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 355,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 356,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 357,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 358,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 359,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 360,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 361,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 3
+        },
+        {
+            "id": 362,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 2
+        },
+        {
+            "id": 363,
+            "size": 1,
+            "dep": [
+                21
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 1
+        },
+        {
+            "id": 364,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 365,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 366,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 367,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 5
+        },
+        {
+            "id": 368,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 369,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 7
+        },
+        {
+            "id": 370,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 371,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 372,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 373,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 374,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 375,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 376,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 6
+        },
+        {
+            "id": 377,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 3
+        },
+        {
+            "id": 378,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 2
+        },
+        {
+            "id": 379,
+            "size": 1,
+            "dep": [
+                22
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 380,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 3
+        },
+        {
+            "id": 24,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 156,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    8,
+                    8
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    6,
+                    6
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 52,
+            "dep": [
+                140,
+                156,
+                172,
+                188,
+                204,
+                220,
+                236,
+                252,
+                268,
+                284,
+                300,
+                316,
+                332,
+                348,
+                364,
+                380
+            ],
+            "node": 3
+        },
+        {
+            "id": 381,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 25,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 128,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    8,
+                    8
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    6,
+                    6
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 52,
+            "dep": [
+                141,
+                157,
+                173,
+                189,
+                205,
+                221,
+                237,
+                253,
+                269,
+                285,
+                301,
+                317,
+                333,
+                349,
+                365,
+                381
+            ],
+            "node": 1
+        },
+        {
+            "id": 382,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 26,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 156,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    8,
+                    8
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    6,
+                    6
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 52,
+            "dep": [
+                142,
+                158,
+                174,
+                190,
+                206,
+                222,
+                238,
+                254,
+                270,
+                286,
+                302,
+                318,
+                334,
+                350,
+                366,
+                382
+            ],
+            "node": 4
+        },
+        {
+            "id": 383,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 5
+        },
+        {
+            "id": 27,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 128,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    8,
+                    8
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    6,
+                    6
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 52,
+            "dep": [
+                143,
+                159,
+                175,
+                191,
+                207,
+                223,
+                239,
+                255,
+                271,
+                287,
+                303,
+                319,
+                335,
+                351,
+                367,
+                383
+            ],
+            "node": 5
+        },
+        {
+            "id": 384,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 3
+        },
+        {
+            "id": 28,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 142,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    8
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    6
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 43,
+            "dep": [
+                144,
+                160,
+                176,
+                192,
+                208,
+                224,
+                240,
+                256,
+                272,
+                288,
+                304,
+                320,
+                336,
+                352,
+                368,
+                384
+            ],
+            "node": 3
+        },
+        {
+            "id": 385,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 7
+        },
+        {
+            "id": 29,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 114,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    8
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    6
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 43,
+            "dep": [
+                145,
+                161,
+                177,
+                193,
+                209,
+                225,
+                241,
+                257,
+                273,
+                289,
+                305,
+                321,
+                337,
+                353,
+                369,
+                385
+            ],
+            "node": 7
+        },
+        {
+            "id": 386,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 6
+        },
+        {
+            "id": 30,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 142,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    8
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    6
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 43,
+            "dep": [
+                146,
+                162,
+                178,
+                194,
+                210,
+                226,
+                242,
+                258,
+                274,
+                290,
+                306,
+                322,
+                338,
+                354,
+                370,
+                386
+            ],
+            "node": 6
+        },
+        {
+            "id": 387,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 31,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 114,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    13,
+                    8
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    6
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 43,
+            "dep": [
+                147,
+                163,
+                179,
+                195,
+                211,
+                227,
+                243,
+                259,
+                275,
+                291,
+                307,
+                323,
+                339,
+                355,
+                371,
+                387
+            ],
+            "node": 1
+        },
+        {
+            "id": 388,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 6
+        },
+        {
+            "id": 32,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 142,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    8,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    6,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 38,
+            "dep": [
+                148,
+                164,
+                180,
+                196,
+                212,
+                228,
+                244,
+                260,
+                276,
+                292,
+                308,
+                324,
+                340,
+                356,
+                372,
+                388
+            ],
+            "node": 6
+        },
+        {
+            "id": 389,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 3
+        },
+        {
+            "id": 33,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 114,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    8,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    6,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 38,
+            "dep": [
+                149,
+                165,
+                181,
+                197,
+                213,
+                229,
+                245,
+                261,
+                277,
+                293,
+                309,
+                325,
+                341,
+                357,
+                373,
+                389
+            ],
+            "node": 3
+        },
+        {
+            "id": 390,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 34,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 142,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    8,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    6,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 38,
+            "dep": [
+                150,
+                166,
+                182,
+                198,
+                214,
+                230,
+                246,
+                262,
+                278,
+                294,
+                310,
+                326,
+                342,
+                358,
+                374,
+                390
+            ],
+            "node": 1
+        },
+        {
+            "id": 391,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 3
+        },
+        {
+            "id": 35,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 114,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    8,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    6
+                ],
+                "spatial_max": [
+                    6,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 38,
+            "dep": [
+                151,
+                167,
+                183,
+                199,
+                215,
+                231,
+                247,
+                263,
+                279,
+                295,
+                311,
+                327,
+                343,
+                359,
+                375,
+                391
+            ],
+            "node": 3
+        },
+        {
+            "id": 392,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 6
+        },
+        {
+            "id": 36,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 130,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 31,
+            "dep": [
+                152,
+                168,
+                184,
+                200,
+                216,
+                232,
+                248,
+                264,
+                280,
+                296,
+                312,
+                328,
+                344,
+                360,
+                376,
+                392
+            ],
+            "node": 6
+        },
+        {
+            "id": 393,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 3
+        },
+        {
+            "id": 37,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 102,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 31,
+            "dep": [
+                153,
+                169,
+                185,
+                201,
+                217,
+                233,
+                249,
+                265,
+                281,
+                297,
+                313,
+                329,
+                345,
+                361,
+                377,
+                393
+            ],
+            "node": 3
+        },
+        {
+            "id": 394,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 2
+        },
+        {
+            "id": 38,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 130,
+            "weight_size": 56,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    0,
+                    2
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 31,
+            "dep": [
+                154,
+                170,
+                186,
+                202,
+                218,
+                234,
+                250,
+                266,
+                282,
+                298,
+                314,
+                330,
+                346,
+                362,
+                378,
+                394
+            ],
+            "node": 2
+        },
+        {
+            "id": 395,
+            "size": 1,
+            "dep": [
+                23
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 39,
+            "type": "COMP_OP",
+            "layer_id": 3,
+            "size": 102,
+            "weight_size": 28,
+            "input_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    13,
+                    13
+                ],
+                "ch_bounds": [
+                    2,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    6,
+                    6
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 31,
+            "dep": [
+                155,
+                171,
+                187,
+                203,
+                219,
+                235,
+                251,
+                267,
+                283,
+                299,
+                315,
+                331,
+                347,
+                363,
+                379,
+                395
+            ],
+            "node": 1
+        },
+        {
+            "id": 396,
+            "size": 1,
+            "dep": [
+                24
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 397,
+            "size": 1,
+            "dep": [
+                24
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 398,
+            "size": 1,
+            "dep": [
+                24
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 0
+        },
+        {
+            "id": 399,
+            "size": 1,
+            "dep": [
+                24
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 400,
+            "size": 1,
+            "dep": [
+                25
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 401,
+            "size": 1,
+            "dep": [
+                25
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 402,
+            "size": 1,
+            "dep": [
+                25
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 403,
+            "size": 1,
+            "dep": [
+                25
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 404,
+            "size": 1,
+            "dep": [
+                26
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 4,
+            "dst": 4
+        },
+        {
+            "id": 405,
+            "size": 1,
+            "dep": [
+                26
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 4,
+            "dst": 1
+        },
+        {
+            "id": 406,
+            "size": 1,
+            "dep": [
+                26
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 4,
+            "dst": 0
+        },
+        {
+            "id": 407,
+            "size": 1,
+            "dep": [
+                26
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 4,
+            "dst": 4
+        },
+        {
+            "id": 408,
+            "size": 1,
+            "dep": [
+                27
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 4
+        },
+        {
+            "id": 409,
+            "size": 1,
+            "dep": [
+                27
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 1
+        },
+        {
+            "id": 410,
+            "size": 1,
+            "dep": [
+                27
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 0
+        },
+        {
+            "id": 411,
+            "size": 1,
+            "dep": [
+                27
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 4
+        },
+        {
+            "id": 412,
+            "size": 1,
+            "dep": [
+                28
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 413,
+            "size": 1,
+            "dep": [
+                28
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 414,
+            "size": 1,
+            "dep": [
+                28
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 0
+        },
+        {
+            "id": 415,
+            "size": 1,
+            "dep": [
+                28
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 416,
+            "size": 1,
+            "dep": [
+                29
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 4
+        },
+        {
+            "id": 417,
+            "size": 1,
+            "dep": [
+                29
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 1
+        },
+        {
+            "id": 418,
+            "size": 1,
+            "dep": [
+                29
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 0
+        },
+        {
+            "id": 419,
+            "size": 1,
+            "dep": [
+                29
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 4
+        },
+        {
+            "id": 420,
+            "size": 1,
+            "dep": [
+                30
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 421,
+            "size": 1,
+            "dep": [
+                30
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 422,
+            "size": 1,
+            "dep": [
+                30
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 0
+        },
+        {
+            "id": 423,
+            "size": 1,
+            "dep": [
+                30
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 424,
+            "size": 1,
+            "dep": [
+                31
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 425,
+            "size": 1,
+            "dep": [
+                31
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 426,
+            "size": 1,
+            "dep": [
+                31
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 427,
+            "size": 1,
+            "dep": [
+                31
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 428,
+            "size": 1,
+            "dep": [
+                32
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 429,
+            "size": 1,
+            "dep": [
+                32
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 430,
+            "size": 1,
+            "dep": [
+                32
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 0
+        },
+        {
+            "id": 431,
+            "size": 1,
+            "dep": [
+                32
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 432,
+            "size": 1,
+            "dep": [
+                33
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 433,
+            "size": 1,
+            "dep": [
+                33
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 434,
+            "size": 1,
+            "dep": [
+                33
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 0
+        },
+        {
+            "id": 435,
+            "size": 1,
+            "dep": [
+                33
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 436,
+            "size": 1,
+            "dep": [
+                34
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 437,
+            "size": 1,
+            "dep": [
+                34
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 438,
+            "size": 1,
+            "dep": [
+                34
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 439,
+            "size": 1,
+            "dep": [
+                34
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 440,
+            "size": 1,
+            "dep": [
+                35
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 441,
+            "size": 1,
+            "dep": [
+                35
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 442,
+            "size": 1,
+            "dep": [
+                35
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 0
+        },
+        {
+            "id": 443,
+            "size": 1,
+            "dep": [
+                35
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 444,
+            "size": 1,
+            "dep": [
+                36
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 445,
+            "size": 1,
+            "dep": [
+                36
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 1
+        },
+        {
+            "id": 446,
+            "size": 1,
+            "dep": [
+                36
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 0
+        },
+        {
+            "id": 447,
+            "size": 1,
+            "dep": [
+                36
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 4
+        },
+        {
+            "id": 448,
+            "size": 1,
+            "dep": [
+                37
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 449,
+            "size": 1,
+            "dep": [
+                37
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 1
+        },
+        {
+            "id": 450,
+            "size": 1,
+            "dep": [
+                37
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 0
+        },
+        {
+            "id": 451,
+            "size": 1,
+            "dep": [
+                37
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 3,
+            "dst": 4
+        },
+        {
+            "id": 452,
+            "size": 1,
+            "dep": [
+                38
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 4
+        },
+        {
+            "id": 453,
+            "size": 1,
+            "dep": [
+                38
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 1
+        },
+        {
+            "id": 454,
+            "size": 1,
+            "dep": [
+                38
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 0
+        },
+        {
+            "id": 455,
+            "size": 1,
+            "dep": [
+                38
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 2,
+            "dst": 4
+        },
+        {
+            "id": 456,
+            "size": 1,
+            "dep": [
+                39
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 40,
+            "type": "COMP_OP",
+            "layer_id": 4,
+            "size": 254,
+            "weight_size": 12,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 5,
+            "dep": [
+                396,
+                400,
+                404,
+                408,
+                412,
+                416,
+                420,
+                424,
+                428,
+                432,
+                436,
+                440,
+                444,
+                448,
+                452,
+                456
+            ],
+            "node": 4
+        },
+        {
+            "id": 457,
+            "size": 1,
+            "dep": [
+                39
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 1
+        },
+        {
+            "id": 41,
+            "type": "COMP_OP",
+            "layer_id": 4,
+            "size": 254,
+            "weight_size": 12,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "ct_required": 5,
+            "dep": [
+                397,
+                401,
+                405,
+                409,
+                413,
+                417,
+                421,
+                425,
+                429,
+                433,
+                437,
+                441,
+                445,
+                449,
+                453,
+                457
+            ],
+            "node": 1
+        },
+        {
+            "id": 458,
+            "size": 1,
+            "dep": [
+                39
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 42,
+            "type": "COMP_OP",
+            "layer_id": 4,
+            "size": 254,
+            "weight_size": 12,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 5,
+            "dep": [
+                398,
+                402,
+                406,
+                410,
+                414,
+                418,
+                422,
+                426,
+                430,
+                434,
+                438,
+                442,
+                446,
+                450,
+                454,
+                458
+            ],
+            "node": 0
+        },
+        {
+            "id": 459,
+            "size": 1,
+            "dep": [
+                39
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 1,
+            "dst": 4
+        },
+        {
+            "id": 43,
+            "type": "COMP_OP",
+            "layer_id": 4,
+            "size": 254,
+            "weight_size": 12,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "ct_required": 5,
+            "dep": [
+                399,
+                403,
+                407,
+                411,
+                415,
+                419,
+                423,
+                427,
+                431,
+                435,
+                439,
+                443,
+                447,
+                451,
+                455,
+                459
+            ],
+            "node": 4
+        },
+        {
+            "id": 460,
+            "size": 5,
+            "dep": [
+                40
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 4,
+            "dst": 0
+        },
+        {
+            "id": 461,
+            "size": 5,
+            "dep": [
+                41
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 1,
+            "dst": 0
+        },
+        {
+            "id": 462,
+            "size": 5,
+            "dep": [
+                42
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 0,
+            "dst": 0
+        },
+        {
+            "id": 463,
+            "size": 5,
+            "dep": [
+                43
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 4,
+            "dst": 0
+        },
+        {
+            "id": 44,
+            "type": "COMP_OP",
+            "layer_id": 5,
+            "size": 242,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    6
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    6
+                ]
+            },
+            "ct_required": 2,
+            "dep": [
+                460,
+                461,
+                462,
+                463
+            ],
+            "node": 0
+        },
+        {
+            "id": 464,
+            "size": 5,
+            "dep": [
+                44
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 0,
+            "dst": 8
+        },
+        {
+            "id": 45,
+            "type": "COMP_OP",
+            "layer_id": 6,
+            "size": 146,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    0,
+                    3
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    5,
+                    5
+                ],
+                "ch_bounds": [
+                    0,
+                    6
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                464
+            ],
+            "node": 8
+        },
+        {
+            "id": 465,
+            "size": 5,
+            "dep": [
+                44
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 2,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 46,
+            "type": "COMP_OP",
+            "layer_id": 6,
+            "size": 146,
+            "weight_size": 0,
+            "input_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    11,
+                    11
+                ],
+                "ch_bounds": [
+                    3,
+                    6
+                ]
+            },
+            "output_range": {
+                "spatial_min": [
+                    0,
+                    0
+                ],
+                "spatial_max": [
+                    5,
+                    5
+                ],
+                "ch_bounds": [
+                    0,
+                    6
+                ]
+            },
+            "ct_required": 1,
+            "dep": [
+                465
+            ],
+            "node": 6
+        },
+        {
+            "id": 466,
+            "size": 2,
+            "dep": [
+                45
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 6
+        },
+        {
+            "id": 467,
+            "size": 2,
+            "dep": [
+                45
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 8,
+            "dst": 0
+        },
+        {
+            "id": 468,
+            "size": 2,
+            "dep": [
+                46
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 6,
+            "dst": 6
+        },
+        {
+            "id": 47,
+            "type": "COMP_OP",
+            "layer_id": 7,
+            "size": 9846,
+            "weight_size": 9664,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    150
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    32
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 96,
+            "dep": [
+                466,
+                468
+            ],
+            "node": 6
+        },
+        {
+            "id": 469,
+            "size": 2,
+            "dep": [
+                46
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 1,
+            "src": 6,
+            "dst": 0
+        },
+        {
+            "id": 48,
+            "type": "COMP_OP",
+            "layer_id": 7,
+            "size": 9846,
+            "weight_size": 9664,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    150
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    32
+                ],
+                "spatial_max": [
+                    64
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 96,
+            "dep": [
+                467,
+                469
+            ],
+            "node": 0
+        },
+        {
+            "id": 470,
+            "size": 1,
+            "dep": [
+                47
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 6
+        },
+        {
+            "id": 471,
+            "size": 1,
+            "dep": [
+                48
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 6
+        },
+        {
+            "id": 49,
+            "type": "COMP_OP",
+            "layer_id": 8,
+            "size": 448,
+            "weight_size": 256,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    64
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    64
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 5,
+            "dep": [
+                470,
+                471
+            ],
+            "node": 6
+        },
+        {
+            "id": 476,
+            "size": 1,
+            "dep": [
+                49
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 5
+        },
+        {
+            "id": 50,
+            "type": "COMP_OP",
+            "layer_id": 10,
+            "size": 1636,
+            "weight_size": 1560,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    64
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    12
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 15,
+            "dep": [
+                476
+            ],
+            "node": 5
+        },
+        {
+            "id": 472,
+            "size": 1,
+            "dep": [
+                50
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 0
+        },
+        {
+            "id": 473,
+            "size": 1,
+            "dep": [
+                50
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 7
+        },
+        {
+            "id": 477,
+            "size": 1,
+            "dep": [
+                49
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 6,
+            "dst": 5
+        },
+        {
+            "id": 51,
+            "type": "COMP_OP",
+            "layer_id": 10,
+            "size": 1636,
+            "weight_size": 1560,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    64
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    12
+                ],
+                "spatial_max": [
+                    24
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 15,
+            "dep": [
+                477
+            ],
+            "node": 5
+        },
+        {
+            "id": 474,
+            "size": 1,
+            "dep": [
+                51
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 0
+        },
+        {
+            "id": 52,
+            "type": "COMP_OP",
+            "layer_id": 11,
+            "size": 279,
+            "weight_size": 250,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    24
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    5
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 2,
+            "dep": [
+                472,
+                474
+            ],
+            "node": 0
+        },
+        {
+            "id": 475,
+            "size": 1,
+            "dep": [
+                51
+            ],
+            "type": "WRITE_REQ",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 5,
+            "dst": 7
+        },
+        {
+            "id": 53,
+            "type": "COMP_OP",
+            "layer_id": 11,
+            "size": 279,
+            "weight_size": 250,
+            "input_range": {
+                "spatial_min": [
+                    0
+                ],
+                "spatial_max": [
+                    24
+                ],
+                "ch_bounds": []
+            },
+            "output_range": {
+                "spatial_min": [
+                    5
+                ],
+                "spatial_max": [
+                    10
+                ],
+                "ch_bounds": []
+            },
+            "ct_required": 2,
+            "dep": [
+                473,
+                475
+            ],
+            "node": 7
+        },
+        {
+            "id": 478,
+            "size": 1,
+            "dep": [
+                52
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 0,
+            "dst": 8
+        },
+        {
+            "id": 479,
+            "size": 1,
+            "dep": [
+                53
+            ],
+            "type": "WRITE",
+            "cl": 0,
+            "pt_required": 0,
+            "src": 7,
+            "dst": 8
+        }
+    ]
+}

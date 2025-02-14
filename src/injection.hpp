@@ -196,6 +196,11 @@ class DependentInjectionProcess : public InjectionProcess {
               return ready;
             }
             else{
+              std::cout << "Waiting workloads: " << std::endl;
+              for (auto & w : waiting_workloads){
+                std::cout << w->id << " " << w->size << std::endl;
+              }
+
               std::cout << "DEADLOCK AVOIDANCE: before leaving, the packet needs the receiving workload to be reconfigured.\n This can not happen because this is not scheduled in the next reconfiguration batch." << std::endl;
               std::cout << "Error triggered for packet with id: " << p->id << " and destination: " << p->dst << std::endl;
               exit(-1);
@@ -690,7 +695,7 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method to check if the a reconfiguration should be performed
     bool _checkReconfNeed(int source, bool bypass_empty_memory_check = false);
     // a method to manage end of computation and integration with reconfiguration
-    bool _manageReconfPacketInjection(const Packet * p, int source);
+    bool _manageReconfPacketInjection(const Packet * p, int p_dep_time, int source);
     //================ RECONFIGURATION =================
 
     bool _managePacketInjection(const Packet * p);
