@@ -379,12 +379,11 @@ bool DependentInjectionProcess::_checkReconfNeed(int source, bool bypass_output_
   //    (that means that all the ouput placeholders have been removed)
   
 
-
   bool valid = false;
   int allocated_workloads = _memory_set.getMemoryUnit(source).getNumCurAllocatedWorkloads();
   int allocated_outputs = _memory_set.getMemoryUnit(source).getNumCurAllocatedOutputs();
   // when all of the above conditions are met, we can toggle the reconfiguration flag
-  if (bypass_output_check ? true : (allocated_outputs < 1)  &&
+  if ((bypass_output_check ? true : (allocated_outputs < 1))  &&
       allocated_workloads < 1 &&
       _waiting_workloads[source].size() > 0){    
           valid = true;
@@ -459,6 +458,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     // make space for the packet
     _waiting_packets[source].emplace_back(p);
     _traffic->updateNextPacket();
+    (*_context->gDumpFile) << "Packet " << p->id << " with size " << p->size << " inserted in queue at node " << source << std::endl;
 
     // create a EventInfo object for each packet
     if (_logger) {
@@ -475,6 +475,7 @@ void DependentInjectionProcess::_buildStaticWaitingQueues(){
     assert((w->ct_required > 0));
     assert((w->node >= 0) && (w->node < _nodes));
     int source = w->node;
+    (*_context->gDumpFile) << "Workload " << w->id << " with size " << w->size << " inserted in queue at node " << source << std::endl;
     _waiting_workloads[source].emplace_back(w);
     _traffic->updateNextWorkload();
 
@@ -667,18 +668,11 @@ bool DependentInjectionProcess::test(int source)
   }
 
 
+
   bool valid = false;
   const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
 
-  if (_resorting){
-    if (_resortWaitingQueues(_waiting_packets, source)){
-    // std::cout << "Resorted the waiting packets" << std::endl;
-    }
-    if (_resortWaitingQueues(_waiting_workloads, source)){
-      // std::cout << "Resorted the waiting workloads" << std::endl;
-    }
-  }
   
   if(!(_waiting_packets[source].empty())){
     p = _waiting_packets[source].front();
@@ -742,7 +736,14 @@ bool DependentInjectionProcess::test(int source)
       *(_context->gDumpFile) << "Workload with ID:" << _pending_workloads[source]->id << " at node " << source << " has been processed at time " << _clock->time() << std::endl;
       _executed[source].insert(make_tuple(_pending_workloads[source]->id, _pending_workloads[source]->type, _clock->time()));
     }
-    
+
+    // enable resorting of the waiting queues for the packets
+    if (_resorting || _enable_reconf){
+      if (_resortWaitingPQueues(_waiting_packets, source)){
+        *(_context->gDumpFile) << "Resorted the waiting packets at node " << source << std::endl;
+      }
+    }
+
     if (_enable_reconf){
       // delete from memory the workload that has been processed
       if (_pending_workloads[source] != nullptr){
@@ -753,17 +754,20 @@ bool DependentInjectionProcess::test(int source)
         *(_context->gDumpFile) << "DEALLOCATED WORKLOAD - id : " <<  _pending_workloads[source]->id <<",  size : " << new_mem - prev_mem << " from node: " << source << " at time: " << _clock->time() << "(prev mem : " << prev_mem << ", new mem: " << new_mem << ")" << std::endl;
       }
 
-      // if no packet is dependent on the workload, check for reconfiguration, bypassing the output memory check
+      // if no packet is dependent on the workload, check directly for reconfiguration, bypassing the output memory check
       if (_requiring_ouput_deallocation[source].at(_pending_workloads[source]->id).size() == 0){
         stageReconfiguration(source, true);
       }
 
     }
     _pending_workloads[source] = nullptr;
+
+
+    
   }
 
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
-  if ((dep_time_p>=0 && source == p->src && !(p == nullptr)) || (_pending_packets[source].size() > 0)){
+  if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
     // the node is idle and can process the packet request
     assert(!_decur[source]);
     // the packet has already been cleared for the dependencies, we can inject

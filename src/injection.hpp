@@ -706,30 +706,60 @@ class DependentInjectionProcess : public InjectionProcess {
       }
     }
 
-    // a new method to resort the waiting queues: if the function gets called, 
-    // it will loop over the waiting queues and check if the dependencies have been satisfied.
-    // If so, the packet/workload will be moved to the front of the queue. If no packets/workloads
-    // dependencies have been satisfied, the function will scan over all the elements in the queue and 
-    // finally return false. Otherwise, it stops at the first element that has dependencies satisfied
-    // and moves it to the front of the queue, returning true
-    template <typename T>
-    bool _resortWaitingQueues(T& container, int source) {
+    // a new method to resort the waiting queues of packets
+    bool _resortWaitingPQueues( vector<deque<const Packet *>> & waiting_packets, int source){
         bool resorted = false;
-        // scan over the waiting packets
-        for (auto it = container[source].begin(); it != container[source].end(); ++it) {
-            // check if the dependencies have been satisfied
-            if (_dependenciesSatisfied(&(*(*it)), source) >= 0) {
-                // if the item is already at the front of the queue, do nothing
-                if (it == container[source].begin()) {
-                    return resorted;
-                }
-                // else, move the item to the front of the queue and return true
-                it = container[source].erase(it);
-                container[source].push_front(*it);
-                resorted = true;
-                return resorted;
-            }
+        
+        // loop over the waiting packets and keep going until you find a packet whose dependencies are
+        // not satisfied yet. Mark this packet and move on with the search: if you find a packet whose
+        // dependencies are satisfied, move it in front of the marked packet. Continue this way until you
+        // reach the end of the queue. 
+
+        std::deque<const Packet *>::iterator marked = waiting_packets[source].begin();
+        std::deque<const Packet *> to_move;
+        bool assigned = false;
+        const Packet * p = nullptr;
+        
+        if (waiting_packets[source].size() < 2){
+          return false;
         }
+        for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
+          // std::cout << _dependenciesSatisfied(*it, source) << std::endl;
+          if (!assigned){
+            if (_dependenciesSatisfied(*it, source) < 0){
+              marked = it;
+              // std::cout << "ASSIGNED MARKED" << std::endl;
+              assigned = true;
+            }
+          }
+          else{
+            if (_dependenciesSatisfied(*it, source) >= 0){
+              // move the packet in front of the marked packet
+              to_move.push_back(*it);
+              // std::cout << "Appending to to_move" << std::endl;
+              // std::cout << "*it->id: " << (*it)->id << std::endl;
+              resorted = true;
+            }
+          }
+        }
+
+        // move the packets
+        for (auto it = to_move.begin(); it != to_move.end(); ++it){
+          p = *it;
+          // find the packet p in waiting_packets
+          auto it2 = std::find(waiting_packets[source].begin(), waiting_packets[source].end(), p);
+          assert (it2 != waiting_packets[source].end());
+          waiting_packets[source].erase(it2);
+          waiting_packets[source].insert(marked, p);
+        }
+
+        // print the new queue
+        // std::cout << "NEW QUEUE" << std::endl;
+        // for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
+        //   std::cout << _dependenciesSatisfied(*it, source) << std::endl;
+        // }
+              
+
         return resorted;
     }
 
@@ -761,8 +791,8 @@ class DependentInjectionProcess : public InjectionProcess {
       if (_requiring_ouput_deallocation[source].at(w_id).empty()){
         // remove the output placeholder from memory
         assert(_memory_set.getMemoryUnit(source).remove_output_placeholder(w_id));
-        // deallocate the memory of the output of the correspoindig workload from the 
-        // memory unit
+        // remove the output placeholder of the correspoindig workload from the 
+        // memory unit.
         const ComputingWorkload * associated_workload = _traffic->workloadByID(w_id);
         assert(associated_workload);
         _memory_set.deallocate_output(source, associated_workload);
