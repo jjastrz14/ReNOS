@@ -129,6 +129,7 @@ class DependentInjectionProcess : public InjectionProcess {
           _cur_allocated_output.erase(it);
           return true;
         }
+        std::cout << "ERROR: output placeholder not for workload " << w_id  << std::endl;
         return false;
       }
 
@@ -620,10 +621,68 @@ class DependentInjectionProcess : public InjectionProcess {
     Clock * _clock;
     //a pointer to the traffic object, holding the packets to be injected
     TrafficPattern * _traffic;
+
+    // a method to check if the dependencies have been satistisfied for the packet
+    int _dependenciesPSatisfied (const Packet * p, int source, bool extensive_search = false) const {
+      assert(p);
+      assert((p->dep.size() > 0));
+      set<int> dep(p->dep.begin(), p->dep.end());
+      std::vector<int> dep_time;
+
+      if (dep.size() == 1){
+        // check wether the only element is -1
+        if (find(dep.begin(), dep.end(), -1) != dep.end()){
+          return 0;
+        }
+      }
+
+      if(!extensive_search) // consider just the specified source
+      {
+        // check if the dependecies have been satisfied for the packet
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in landed packets if the (last) dependency for the packet has been satisfied
+          auto match = std::find_if(_executed[source].begin(), _executed[source].end(), [it](const tuple<int,int,int> & p){
+            return std::get<0>(p) == *it;
+          });
+          if (match != _executed[source].end()){
+            dep_time.push_back(std::get<2>(*match));
+          }
+        }
+      }
+      else{
+        // check for the executed workload
+        for (auto it = dep.begin(); it != dep.end(); ++it){
+          // check in landed packets if the (last) dependency for the packet has been satisfied
+          for (int i = 0; i < _nodes; ++i){
+            auto match = std::find_if(_executed[i].begin(), _executed[i].end(), [it](const tuple<int,int,int> & p){
+              return std::get<0>(p) == *it;
+            });
+            if (match != _executed[i].end()){
+              dep_time.push_back(std::get<2>(*match));
+            }
+          }
+        }
+      }
+
+      // if the set is empty, return the maximum time of the dependencies
+      if (dep.size() == dep_time.size()){
+        // std::cout << "\n"<<std::endl;
+        // std::cout << "Dependencies satisfied for node: " << source << std::endl;
+        for(auto & t : dep_time){
+          // std::cout << t << " ";
+        }
+        // std::cout << "\n"<<std::endl;
+        return *max_element(dep_time.begin(), dep_time.end());
+      }
+      else{
+        return -1;
+      }
+
+    };
+
     
-    // a method to check if the dependencies have been satisfied for the packet/workload
-    template <typename T>
-    int _dependenciesSatisfied (const T * u, int source, bool extensive_search= false) const{
+    // a method to check if the dependencies have been satisfied for the workload
+    int _dependenciesWSatisfied (const ComputingWorkload * u, int source, bool extensive_search= false) const{
       // get the vector of dependencies and convert it to a set
       assert(u);
       assert((u->dep.size() > 0));
@@ -638,8 +697,8 @@ class DependentInjectionProcess : public InjectionProcess {
       }
       if (!extensive_search) // consider just the specified source
       {
-        // check if the dependencies have been satisfied for the packet
-        for (auto it = dep.begin(); it != dep.end(); ++it){
+         // check if the dependencies have been satisfied for the workload
+         for (auto it = dep.begin(); it != dep.end(); ++it){
           // check in the processed packets for the coinsidered source if there are requests whose
           // id matches the dependency: THE PACKET ID MUST MATCH WITH THE DEPENDENCY, AS WELL AS BE A WRITE PACKET
           auto match = std::find_if(_processed->at(source).begin(), _processed->at(source).end(), [it](const tuple<int,int,int> & p){
@@ -649,20 +708,9 @@ class DependentInjectionProcess : public InjectionProcess {
             dep_time.push_back(std::get<2>(*match));
           }
         }
-
-        // do the same for the executed workloads
-        for (auto it = dep.begin(); it != dep.end(); ++it){
-          // check in landed packets if the (last) dependency for the packet has been satisfied
-          auto match = std::find_if(_executed[source].begin(), _executed[source].end(), [it](const tuple<int,int,int> & p){
-            return std::get<0>(p) == *it;
-          });
-          if (match != _executed[source].end()){
-            dep_time.push_back(std::get<2>(*match));
-          }
-        }
+        
       }
       else{ // consider also all the other sources
-
         // check if the dependencies have been satisfied for the packet
         for (auto it = dep.begin(); it != dep.end(); ++it){
           // check in the processed packets for the coinsidered source if there are requests whose
@@ -676,19 +724,7 @@ class DependentInjectionProcess : public InjectionProcess {
             }
           }
         }
-
-        // do the same for the executed workloads
-        for (auto it = dep.begin(); it != dep.end(); ++it){
-          // check in landed packets if the (last) dependency for the packet has been satisfied
-          for (int i = 0; i < _nodes; ++i){
-            auto match = std::find_if(_executed[i].begin(), _executed[i].end(), [it](const tuple<int,int,int> & p){
-              return std::get<0>(p) == *it;
-            });
-            if (match != _executed[i].end()){
-              dep_time.push_back(std::get<2>(*match));
-            }
-          }
-        }
+        
       }
       
       // if the set is empty, return the maximum time of the dependencies
@@ -716,6 +752,7 @@ class DependentInjectionProcess : public InjectionProcess {
         // reach the end of the queue. 
 
         std::deque<const Packet *>::iterator marked = waiting_packets[source].begin();
+        int marked_position = 0;
         std::deque<const Packet *> to_move;
         bool assigned = false;
         const Packet * p = nullptr;
@@ -726,15 +763,17 @@ class DependentInjectionProcess : public InjectionProcess {
         for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
           // std::cout << "id" << (*it)->id << ", _dependenciesSatisfied(*it, source): " << _dependenciesSatisfied(*it, source) << std::endl;
           if (!assigned){
-            if (_dependenciesSatisfied(*it, source) < 0){
+            if (_dependenciesPSatisfied(*it, source) < 0){
               marked = it;
               // std::cout << "ASSIGNED MARKED" << std::endl;
-              
               assigned = true;
+            }
+            else{
+              marked_position++;
             }
           }
           else{
-            if (_dependenciesSatisfied(*it, source) >= 0){
+            if (_dependenciesPSatisfied(*it, source) >= 0){
               // move the packet in front of the marked packet
               to_move.push_back(*it);
               // std::cout << "Appending to to_move" << std::endl;
@@ -743,18 +782,21 @@ class DependentInjectionProcess : public InjectionProcess {
             }
           }
         }
+
+        assert ((marked == _waiting_packets[source].begin())? (marked_position == 0 || marked_position == waiting_packets[source].size() ): (waiting_packets[source][marked_position])->id == (*marked)->id );
         // move the packets
         for (auto m = to_move.begin(); m != to_move.end(); ++m){
           p = *m;
           // insert the packet in front of the marked packet
-          if (marked == waiting_packets[source].begin()){
-            waiting_packets[source].push_front(p);
-          }
-          else{
-            waiting_packets[source].insert(marked, p);
-          }
+          // std::cout << "marked->id: " << (*marked)->id << std::endl;
+          waiting_packets[source].insert(marked, p);
+          // increase the marked position
+          marked_position++;
+          // update the marked iterator
+          marked = waiting_packets[source].begin() + marked_position;
+          
+          
           // seach for the second occurence of the packet in the queue and remove it 
-          // OSS: this contorted way is used becuse simpler implementation would sometimes not work
           bool found_first = false;
           for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
             if ((*it)->id == p->id){
@@ -807,6 +849,7 @@ class DependentInjectionProcess : public InjectionProcess {
       _requiring_ouput_deallocation[source].at(w_id).erase(packet_id);
       if (_requiring_ouput_deallocation[source].at(w_id).empty()){
         // remove the output placeholder from memory
+        std::cout << "PAcket " << packet_id << " has been processed" << std::endl;
         assert(_memory_set.getMemoryUnit(source).remove_output_placeholder(w_id));
         // remove the output placeholder of the correspoindig workload from the 
         // memory unit.
@@ -841,24 +884,26 @@ class DependentInjectionProcess : public InjectionProcess {
         return;
       }
 
-      // if not, allocate the memory for the output of the workload on 
-      // the destination node
+      
+      // if not, we must allocate the output space for the workload iff the receiving workload is not already allocated
+      // also include the ouput in the list of outputs to be deallocated for the w_next workload
+      // on the destination node when the next reconfiguration is performed
+
       const ComputingWorkload * associated_workload = _traffic->workloadByID(w_prev_id);
       assert(associated_workload);
-      _memory_set.allocate_output(dest, associated_workload);
-      (*_context->gDumpFile) << " ALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << dest << std::endl;
-
-      // include the ouput in the list of outputs to be deallocated for the w_next workload
-      // on the destination node when the next reconfiguration is performed
       
       // 1. check if the entry for w_next already exists, if not create it
       auto it = _output_left_to_deallocate[dest].find((*w_next)->id);
       if (it == _output_left_to_deallocate[dest].end()){
         _output_left_to_deallocate[dest][(*w_next)->id] = std::set<const ComputingWorkload *>();
+        
       }
-      // 2. assert that no other entry for the same workload is present
+      // 2. if no other entry for the same workload is present
       auto it2 = _output_left_to_deallocate[dest][(*w_next)->id].find(associated_workload);
-      assert(it2 == _output_left_to_deallocate[dest][(*w_next)->id].end());
+      assert(it2 == _output_left_to_deallocate[dest][(*w_next)->id].end()); // one out packet per workload, if we find more entries, thats a mistake
+      // allocate space for the output on the node
+      _memory_set.allocate_output(dest, associated_workload);
+      (*_context->gDumpFile) << " ALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << dest << std::endl;
 
       // 3. insert the entry in the set
       _output_left_to_deallocate[dest].at((*w_next)->id).insert(associated_workload);

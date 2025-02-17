@@ -631,7 +631,7 @@ void DependentInjectionProcess::addToWaitingQueue(int source, Packet * p)
   auto it = _waiting_packets[source].begin();
   while (it != _waiting_packets[source].end()){
     // first check if the packet dependecy as been cleared
-    if (_dependenciesSatisfied(*it, source) == -1 && _dependenciesSatisfied(p, source) >= 0){
+    if (_dependenciesPSatisfied(*it, source) == -1 && _dependenciesPSatisfied(p, source) >= 0){
       // if the dependency for the packet in the waiting queue has not been satisfied,
       // we can insert the packet before it
       break; 
@@ -758,10 +758,10 @@ bool DependentInjectionProcess::test(int source)
   int dep_time_w = -1;
   int dep_time_p = -1;
   if (!(w == nullptr)){
-    dep_time_w = _dependenciesSatisfied(&(*w), source);
+    dep_time_w = _dependenciesWSatisfied(&(*w), source);
   }
   if (!(p == nullptr)){
-    dep_time_p = _dependenciesSatisfied(&(*p), source);
+    dep_time_p = _dependenciesPSatisfied(&(*p), source);
   }
 
 
