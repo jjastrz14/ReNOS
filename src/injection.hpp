@@ -724,11 +724,12 @@ class DependentInjectionProcess : public InjectionProcess {
           return false;
         }
         for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
-          // std::cout << _dependenciesSatisfied(*it, source) << std::endl;
+          // std::cout << "id" << (*it)->id << ", _dependenciesSatisfied(*it, source): " << _dependenciesSatisfied(*it, source) << std::endl;
           if (!assigned){
             if (_dependenciesSatisfied(*it, source) < 0){
               marked = it;
               // std::cout << "ASSIGNED MARKED" << std::endl;
+              
               assigned = true;
             }
           }
@@ -742,21 +743,37 @@ class DependentInjectionProcess : public InjectionProcess {
             }
           }
         }
-
         // move the packets
-        for (auto it = to_move.begin(); it != to_move.end(); ++it){
-          p = *it;
-          // find the packet p in waiting_packets
-          auto it2 = std::find(waiting_packets[source].begin(), waiting_packets[source].end(), p);
-          assert (it2 != waiting_packets[source].end());
-          waiting_packets[source].erase(it2);
-          waiting_packets[source].insert(marked, p);
+        for (auto m = to_move.begin(); m != to_move.end(); ++m){
+          p = *m;
+          // insert the packet in front of the marked packet
+          if (marked == waiting_packets[source].begin()){
+            waiting_packets[source].push_front(p);
+          }
+          else{
+            waiting_packets[source].insert(marked, p);
+          }
+          // seach for the second occurence of the packet in the queue and remove it 
+          // OSS: this contorted way is used becuse simpler implementation would sometimes not work
+          bool found_first = false;
+          for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
+            if ((*it)->id == p->id){
+              if (found_first){
+                waiting_packets[source].erase(it);
+                break;
+              }
+              else{
+                found_first = true;
+              }
+            }
+          }
+          assert(found_first);
         }
 
-        // print the new queue
+        // // print the new queue
         // std::cout << "NEW QUEUE" << std::endl;
         // for (auto it = waiting_packets[source].begin(); it != waiting_packets[source].end(); ++it){
-        //   std::cout << _dependenciesSatisfied(*it, source) << std::endl;
+        //   std::cout << "id" << (*it)->id << ", _dependenciesSatisfied(*it, source): " << _dependenciesSatisfied(*it, source) << std::endl;
         // }
               
 

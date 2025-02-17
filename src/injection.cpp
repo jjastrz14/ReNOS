@@ -673,36 +673,6 @@ bool DependentInjectionProcess::test(int source)
   const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
 
-  
-  if(!(_waiting_packets[source].empty())){
-    p = _waiting_packets[source].front();
-    assert(p);
-    assert((p->size > 0));
-    assert((p->src == source));
-  }
-  if (!(_waiting_workloads[source].empty())){
-    w =_waiting_workloads[source].front();
-    assert(w);
-    assert((w->ct_required > 0));
-    assert(w->node == source);
-  }
-
-  
-  if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr && _pending_packets[source].size() == 0){
-    return valid;
-  }
-
-  assert((source >= 0) && (source < _nodes));
-
-  int dep_time_w = -1;
-  int dep_time_p = -1;
-  if (!(w == nullptr)){
-    dep_time_w = _dependenciesSatisfied(&(*w), source);
-  }
-  if (!(p == nullptr)){
-    dep_time_p = _dependenciesSatisfied(&(*p), source);
-  }
-
 
   // if there are pending workloads, the timer should be decremented
   if (_timer[source] > 0){
@@ -761,10 +731,39 @@ bool DependentInjectionProcess::test(int source)
 
     }
     _pending_workloads[source] = nullptr;
-
-
-    
   }
+
+
+  // get the next packet and workloads in the queue
+  if(!(_waiting_packets[source].empty())){
+    p = _waiting_packets[source].front();
+    assert(p);
+    assert((p->size > 0));
+    assert((p->src == source));
+  }
+  if (!(_waiting_workloads[source].empty())){
+    w =_waiting_workloads[source].front();
+    assert(w);
+    assert((w->ct_required > 0));
+    assert(w->node == source);
+  }
+
+  
+  if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr && _pending_packets[source].size() == 0){
+    return valid;
+  }
+
+  assert((source >= 0) && (source < _nodes));
+
+  int dep_time_w = -1;
+  int dep_time_p = -1;
+  if (!(w == nullptr)){
+    dep_time_w = _dependenciesSatisfied(&(*w), source);
+  }
+  if (!(p == nullptr)){
+    dep_time_p = _dependenciesSatisfied(&(*p), source);
+  }
+
 
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
   if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
