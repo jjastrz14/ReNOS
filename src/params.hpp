@@ -38,6 +38,7 @@
 #include <vector>
 #include <map>
 #include <cassert>
+#include <iostream>
 
 #define COMM_DELAY 1
 #define FLIT_SIZE 64 // in bytes
@@ -57,21 +58,22 @@ enum class WorkloadType{
 class NVMPar {
     public:
         // constructor
-        NVMPar( double reconf_rate /* [flit size / s] */, double clock_freq /* [Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) {} 
+        NVMPar( double reconf_rate /* [flit size / s] */, double clock_freq /* [Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) { assert(_reconf_rate > 0. || _reconf_cycles > 0.);} 
         NVMPar( double reconf_cycles /* [flit size / cycle] */) : _reconf_cycles(reconf_cycles) {}
 
-        int cycles_reconf(int size /* [ flit size ] */, int noc_freq = -1) const {
-            assert(_reconf_rate > 0 || _reconf_cycles > 0);
+        int cycles_reconf(int size /* [ flit size ] */, double noc_freq = -1.) const {
 
-            if (_reconf_rate > 0 && noc_freq != -1) {
-                return std::ceil(size / byte_per_cycles(noc_freq));
+            
+
+            if (_reconf_rate > 0. && noc_freq != -1.) {
+                return std::ceil(double(size)/ byte_per_cycles(noc_freq));
             }
 
-            return std::ceil(size *  _reconf_cycles);
+            return std::ceil(double(size) *  _reconf_cycles);
         }
         
         // a method to get the byte per cycles
-        double byte_per_cycles(int noc_freq = -1 /* [Hz] */) const {
+        double byte_per_cycles(double noc_freq = -1. /* [Hz] */) const {
             assert(_reconf_rate > 0);
             if (noc_freq == -1) {
                 return _reconf_rate / _clock_freq;
@@ -97,12 +99,12 @@ class NPUPar {
 
         int cycles_workload(int size, WorkloadType type) const {
             assert(_mac_flop_rate.find(type) != _mac_flop_rate.end());
-            return std::ceil(size / mac_flop_per_cycles(type));
+            return std::ceil(double(size) / mac_flop_per_cycles(type));
         }
 
         // a method to get the MAC/FLOP rate for a certain type of workload
-        double mac_flop_per_cycles(WorkloadType type, int noc_freq = -1 /* [Hz] */) const {
-            if (noc_freq == -1) {
+        double mac_flop_per_cycles(WorkloadType type, double noc_freq = -1 /* [Hz] */) const {
+            if (noc_freq == -1.) {
                 return _mac_flop_rate.at(type) / _clock_freq;
             }
             double scale = _clock_freq / noc_freq;

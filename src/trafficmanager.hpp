@@ -78,7 +78,9 @@ protected:
   // ============ Reconfiguration ============
   
   int _local_mem_size;
-  int _reconfig_cycles;
+  double _reconfig_cycles;
+  int _flit_size;
+  int _reconf_batch_size;
 
   // ============ Traffic ============ 
 

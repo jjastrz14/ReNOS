@@ -55,7 +55,7 @@ public:
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, int local_memory_size, int reconfig_cycles, Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,
+  static InjectionProcess * NewUserDefined(string const & inject, int nodes, int local_memory_size, double reconfig_cycles,  int reconf_batch_size, int flit_size ,Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,
         Configuration const * const config = NULL);
 
 };
@@ -84,25 +84,12 @@ public:
 
 class DependentInjectionProcess : public InjectionProcess {
 
-  struct ReconfigBit {
-    /* 
-    The struct will be used to schedule an online reconfiguration (if reconfiguraitons are enabled).
-    The information needed for the reconfigurations are:
-    - the id of the task after which to perform the reconfiguration
-    - the size of the weights to be pulled from the NVM using TSVs: this information
-      is then used to estimate the number of reconfiguration cycles needed to actually perform 
-      the reconfiguration during the simulation
-      */
-    int id; // the id of the task after which to perform reconfiguration
-    int wsize; // the size of the weights to be pulled from the NVM
-  };
-
   class MemoryUnit {
     // The following class will be used to model the memory unit of the PE.
     // For initialization, the class will be given an integer, representing the size (in bytes/flit) of the local 
     // memory unit available to the single NPU. It provides a very high level abstraction of the memory unit.
     public:
-      MemoryUnit(int size, float threshold = 0.9) : _size(size), _available(size), _threshold(threshold) {}
+      MemoryUnit(int size, float threshold = 0.9) : _size(size), _available(size), _threshold(threshold), _no_more_to_reconfigure(false) {}
       int getSize() const { return _size; }
       int getAvailable() const { return _available; }
       int getTotalAvailableForReconf() const { return _size*_threshold; }
@@ -111,6 +98,8 @@ class DependentInjectionProcess : public InjectionProcess {
       int getNumCurAllocatedOutputs() const { return _cur_allocated_output.size(); }
       std::deque<const ComputingWorkload *> & getCurAllocatedWorkloads() { return _cur_allocated_workload; }
       std::set<const ComputingWorkload *> & getCurAllocatedOutputs() { return _cur_allocated_output; }
+      void setNoMoreToReconfigure() { _no_more_to_reconfigure = true; }
+      bool noMoreToReconfigure() const { return _no_more_to_reconfigure; }
 
       void reset() { 
         _available = _size; 
@@ -470,6 +459,7 @@ class DependentInjectionProcess : public InjectionProcess {
       int _size;
       int _available; // total memory available
       float _threshold; // to avoid deadlocks
+      bool _no_more_to_reconfigure; // flag to signal that no more reconfigurations are needed
       // int _available_for_reconf; // the memory available for reconfigurations
       std::deque<const ComputingWorkload *> _cur_allocated_workload;
       std::set<const ComputingWorkload *> _cur_allocated_output;
@@ -600,8 +590,10 @@ class DependentInjectionProcess : public InjectionProcess {
 
     // ==================  RECONFIGURATION ==================
     bool _enable_reconf;
+    int _reconf_batch_size;
     std::vector<int> _reconf_deadlock_timer;
     std::vector<bool> _reconf_active;
+    std::vector<bool> _reconf_ready;
     std::vector<std::map<int,set<int>>> _requiring_ouput_deallocation; // a datastructure to manage the deallocation of the output space for the workloads
     std::vector<std::map<int, set<const ComputingWorkload *>>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
     DependentInjectionProcess::MemorySet _memory_set;
@@ -840,7 +832,7 @@ class DependentInjectionProcess : public InjectionProcess {
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes, int local_memory_size , int reconfig_cycles , Clock * clock, TrafficPattern * traffic ,  vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context , int resort = 0);
+    DependentInjectionProcess(int nodes, int local_memory_size , double reconfig_cycles, int reconf_batch_size, int flit_size, Clock * clock, TrafficPattern * traffic ,  vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context , int resort = 0);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);
@@ -849,7 +841,6 @@ class DependentInjectionProcess : public InjectionProcess {
       _requiring_ouput_deallocation[source].at(w_id).erase(packet_id);
       if (_requiring_ouput_deallocation[source].at(w_id).empty()){
         // remove the output placeholder from memory
-        std::cout << "PAcket " << packet_id << " has been processed" << std::endl;
         assert(_memory_set.getMemoryUnit(source).remove_output_placeholder(w_id));
         // remove the output placeholder of the correspoindig workload from the 
         // memory unit.
@@ -858,7 +849,7 @@ class DependentInjectionProcess : public InjectionProcess {
         _memory_set.deallocate_output(source, associated_workload);
 
         // stage reconfiguration
-        stageReconfiguration(source);
+        (_reconf_batch_size>0)? stageBatchReconfiguration(source): stageReconfiguration(source);
       }
     };
 
@@ -883,7 +874,6 @@ class DependentInjectionProcess : public InjectionProcess {
       if (_memory_set.getMemoryUnit(dest).is_workload_allocated(*w_next)){
         return;
       }
-
       
       // if not, we must allocate the output space for the workload iff the receiving workload is not already allocated
       // also include the ouput in the list of outputs to be deallocated for the w_next workload
@@ -908,7 +898,6 @@ class DependentInjectionProcess : public InjectionProcess {
       // 3. insert the entry in the set
       _output_left_to_deallocate[dest].at((*w_next)->id).insert(associated_workload);
       *(_context->gDumpFile) << "Output of workload " << associated_workload->id << " to be deallocated on reconfiguration of workload " << (*w_next)->id << " at node " << dest << std::endl;
-      
     }
     
     
@@ -920,6 +909,8 @@ class DependentInjectionProcess : public InjectionProcess {
     virtual void deallocateMemory(int source, const ComputingWorkload * w){_memory_set.deallocate_output(source, w);};
     // a method to stage reconfiguration
     virtual void stageReconfiguration(int source, bool bypass_output_check = false);
+    // a method to stage a batch reconfiguration
+    virtual void stageBatchReconfiguration(int source, bool bypass_output_check = false);
     // finally, a method to test if the packet can be injected
     virtual bool test(int source);
     

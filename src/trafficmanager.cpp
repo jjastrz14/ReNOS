@@ -85,16 +85,20 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     // ============  Reconfiguration ============
     int reconf = config.getIntField("reconfiguration");
     int max_pe_mem = config.getIntField("max_pe_mem");
-    int reconf_rate = config.getIntField("reconf_rate");
-    int reconf_cycles = config.getIntField("reconf_cycles");
-    int reconf_freq = config.getIntField("reconf_freq");
+    double reconf_rate = config.getFloatField("reconf_rate");
+    double reconf_cycles = config.getFloatField("reconf_cycles");
+    double reconf_freq = config.getFloatField("reconf_freq");
     if (reconf){
         _local_mem_size = max_pe_mem;
         _reconfig_cycles = reconf_cycles; // fix for now
+        assert(_reconfig_cycles > 0.);
     }else{
         _local_mem_size = 0;
         _reconfig_cycles = -1;// fix for now
     }
+
+    _reconf_batch_size = config.getIntField("reconf_batch_size");
+    _flit_size = config.getIntField("flit_size");
 
     string priority = config.getStrField( "priority" );
 
@@ -314,7 +318,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     
     for(int c = 0; c < _classes; ++c) {
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, &_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, _reconf_batch_size,_flit_size,&_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 

@@ -10,7 +10,7 @@
         "watch_out": "-",
         "logger": 1,
         "reconfiguration": 1,
-        "reconf_cycles": 1,
+        "reconf_cycles": 1.0,
         "max_pe_mem": 3000
     },
     "workload": [

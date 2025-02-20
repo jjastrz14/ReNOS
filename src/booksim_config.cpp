@@ -308,9 +308,11 @@ BookSimConfig::BookSimConfig( )
 
   addIntField("reconfiguration", 0);
   addIntField("max_pe_mem", 256000);
-  addIntField("reconf_rate", 0);
-  addIntField("reconf_cycles", 0);
-  addIntField("reconf_freq", 0);
+  addIntField("flit_size", 64);
+  addIntField("reconf_batch_size", 0);
+  addFloatField("reconf_rate", 0.);
+  addFloatField("reconf_cycles", 0.);
+  addFloatField("reconf_freq", 0.);
 
   // ============ Reconfiguration ============
 
