@@ -1,4 +1,3 @@
-
 {
 
     "arch":{
@@ -10,10 +9,9 @@
             "num_vcs" : 16,
             "user_defined_traffic" : 1,
             "watch_out" : "-",
-            "watch_file" : "../config_examples/watch_list",
             "logger": 1,
             "reconfiguration": 1,
-            "reconf_cycles": 2,
+            "reconf_cycles": 2.0,
             "max_pe_mem": 8
         },
         
@@ -45,7 +43,7 @@
             "weight_size" : 3,
             "type" : "COMP_OP",
             "ct_required" : 5,
-            "dep" : [0,1]
+            "dep" : [0]
         }, 
         {
             "id" : 3,
@@ -54,7 +52,7 @@
             "weight_size" : 2,
             "type" : "COMP_OP",
             "ct_required" : 5,
-            "dep" : [2]
+            "dep" : [0]
         },
         {
             "id" : 4,

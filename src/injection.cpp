@@ -459,9 +459,34 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
     // we can eventually trigger the reconfiguration on the remaining nodes
     bool all_ready = true;
     for (int i = 0; i < _nodes; ++i){
-      if (!_reconf_ready[i] && !_memory_set.getMemoryUnit(i).noMoreToReconfigure()){
-        all_ready = false;
-        break;
+      if (_reconf_ready[i]){
+        continue;  // if the node is ready, we skip it
+      }
+      else{
+        // otherwise, we :
+        // 1. check if the node has no more workloads to reconfigure
+        // 2. check if the nodes have allocated workloads wich are dependent
+        // on the output of workloads that are not yet allocated (to avoid deadlocks)
+        // if either the node has still workloads to reconfigure but the dependencies are satisfied, we wait and set all_ready to false
+        // if the node has no more workloads to reconfigure, we can trigger the reconfiguration, so we don't do anything
+
+
+        // to check for 2, this means that all the workloads on the other nodes have been deallocated (have
+        // all already written its results to the receiving nodes, but the allocated workloads on the source
+        // node still don't have their dependencies satisfied)
+        bool no_more_to_reconfigure = _memory_set.getMemoryUnit(i).noMoreToReconfigure();
+        bool dependencies_satisfied = true;
+        for (auto & w : _memory_set.getMemoryUnit(i).getCurAllocatedWorkloads()){
+          if (_dependenciesWSatisfied(w,i)<0){
+            dependencies_satisfied = false;
+            break;
+          }
+        }
+        if (!no_more_to_reconfigure && dependencies_satisfied ) // if the node has still workloads to reconfigure and the dependencies are satisfied
+        {
+          all_ready = false;
+          break;
+        }
       }
     }
     if (all_ready){
@@ -817,6 +842,8 @@ bool DependentInjectionProcess::test(int source)
     assert(w->node == source);
   }
 
+  // std::cout << "packet: " << p << " workload: " << w << " pending workload: " << _pending_workloads[source] << " pending packets: " << _pending_packets[source].size() << std::endl;
+
   
   if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr && _pending_packets[source].size() == 0){
     return valid;
@@ -830,7 +857,7 @@ bool DependentInjectionProcess::test(int source)
     dep_time_w = _dependenciesWSatisfied(&(*w), source);
   }
   if (!(p == nullptr)){
-    dep_time_p = _dependenciesPSatisfied(&(*p), source);
+    dep_time_p = _dependenciesPSatisfied(&(*p), source); 
   }
 
 

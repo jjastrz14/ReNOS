@@ -848,6 +848,8 @@ class DependentInjectionProcess : public InjectionProcess {
         assert(associated_workload);
         _memory_set.deallocate_output(source, associated_workload);
 
+        (*_context->gDumpFile) << " DEALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << source << std::endl;
+
         // stage reconfiguration
         (_reconf_batch_size>0)? stageBatchReconfiguration(source): stageReconfiguration(source);
       }
