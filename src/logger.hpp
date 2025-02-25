@@ -285,8 +285,10 @@ class EventLogger {
 
         void register_event(EventType type, int start_cycle, int additional_info = -1, int ctype = -1) {
             _events.emplace_back(Event(_id_counter, type, start_cycle, additional_info, ctype));
-            assert (_event_info[additional_info][ctype > -1 ? ctype : 0]);
-            _events.back().set_event_info(_event_info[additional_info][ctype > -1 ? ctype : 0]);
+            if (type == EventType::IN_TRAFFIC || type == EventType::OUT_TRAFFIC || type == EventType::START_COMPUTATION || type == EventType::END_COMPUTATION) {
+                assert (_event_info[additional_info][ctype > -1 ? ctype : 0]);
+                _events.back().set_event_info(_event_info[additional_info][ctype > -1 ? ctype : 0]);
+            }
             _id_counter++;
         }
 
