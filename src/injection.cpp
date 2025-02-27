@@ -435,17 +435,18 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
     _reconf_ready[source] = true;
   }
 
+
   // we also check that the reconfiguration is needed for other _reconf_batch_size - 1 nodes
   // if so, we can stage the reconfiguration for the first _reconf_batch_size nodes
   int count = 0;
-  for (int i = 0; i < _nodes; ++i){
+  for (int i = 0; i < this->_nodes; ++i){
     if (_reconf_ready[i]){
       count++;
     }
   }
   if (count >= _reconf_batch_size){
     // we can stage the reconfiguration for the first _reconf_batch_size nodes
-    for (int i = 0; i < _nodes; ++i){
+    for (int i = 0; i < this->_nodes; ++i){
       if (_reconf_ready[i] && count > 0){
         stageReconfiguration(i, bypass_output_check);
         _reconf_ready[i] = false;
@@ -458,7 +459,7 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
     // have already reconfigured all of their workloads: if all of the non-ready nodes have their memory set to _no_more_to_reconfigure
     // we can eventually trigger the reconfiguration on the remaining nodes
     bool all_ready = true;
-    for (int i = 0; i < _nodes; ++i){
+    for (int i = 0; i < this->_nodes; ++i){
       if (_reconf_ready[i]){
         continue;  // if the node is ready, we skip it
       }
@@ -469,7 +470,6 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
         // on the output of workloads that are not yet allocated (to avoid deadlocks)
         // if either the node has still workloads to reconfigure but the dependencies are satisfied, we wait and set all_ready to false
         // if the node has no more workloads to reconfigure, we can trigger the reconfiguration, so we don't do anything
-
 
         // to check for 2, this means that all the workloads on the other nodes have been deallocated (have
         // all already written its results to the receiving nodes, but the allocated workloads on the source
@@ -482,7 +482,7 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
             break;
           }
         }
-        if (!no_more_to_reconfigure && dependencies_satisfied ) // if the node has still workloads to reconfigure and the dependencies are satisfied
+        if (!no_more_to_reconfigure && dependencies_satisfied && _reconf_active[i] != true) // if the node has still workloads to reconfigure, the dependencies are satisfied and the 
         {
           all_ready = false;
           break;
@@ -860,6 +860,7 @@ bool DependentInjectionProcess::test(int source)
     dep_time_p = _dependenciesPSatisfied(&(*p), source); 
   }
 
+  
 
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
   if (dep_time_p>=0 && source == p->src && !(p == nullptr)){
