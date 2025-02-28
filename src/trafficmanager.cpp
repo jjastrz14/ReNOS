@@ -864,7 +864,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
 
             if (_context->logger) {
                 commType rtype = (f->type == commType::READ) ? commType::READ_ACK : commType::WRITE_ACK;
-                EventInfo* info = new TrafficEventInfo(f->rpid, rtype, f->dst,f->src, f->size);
+                EventInfo* info = new TrafficEventInfo(f->rpid, rtype, dest, f->src, f->size);
                 _context->logger->add_tevent_info(info);
             }
 
