@@ -798,17 +798,18 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
         // if the packet is a request, assert that it is not already there
         // if the packet is a reply, assert that there is one request already
         if(_use_read_write[f->cl]) {
+            int processing_time = 0;
             if(f->type == commType::READ_REQ || f->type == commType::WRITE_REQ || f->type == commType::READ || f->type == commType::WRITE) {
                 // search in the destination node landed packets list
-                *(_context->gDumpFile) << " Read/Write packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", size: "<< f->size << std::endl;
                 auto it = std::find_if(_landed_packets[f->cl][dest].begin(), _landed_packets[f->cl][dest].end(), [f](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && get<1>(p) == f->type; });
                 assert(it == _landed_packets[f->cl][dest].end());
                 _landed_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time(),f->size));
 
                 // ================ MANAGING OF PROCESSING TIMES FOR PACKETS ================ 
-                int processing_time = 0;
+                
                 if(f->type == commType::WRITE || f->type == commType::READ){
                     processing_time = f->data_ptime_expected;
+                    *(_context->gDumpFile) << " Bulk packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", size: "<< f->size << std::endl;
                     *(_context->gDumpFile) << "Processing time: " << processing_time << std::endl;
                     if (_local_mem_size > 0 && f->type == commType::WRITE && f->data_dep != -1) {
                         // finalize the write for reconfiguration
@@ -816,10 +817,11 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                     }
                 }
                 else{
+                    *(_context->gDumpFile) << " Read/Write REQ packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", size: "<< f->size << std::endl;
                     processing_time = (f->type == commType::WRITE_REQ) ? _write_request_time[f->cl] : _read_request_time[f->cl];
                     
                 }
-                _to_process_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time() + processing_time));
+                _to_process_packets[f->cl][dest].insert(std::make_tuple(f->rpid, f->type, _clock.time() + processing_time)); 
                 // ==========================================================================
             } else if (f->type == commType::READ_ACK || f->type == commType::WRITE_ACK) {
                 // search in the reply source node (destination node of the replied packet) landed packets list
@@ -827,9 +829,11 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 if (f->type == commType::READ_ACK) {
                     req_type1 = commType::READ_REQ;
                     req_type2 = commType::READ;
+                    processing_time = _read_reply_time[f->cl];
                 } else {
                     req_type1 = commType::WRITE_REQ;
                     req_type2 = commType::WRITE;
+                    processing_time = _write_reply_time[f->cl];
                 }
                 *(_context->gDumpFile) << " Reply packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << std::endl;
                 auto it = std::find_if(_landed_packets[f->cl][f->src].begin(), _landed_packets[f->cl][f->src].end(), [f, req_type1, req_type2](const std::tuple<int, int, int, int> & p) { return get<0>(p) == f->rpid && (get<1>(p) == req_type1 || get<1>(p) == req_type2); });
@@ -843,6 +847,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
 
                 }
             }
+            _injection_process[f->cl]->requestInterrupt(dest, processing_time);
         }
 
         if (_context->logger) {
@@ -867,6 +872,8 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 EventInfo* info = new TrafficEventInfo(f->rpid, rtype, dest, f->src, f->size);
                 _context->logger->add_tevent_info(info);
             }
+
+
 
         }else {
             if(f->type == commType::READ_ACK || f->type == commType::WRITE_ACK ){
@@ -1027,14 +1034,17 @@ void TrafficManager::_GeneratePacket( int source, int stype,
                 error( err.str( ) );
             }
         } else {
-
+            int processing_time = 0;
             PacketReplyInfo* rinfo = _repliesPending[source].front();
             if (rinfo->type == commType::READ_REQ || rinfo->type == commType::READ) {//read reply
                 size = _read_reply_size[cl];
                 packet_type = commType::READ_ACK;
+                processing_time = _read_reply_time[cl];
+
             } else if(rinfo->type == commType::WRITE_REQ || rinfo->type == commType::WRITE) {  //write reply
                 size = _write_reply_size[cl];
                 packet_type = commType::WRITE_ACK;
+                processing_time = _write_reply_time[cl];
             } else {
                 ostringstream err;
                 err << "Invalid packet type: " << rinfo->type;
@@ -1047,6 +1057,9 @@ void TrafficManager::_GeneratePacket( int source, int stype,
             data_dep = rinfo->data_dep;
             _repliesPending[source].pop_front();
             rinfo->freeReply(packet_reply_pool);
+
+            // request an interrupt if the node is computing or reconfiguring
+            _injection_process[cl]->requestInterrupt(source, processing_time);
         }
     }
 
@@ -1378,9 +1391,6 @@ void TrafficManager::_Step( )
                     }
                 }
 
-                // Se alla fine del processo, il flit ancora non è stato assegnato a un VC
-                // o se il buffer per il VC assegnato è pieno, continua a processare 
-                // il flit dell'ultima classe
                 if(cf->vc == -1) {
                     if(cf->watch) {
                         *(_context->gWatchOut) << getTime() << " | " << getFullName() << " | "
@@ -1396,13 +1406,11 @@ void TrafficManager::_Step( )
                                        << "." << endl;
                         }
                     } else {
-                        // altrimenti passa a processare il flit corrente
                         f = cf;
                     }
                 }
             }
             
-            // At this point, the flit to be processed for the current node has been selected
             if(f) {
 
                 assert(f->subnetwork == subnet);
@@ -1440,7 +1448,6 @@ void TrafficManager::_Step( )
 	
                 _last_class[n][subnet] = c;
 
-                // pop the flit from the partial packet
                 _partial_packets[n][c].pop_front();
 
 #ifdef TRACK_FLOWS
