@@ -524,6 +524,13 @@ int DependentInjectionProcess::_reconfigure(int source){
       it = std::next(it);
     }
     else{
+      if (total_size == 0){
+        // in this case, something went wrong: there should be enough memory to allocate at least one workload
+        // if this is not the case, we have to either resize the memory, or the percentage of memory allocated for reconfiguration
+        // or the size of the workloads
+        *(_context->gDumpFile) << "ERROR: Not enough memory to allocate the next workload at node " << source << std::endl;
+        exit(-1);
+      }
       break;
     }
   } 
