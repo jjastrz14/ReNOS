@@ -36,6 +36,8 @@
 #define PARAMS_HPP
 
 #include <vector>
+#include <set>
+#include <tuple>
 #include <map>
 #include <cassert>
 #include <iostream>
@@ -45,12 +47,11 @@
 #define MAX_LOCAL_MEMORY 56 // in flit size
 #define MAX_NVM_MEMORY 1024 // in flit size
 
-// the following file is used to host the parameters:
-// - reconfiguration rates for a certain technological node
-// - the MAC/FLOP rate for a certain type of workload
-// to be used for the UserDefinedTrafficPattern class
+
+
 
 enum class WorkloadType{
+    NONE, // not specified
     CONV, // convolutional wokload
     FC, // fully connected workload
 };
@@ -58,18 +59,15 @@ enum class WorkloadType{
 class NVMPar {
     public:
         // constructor
-        NVMPar( double reconf_rate /* [flit size / s] */, double clock_freq /* [Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) { assert(_reconf_rate > 0. || _reconf_cycles > 0.);} 
-        NVMPar( double reconf_cycles /* [flit size / cycle] */) : _reconf_cycles(reconf_cycles) {}
+        NVMPar( double reconf_rate /* [byte / s] */, double clock_freq /* [cycle/s = Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) { assert(_reconf_rate > 0. || _reconf_cycles > 0.);} 
+        NVMPar( double reconf_cycles /* [byte / cycle] */) : _reconf_cycles(reconf_cycles) {}
 
-        int cycles_reconf(int size /* [ flit size ] */, double noc_freq = -1.) const {
+        int cycles_reconf(int size /* [ byte size ] */, double noc_freq = -1.) const {
 
-            
-
-            if (_reconf_rate > 0. && noc_freq != -1.) {
+            if (_reconf_rate > 0.) {
                 return std::ceil(double(size)/ byte_per_cycles(noc_freq));
             }
-
-            return std::ceil(double(size) *  _reconf_cycles);
+            return std::ceil(double(size) /  _reconf_cycles);
         }
         
         // a method to get the byte per cycles
@@ -79,7 +77,7 @@ class NVMPar {
                 return _reconf_rate / _clock_freq;
             }
             double scale = _clock_freq / noc_freq;
-            return _reconf_rate * scale;
+            return _reconf_rate / scale;
         }
 
         
@@ -95,26 +93,28 @@ class NVMPar {
 class NPUPar {
     public:
         // constructor
-        NPUPar(double clock_freq /* [Hz] */, std::map<WorkloadType, double> mac_flop_rate /* [flop/s] */) : _clock_freq(clock_freq), _mac_flop_rate(mac_flop_rate) {}
+        NPUPar(double comp_cycles/* [FLOP/cycle] */):_comp_cycles(comp_cycles) {}
 
-        int cycles_workload(int size, WorkloadType type) const {
-            assert(_mac_flop_rate.find(type) != _mac_flop_rate.end());
-            return std::ceil(double(size) / mac_flop_per_cycles(type));
+        int cycles_workload(int size, WorkloadType type = WorkloadType::NONE) const {
+            return std::ceil(double(size) / flops_per_cycles(type));
         }
 
         // a method to get the MAC/FLOP rate for a certain type of workload
-        double mac_flop_per_cycles(WorkloadType type, double noc_freq = -1 /* [Hz] */) const {
-            if (noc_freq == -1.) {
-                return _mac_flop_rate.at(type) / _clock_freq;
+        double flops_per_cycles(WorkloadType type = WorkloadType::NONE) const {
+            if (type == WorkloadType::NONE) {
+                return _comp_cycles;
             }
-            double scale = _clock_freq / noc_freq;
-            return _mac_flop_rate.at(type) * scale;
+            else {
+                std::cerr << "Error: Specific FLOP cycles per workload type not implemented yet" << std::endl;
+                exit(1);
+            }
+            
         }
 
     private:
-        // the MAC/FLOP rate for a certain type of workload
-        std::map<WorkloadType, double> _mac_flop_rate;
-        // clock frequency used for the NPU
-        double _clock_freq;
+        // the FLOP cycles for a certain type of workload
+        std::map<WorkloadType, double> _w_specific_cycles;
+        // cycles used to process a generic FLOP
+        double _comp_cycles;
 };
 #endif

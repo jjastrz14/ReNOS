@@ -33,6 +33,7 @@
 #include <set>
 #include <cassert>
 
+
 #include "base.hpp"
 #include "logger.hpp"
 #include "config.hpp"
@@ -75,12 +76,8 @@ protected:
   vector<Network *> _net;
   vector<vector<Router *> > _router;
 
-  // ============ Reconfiguration ============
-  
-  int _local_mem_size;
-  double _reconfig_cycles;
-  int _flit_size;
-  int _reconf_batch_size;
+  // ============ Dep Injection Parameters  ==========
+  vector<DependentInjectionProcessParameters *> _params;
 
   // ============ Traffic ============ 
 

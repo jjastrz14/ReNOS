@@ -235,6 +235,9 @@ BookSimConfig::BookSimConfig( )
   _arch_int["write_reply_time"] = 0;
   addStrField("write_reply_time", "");
 
+  //==== PE parameters ==========================
+
+  _arch_float["pe_comp_cycles"] = 1.; // cycles to process a FLOP [FLOP/s]
 
   //==== Simulation parameters ==========================
 
@@ -307,7 +310,7 @@ BookSimConfig::BookSimConfig( )
   // ============ Reconfiguration ============
 
   addIntField("reconfiguration", 0);
-  addIntField("max_pe_mem", 256000);
+  addIntField("pe_mem_size", 256000);
   addIntField("flit_size", 64);
   addIntField("reconf_batch_size", 0);
   addFloatField("reconf_rate", 0.);

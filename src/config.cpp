@@ -355,6 +355,26 @@ void Configuration::WriteMatlabFile(std::ostream * config_out) const {
 
 }
 
+
+void Configuration::PreprocessPackets(std::ostream * o){
+    // This function preprocesses the packet sizes based on the flit_size variable
+    // The function loops over all the packets and divides the packet size by the flit_size
+    // If the size is 0, the function sets the size to 1
+
+    int flit_size = getIntField("flit_size");
+    
+
+    for (auto & packet : _packets){
+        if (packet.size % flit_size == 0){
+            packet.size = packet.size / flit_size;
+        }
+        else{
+            packet.size = packet.size / flit_size + 1;
+        }
+        assert(packet.size > 0);
+    }
+}
+
 void Configuration::parseJSONFile(const std::string & filename){
     // The function reads the JSON file and parses it to fill the configuration fields
     // The function uses the nlohmann::json library to parse the JSON file

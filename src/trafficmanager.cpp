@@ -81,25 +81,6 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     // ============ Message priorities ============ 
 
-
-    // ============  Reconfiguration ============
-    int reconf = config.getIntField("reconfiguration");
-    int max_pe_mem = config.getIntField("max_pe_mem");
-    double reconf_rate = config.getFloatField("reconf_rate");
-    double reconf_cycles = config.getFloatField("reconf_cycles");
-    double reconf_freq = config.getFloatField("reconf_freq");
-    if (reconf){
-        _local_mem_size = max_pe_mem;
-        _reconfig_cycles = reconf_cycles; // fix for now
-        assert(_reconfig_cycles > 0.);
-    }else{
-        _local_mem_size = 0;
-        _reconfig_cycles = -1;// fix for now
-    }
-
-    _reconf_batch_size = config.getIntField("reconf_batch_size");
-    _flit_size = config.getIntField("flit_size");
-
     string priority = config.getStrField( "priority" );
 
     if ( priority == "class" ) {
@@ -153,6 +134,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         _classes = 1;
         _traffic = vector<string>(1, "user_defined");
         injection_process = vector<string>(1, "dependent");
+        
     }else{
         _packets = vector<Packet>();
         _traffic = config.getStrArray("traffic");
@@ -304,6 +286,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
     _traffic.resize(_classes, _traffic.back());
 
     _traffic_pattern.resize(_classes);
+    _params.resize(_classes);
 
     _class_priority = config.getIntArray("class_priority"); 
     if(_class_priority.empty()) {
@@ -317,8 +300,43 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
     
     for(int c = 0; c < _classes; ++c) {
+
         _traffic_pattern[c] = TrafficPattern::New(_traffic[c], _nodes, &config);
-        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _nodes, _local_mem_size, _reconfig_cycles, _reconf_batch_size,_flit_size,&_clock ,_traffic_pattern[c], &(_processed_packets[c]), _context, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
+
+        if (_user_defined_traffic){
+            // ============  Reconfiguration ============
+            int reconf = config.getIntField("reconfiguration");
+            int pe_mem_size = config.getIntField("pe_mem_size");
+            double reconf_rate = config.getFloatField("reconf_rate");
+            double reconf_cycles = config.getFloatField("reconf_cycles");
+            double reconf_freq = config.getFloatField("reconf_freq");
+            if (!reconf){
+                pe_mem_size = 0;
+                reconf_cycles =  -1; // fix for now
+                
+            }else{
+                assert(reconf_cycles > 0.);
+            }
+
+            int reconf_batch_size = config.getIntField("reconf_batch_size");
+            int flit_size = config.getIntField("flit_size");
+            double pe_comp_cycles = config.getFloatField("pe_comp_cycles");
+
+            _params[c] = DependentInjectionProcessParameters::New(
+                _nodes,
+                pe_mem_size,
+                reconf_cycles,
+                pe_comp_cycles,
+                reconf_batch_size,
+                flit_size,
+                &_clock,
+                _traffic_pattern[c],
+                &(_processed_packets[c])
+            );
+        }
+
+        
+        _injection_process[c] = _user_defined_traffic ? InjectionProcess::NewUserDefined(injection_process[c], _params[c], _context, &config) : InjectionProcess::New(injection_process[c], _nodes, _load[c], &config);
 
     }
 
@@ -811,7 +829,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                     processing_time = f->data_ptime_expected;
                     *(_context->gDumpFile) << " Bulk packet with id: "<<f->rpid << " and type: "<< f->type << " arrived at: "<< dest << " at time: " << _clock.time() << " from node: "<< f->src << ", size: "<< f->size << std::endl;
                     *(_context->gDumpFile) << "Processing time: " << processing_time << std::endl;
-                    if (_local_mem_size > 0 && f->type == commType::WRITE && f->data_dep != -1) {
+                    if (_params[f->cl]->localMemSize > 0 && f->type == commType::WRITE && f->data_dep != -1) {
                         // finalize the write for reconfiguration
                         _injection_process[f->cl]->finalizeWrite(dest, f->data_dep, f->rpid);
                     }
@@ -840,7 +858,7 @@ void TrafficManager::_RetireFlit( Flit *f, int dest )
                 assert(it != _landed_packets[f->cl][f->src].end());
                 // if the packet is a reply and its corresponding request if a WRITE, deallocate from 
                 // the local memory the space used to store the output data (packet size)
-                if (_local_mem_size > 0 && f->type == commType::WRITE_ACK && f->data_dep != -1) {
+                if (_params[f->cl]->localMemSize > 0 && f->type == commType::WRITE_ACK && f->data_dep != -1) {
                     
                     // when a write reply is received, we finalize the communication for reconfiguration
                     _injection_process[f->cl]->finalizeCommunication(f->dst, f->data_dep, f->rpid);

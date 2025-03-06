@@ -151,7 +151,7 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
   return result;
 }
 
-InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int nodes, int local_memory_size, double reconfig_cycles,  int reconf_batch_size, int flit_size, Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,
+InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, const DependentInjectionProcessParameters * dep_par, const SimulationContext * context,
         Configuration const * const config)
 {
   string process_name;
@@ -178,7 +178,8 @@ InjectionProcess * InjectionProcess::NewUserDefined(string const & inject, int n
     // std::cout << "Clock: " << clock << std::endl;
     // std::cout << "Traffic: " << traffic << std::endl;
     // std::cout << "Landed packets: " << landed_packets << std::endl;
-    result = new DependentInjectionProcess(nodes, local_memory_size, reconfig_cycles, reconf_batch_size, flit_size, clock, traffic,landed_packets, context, resort);
+    assert (dep_par);
+    result = new DependentInjectionProcess(*dep_par, context, resort);
   } else {
     cout << "Invalid injection process: " << inject << endl;
     exit(-1);
@@ -247,17 +248,19 @@ bool OnOffInjectionProcess::test(int source)
 
 // ============================================================================================================
 
-DependentInjectionProcess::DependentInjectionProcess(int nodes, int local_mem_size, double reconfig_cycles, int reconf_batch_size, int flit_size ,Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,int resort) 
-  : InjectionProcess(nodes, 0.0), _traffic(traffic), _memory_set(nodes,local_mem_size), _processed(landed_packets), _clock(clock), _logger(context->logger), _context(context)
+DependentInjectionProcess::DependentInjectionProcess(const DependentInjectionProcessParameters& params, const SimulationContext * context,int resort) 
+  : InjectionProcess(params.nodes, 0.0), _traffic(params.trafficPattern), _memory_set(params.nodes,params.localMemSize), _processed(params.processedPackets), _clock(params.clock), _logger(context->logger), _context(context)
 {
   assert(_traffic);
   assert(_processed);
   assert(_clock);
   assert(context);
-  _enable_reconf = local_mem_size > 0 ? true : false;
-  _reconf_batch_size = reconf_batch_size;
-  _nvm = new NVMPar(reconfig_cycles);
+  _enable_reconf = params.localMemSize > 0 ? true : false;
+  _reconf_batch_size =  params.reconfBatchSize;
+  _nvm = new NVMPar(params.reconfigCycles);
+  _npu = new NPUPar(params.compCycles);
 
+  int nodes = params.nodes;
   _executed.resize(nodes);
   _timer.resize(nodes, 0);
   _decur.resize(nodes, false);
@@ -1082,7 +1085,8 @@ bool DependentInjectionProcess::test(int source)
 
       _pending_workloads[source] = w;
       _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
-      _timer[source] = w->ct_required ; // update the timer for the required time
+      int time_required = _npu->cycles_workload( w->ct_required );
+      _timer[source] = time_required; // update the timer for the required time
       _decur[source] = true;
       if (_logger) {
         _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);

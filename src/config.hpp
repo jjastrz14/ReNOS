@@ -153,6 +153,9 @@ class Configuration {
         void WriteFile(std::string const & filename);
         void WriteMatlabFile(std::ostream * o) const;
 
+        /* =====  A function to preprocess the packets  based on the flit_size variables*/
+        void PreprocessPackets(std::ostream * o);
+
 
         // set of functions to return tokenized vector of values out of the string valued field
         // std::vector<std::string> getStrArray(std::string const &field) const;

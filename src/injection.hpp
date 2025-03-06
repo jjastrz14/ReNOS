@@ -27,6 +27,7 @@
 #ifndef _INJECTION_HPP_
 #define _INJECTION_HPP_
 
+#include "params.hpp"
 #include "config.hpp"
 #include "base.hpp"
 #include "traffic.hpp"
@@ -35,6 +36,68 @@
 using namespace std;
 
 commType intToCommType(int i);
+
+/* ============ SPECIAL CLASS WRAPPER FOR DEPENTENT INJECTION PARAMETERS ============ */
+class DependentInjectionProcessParameters {
+  public:
+    int nodes;
+    int localMemSize;
+    double reconfigCycles;
+    double compCycles;
+    int reconfBatchSize;
+    int flitSize;
+    Clock* clock;
+    TrafficPattern * trafficPattern;
+    std::vector<std::set<std::tuple<int,int,int>>> * processedPackets;
+    
+    // constructor
+    DependentInjectionProcessParameters(
+        int nodes,
+        int localMemSize,
+        double reconfigCycles,
+        double compCycles,
+        int reconfBatchSize,
+        int flitSize,
+        Clock * clock,
+        TrafficPattern * trafficPattern,
+        std::vector<std::set<std::tuple<int,int,int>>> * processedPackets
+    ) : nodes(nodes),
+        localMemSize(localMemSize),
+        reconfigCycles(reconfigCycles),
+        compCycles(compCycles),
+        reconfBatchSize(reconfBatchSize),
+        flitSize(flitSize),
+        clock(clock),
+        trafficPattern(trafficPattern),
+        processedPackets(processedPackets)
+    {}
+
+    // static method to create a new instance of the class
+    static DependentInjectionProcessParameters * New(
+        int nodes,
+        int localMemSize,
+        double reconfigCycles,
+        double compCycles,
+        int reconfBatchSize,
+        int flitSize,
+        Clock * clock,
+        TrafficPattern * trafficPattern,
+        std::vector<std::set<std::tuple<int,int,int>>> * processedPackets
+    ){
+      return new DependentInjectionProcessParameters(
+        nodes,
+        localMemSize,
+        reconfigCycles,
+        compCycles,
+        reconfBatchSize,
+        flitSize,
+        clock,
+        trafficPattern,
+        processedPackets
+      );
+    }
+};
+/* ============ SPECIAL CLASS WRAPPER FOR DEPENTENT INJECTION PARAMETERS ============ */
 
 class InjectionProcess {
 protected:
@@ -56,7 +119,7 @@ public:
   bool reached_end;
   static InjectionProcess * New(string const & inject, int nodes, double load,
 				Configuration const * const config = NULL);
-  static InjectionProcess * NewUserDefined(string const & inject, int nodes, int local_memory_size, double reconfig_cycles,  int reconf_batch_size, int flit_size ,Clock * clock, TrafficPattern * traffic, vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context,
+  static InjectionProcess * NewUserDefined(string const & inject, const DependentInjectionProcessParameters * dep_par , const SimulationContext * context,
         Configuration const * const config = NULL);
 
 };
@@ -599,6 +662,7 @@ class DependentInjectionProcess : public InjectionProcess {
     std::vector<std::map<int, set<const ComputingWorkload *>>> _output_left_to_deallocate; // used as a buffer to store the workload whose related output needs to be deallocated at a later moment than the last dependet packet
     DependentInjectionProcess::MemorySet _memory_set;
     const NVMPar * _nvm;
+    const NPUPar * _npu;
     // ==================  RECONFIGURATION ==================
 
     vector<set<tuple<int, int, int>>> * _processed;
@@ -643,7 +707,7 @@ class DependentInjectionProcess : public InjectionProcess {
     void _setProcessingTime(int node, int value);
 
   public:
-    DependentInjectionProcess(int nodes, int local_memory_size , double reconfig_cycles, int reconf_batch_size, int flit_size, Clock * clock, TrafficPattern * traffic ,  vector<set<tuple<int,int,int>>> * landed_packets, const SimulationContext * context , int resort = 0);
+    DependentInjectionProcess(const DependentInjectionProcessParameters& params, const SimulationContext * context , int resort = 0);
     virtual void reset();
     // a method used to append additional packets to the waiting queues
     virtual void addToWaitingQueue(int source, Packet * p);

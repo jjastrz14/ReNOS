@@ -52,6 +52,7 @@ int main( int argc, char **argv )
     cerr << "Usage: " << argv[0] << " configfile... [param=value...]" << endl;
     return 0;
  } 
+  config.PreprocessPackets(context.gDumpFile);
 
   
   /*initialize routing, traffic, injection functions

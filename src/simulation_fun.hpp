@@ -152,6 +152,7 @@ std::tuple<int, EventLogger*> SimulateWrapper(const std::string &config_file, co
     if (!ParseArgs(&config, context, argc, argv)) {
         throw std::runtime_error("Failed to parse configuration file");
     }
+    config.PreprocessPackets(context.gDumpFile);
 
     tRoutingParameters p=initializeRoutingMap(config);
 
