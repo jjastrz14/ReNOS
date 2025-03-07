@@ -363,13 +363,14 @@ void Configuration::PreprocessPackets(std::ostream * o){
 
     int flit_size = getIntField("flit_size");
     
+    double scaling = 8./flit_size;
 
     for (auto & packet : _packets){
         if (packet.size % flit_size == 0){
-            packet.size = packet.size / flit_size;
+            packet.size = packet.size *scaling;
         }
         else{
-            packet.size = packet.size / flit_size + 1;
+            packet.size = packet.size *scaling + 1;
         }
         assert(packet.size > 0);
     }
