@@ -25,20 +25,11 @@
             "id" : 0,
             "src" : 0,
             "dst" : 1,
-            "size" : 3,
+            "size" : 1,
             "dep" : [-1],
-            "type" : "WRITE_REQ",
+            "type" : "WRITE",
             "cl" : 0,
-            "pt_required" : 5
-        },
-        {
-            "id" : 1,
-            "node" : 0,
-            "size" : 3,
-            "weight_size" : 2,
-            "type" : "COMP_OP",
-            "ct_required" : 10,
-            "dep" : [-1]
+            "pt_required" : 0
         }
     ]
 }

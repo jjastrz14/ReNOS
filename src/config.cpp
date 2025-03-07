@@ -368,9 +368,11 @@ void Configuration::PreprocessPackets(std::ostream * o){
     for (auto & packet : _packets){
         if (packet.size % flit_size == 0){
             packet.size = packet.size *scaling;
+            packet.pt_required = packet.pt_required * scaling;
         }
         else{
             packet.size = packet.size *scaling + 1;
+            packet.pt_required = packet.pt_required * scaling + 1;
         }
         assert(packet.size > 0);
     }
