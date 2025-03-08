@@ -263,6 +263,7 @@ DependentInjectionProcess::DependentInjectionProcess(const DependentInjectionPro
   int nodes = params.nodes;
   _executed.resize(nodes);
   _timer.resize(nodes, 0);
+  _start_time.resize(nodes, 0);
   _decur.resize(nodes, false);
   _reconf_active.resize(nodes, false);
   _reconf_ready.resize(nodes, false);
@@ -613,10 +614,12 @@ void DependentInjectionProcess::stageReconfiguration(int source, bool bypass_out
     }
     else{
       int time_needed = _nvm->cycles_reconf(total_size);
-      _decur[source] = true;
       _reconf_active[source] = true;
       _reconf_deadlock_timer[source] = 0;
-      _timer[source] = time_needed;
+      assert(_timer[source] == 0);
+      _timer[source] += time_needed;
+      _start_time[source] = _clock->time();
+      _decur[source] = true;
       if (_logger) {
         _logger->register_event(EventType::START_RECONFIGURATION, _clock->time(), source);
       }
@@ -908,9 +911,9 @@ void DependentInjectionProcess::_setProcessingTime(int node, int value)
 {
 
   assert((node >= 0) && (node < _nodes));
-  _timer[node] = value;
-  // check in the _landed_packets for the packet with the id equal to the dependency
-  _decur[node] = false;
+  _timer[node] += value;
+  _start_time[node] = _clock->time();
+  _decur[node] = true;
 }
 
 
@@ -966,17 +969,19 @@ bool DependentInjectionProcess::test(int source)
     }   
   }
 
-
-
   bool valid = false;
   const ComputingWorkload * w = nullptr;
   const Packet * p = nullptr;
 
-
   // if there are pending workloads, the timer should be decremented
   if (_timer[source] > 0){
     assert(!(_pending_workloads[source] == nullptr) || _reconf_active[source]);
-    --_timer[source];
+    // check that _start_time + _timer is equal to the current time:
+    // this articulated way of checking is needed to avoid the decurring of 
+    // time due to the outer while loop that calls test in trafficinmanager
+    if (_start_time[source] + _timer[source] < _clock->time()){
+      _timer[source] = 0;
+    }
     return valid;
   }
   else if ( _reconf_deadlock_timer[source] > 0){
@@ -1079,20 +1084,22 @@ bool DependentInjectionProcess::test(int source)
     
   }
   if(dep_time_w>=0 && source == w->node && !(w==nullptr) && ((_enable_reconf)?_memory_set.is_workload_allocated(source, w):1)){
-    if(_timer[source] == 0){
-      // the node is idle and can process the workload
-      assert(_pending_workloads[source] == nullptr);
+    assert(_timer[source] == 0);
+    // the node is idle and can process the workload
+    assert(_pending_workloads[source] == nullptr);
 
-      _pending_workloads[source] = w;
-      _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
-      int time_required = _npu->cycles_workload( w->ct_required );
-      _timer[source] = time_required; // update the timer for the required time
-      _decur[source] = true;
-      if (_logger) {
-        _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
-      }
-      *(_context->gDumpFile) << "Workload with ID:" << w->id << " at node " << source << " has started processing at time " << _clock->time() << std::endl;
+    _pending_workloads[source] = w;
+    _waiting_workloads[source].pop_front(); // remove the workload from the waiting queue
+    int time_required = _npu->cycles_workload( w->ct_required );
+    _timer[source] = +time_required; // update the timer for the required time
+    _start_time[source] = _clock->time();
+    _decur[source] = true;
+    if (_logger) {
+      _logger->register_event(EventType::START_COMPUTATION, _clock->time(), w->id);
     }
+    *(_context->gDumpFile) << "Workload with ID:" << w->id << " at node " << source << " has started processing at time " << _clock->time() << std::endl;
+    *(_context->gDumpFile) << "Initialized timer: "<<_timer[source] << std::endl;
+  
   }
 
   return valid;

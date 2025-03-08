@@ -650,6 +650,7 @@ class DependentInjectionProcess : public InjectionProcess {
   private:
     int _resorting;
     vector<int> _timer; // timer only used for workloads (eventually reconfiguration), packets processing time is managed in trafficmanager
+    vector<int> _start_time ; // the time at which the processing of the workload/reconfiguration started
     vector<bool> _decur;
 
     // ==================  RECONFIGURATION ==================
