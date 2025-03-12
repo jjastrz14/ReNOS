@@ -12,7 +12,7 @@
         "reconfiguration": 1,
         "reconf_batch_size": 0,
         "reconf_cycles": 1.0,
-        "max_pe_mem": 400,
+        "max_pe_mem": 300,
         "flit_size": 64
     },
     "workload": [

@@ -306,7 +306,7 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
         if (_user_defined_traffic){
             // ============  Reconfiguration ============
             int reconf = config.getIntField("reconfiguration");
-            int pe_mem_size = config.getIntField("pe_mem_size");
+            int pe_mem_size = config.getIntField("max_pe_mem");
             double reconf_rate = config.getFloatField("reconf_rate");
             double reconf_cycles = config.getFloatField("reconf_cycles");
             double reconf_freq = config.getFloatField("reconf_freq");
@@ -1189,9 +1189,6 @@ void TrafficManager::_Inject(){
                 bool generated = false;
                 int i = 0;
                 while( !generated && ( _qtime[input][c] <= _clock.time() ) ) {
-                    // the way the while loop is written (with _qtime[input][c] <= _time)
-                    // actually prevents us from using decurPTime, since each time the method test
-                    // exectution is skipped, it is actually then made-up for by the execution of the while loop
                     int stype = _IssuePacket( input, c );
                     //*(_context->gDumpFile) << "Time: " << _clock.time() << " | Node: " << input << " | Class: " << c << " | Stype: " << stype << std::endl;
             

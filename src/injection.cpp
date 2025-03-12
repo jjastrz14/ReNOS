@@ -273,6 +273,7 @@ DependentInjectionProcess::DependentInjectionProcess(const DependentInjectionPro
   _requiring_ouput_deallocation.resize(nodes);
   _output_left_to_deallocate.resize(nodes);
   _reconf_deadlock_timer.resize(nodes, 0);
+  
 
   for (int i = 0; i < nodes; ++i){
     _waiting_packets[i].resize(0);
@@ -485,6 +486,7 @@ bool DependentInjectionProcess::_resortWaitingPQueues( vector<deque<const Packet
   return resorted;
 }
 
+
 int DependentInjectionProcess::_reconfigure(int source){
   
   // starting from the first valid workload, we allocate the memory of the next ones in the queue
@@ -590,12 +592,14 @@ bool DependentInjectionProcess::_checkReconfNeed(int source, bool bypass_output_
           valid = true;
       };
   return valid;
+  
 }
 
 
 void DependentInjectionProcess::stageReconfiguration(int source, bool bypass_output_check){
   // right after the output deallocation, we check for reconfiguration need:
   // if the conditions are met, we can start the reconfiguration
+
   if (_checkReconfNeed(source, bypass_output_check) && !_reconf_active[source]){
     // if the reconfiguration is needed, we can allocate the memory for the next workloads
     int total_size = _computeReconfMem(source);
@@ -642,7 +646,6 @@ void DependentInjectionProcess::stageBatchReconfiguration(int source, bool bypas
     // if the reconfiguration is needed, we set to true the _reconf_ready flag
     _reconf_ready[source] = true;
   }
-
 
   // we also check that the reconfiguration is needed for other _reconf_batch_size - 1 nodes
   // if so, we can stage the reconfiguration for the first _reconf_batch_size nodes
@@ -740,8 +743,7 @@ bool DependentInjectionProcess::_manageReconfPacketInjection(const Packet * p, i
         }        
         _processed->at(src).insert(make_tuple(p->id, type, _clock->time()));
         _waiting_packets[src].pop_front(); // remove the packet from the waiting queue
-      *(_context->gDumpFile) << " --( No communication )-- Packet with ID:" << p->id <<" and type " << p->type << " at node " << p->src << " has been processed at time " << _clock->time() << std::endl;
-
+        *(_context->gDumpFile) << " --( No communication )-- Packet with ID:" << p->id <<" and type " << p->type << " at node " << p->src << " has been processed at time " << _clock->time() << std::endl;
         if (type == 6){
           // check _requiring_output_deallocation for the packet
           auto it = _requiring_ouput_deallocation[src].at(p->dep[0]).find(p->id);
@@ -1051,9 +1053,6 @@ bool DependentInjectionProcess::test(int source)
     assert((w->ct_required > 0));
     assert(w->node == source);
   }
-
-  // std::cout << "packet: " << p << " workload: " << w << " pending workload: " << _pending_workloads[source] << " pending packets: " << _pending_packets[source].size() << std::endl;
-
   
   if (p == nullptr && w == nullptr && _pending_workloads[source] == nullptr && _pending_packets[source].size() == 0){
     return valid;
@@ -1070,7 +1069,9 @@ bool DependentInjectionProcess::test(int source)
     dep_time_p = _dependenciesPSatisfied(&(*p), source); 
   }
 
-  
+  // if (w!=nullptr && source == 20){
+  //   std::cout << "source: " << source << ", w->id: " << w->id  << ", dep_time_w: " << dep_time_w << std::endl;
+  // }
 
   // the new workload/packet can be executed only if its dependecies (packets and workloads) have been satisfied
   if (dep_time_p>=0 && source == p->src && !(p == nullptr)){

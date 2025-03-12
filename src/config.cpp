@@ -357,23 +357,48 @@ void Configuration::WriteMatlabFile(std::ostream * config_out) const {
 
 
 void Configuration::PreprocessPackets(std::ostream * o){
-    // This function preprocesses the packet sizes based on the flit_size variable
-    // The function loops over all the packets and divides the packet size by the flit_size
-    // If the size is 0, the function sets the size to 1
+    /**
+     * Preprocesses the packet sizes based on the flit_size variable.
+     *
+     * This function loops over all the packets and divides the packet size by the flit_size.
+     * If the packet size after rescaling is 0, it is set to 1.
+     *
+     * The scaling factor allows rescaling the size of a packet to the number of flits needed to send it.
+     * The size of the packet defined in the .json file is in bytes, while flit_size is in bits.
+     *
+     * Example: If a packet has a size of 8 BYTES and the flit size is 8 BITS, the packet size is rescaled to 8 flits.
+     * Thus, 8 flits of size 8 bits are needed to send 8 BYTES over a channel.
+     *
+     */
 
     int flit_size = getIntField("flit_size");
+    if (flit_size <= 0){
+        throw std::invalid_argument("Flit size must be greater than 0");
+    }
     
     double scaling = 8./flit_size;
 
     for (auto & packet : _packets){
-        if (packet.size % flit_size == 0){
-            packet.size = packet.size *scaling;
-            packet.pt_required = packet.pt_required * scaling;
+
+        double temp_size = packet.size * scaling;
+        double temp_pt_required = packet.pt_required * scaling; 
+        
+        // Round up if temp_size is not an integer
+        if  (std::ceil(temp_size) != temp_size){
+            temp_size = std::ceil(temp_size); //round up
+            temp_pt_required = std::ceil(temp_pt_required);
         }
-        else{
-            packet.size = packet.size *scaling + 1;
-            packet.pt_required = packet.pt_required * scaling + 1;
-        }
+
+        // Ensure at least 1 flit
+        if (temp_size == 0) { //rare case
+            temp_size = 1;
+            temp_pt_required = packet.pt_required; //pt_required as defined in json
+                }
+        
+        // cast to intger because size and pt_required are integers
+        packet.size = static_cast<int>(temp_size);
+        packet.pt_required = static_cast<int>(temp_pt_required);
+
         assert(packet.size > 0);
     }
 }

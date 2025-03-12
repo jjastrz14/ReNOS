@@ -159,7 +159,8 @@ class DependentInjectionProcess : public InjectionProcess {
       int getTotalAvailableForReconf() const { return _size*_threshold; }
       int getAvailableForReconf() const { return _threshold * _size - (_size-_available); }
       int getNumCurAllocatedWorkloads() const { return _cur_allocated_workload.size(); }
-      int getNumCurAllocatedOutputs() const { return _cur_allocated_output.size(); }
+      int getNumCurAllocatedOutputs() const { /*if (_cur_allocated_output.size() != 0)  std::cout << "first output: " << (*_cur_allocated_output.begin())->id << std::endl; */
+                                              return _cur_allocated_output.size(); }
       std::deque<const ComputingWorkload *> & getCurAllocatedWorkloads() { return _cur_allocated_workload; }
       std::set<const ComputingWorkload *> & getCurAllocatedOutputs() { return _cur_allocated_output; }
       void setNoMoreToReconfigure() { _no_more_to_reconfigure = true; }
@@ -715,6 +716,7 @@ class DependentInjectionProcess : public InjectionProcess {
     // a method to remove a packet id from _requiring_ouput_deallocation
     void finalizeCommunication(int source, int w_id, int packet_id){
       _requiring_ouput_deallocation[source].at(w_id).erase(packet_id);
+      // std::cout << "_reuiring_output_deallocation for " << w_id << " at node " << source << " size: " << _requiring_ouput_deallocation[source].at(w_id).size() << std::endl;
       if (_requiring_ouput_deallocation[source].at(w_id).empty()){
         // remove the output placeholder from memory
         assert(_memory_set.getMemoryUnit(source).remove_output_placeholder(w_id));
@@ -725,7 +727,7 @@ class DependentInjectionProcess : public InjectionProcess {
         _memory_set.deallocate_output(source, associated_workload);
 
         (*_context->gDumpFile) << " DEALLOCATING OUTPUT FOR WORKLOAD " << associated_workload->id << " ON NODE " << source << std::endl;
-
+        
         // stage reconfiguration
         (_reconf_batch_size>0)? stageBatchReconfiguration(source): stageReconfiguration(source);
       }
@@ -790,6 +792,7 @@ class DependentInjectionProcess : public InjectionProcess {
       // first check if the node is either computing or reconfiguring:
       if (_timer[source] > 0){
         // only in this case, add the processing time to the timer
+
         _timer[source] += processing_time;
         (*_context->gDumpFile) << "requesting INTERRUPT FOR node " << source << " WITH TIME " << processing_time << " to handle message" << std::endl;
       }
