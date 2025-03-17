@@ -1,0 +1,99 @@
+{
+
+    "arch":{
+            "topology" : "torus",
+            "k" : 3,
+            "n" : 2,
+            "use_read_write" : 1,
+            "routing_function" : "dim_order",
+            "num_vcs" : 16,
+            "user_defined_traffic" : 1,
+            "watch_out" : "-",
+            "watch_file" : "../config_examples/watch_list",
+            "sim_power" : 1,
+            "tech_file" : "../src/power/techfile.json"
+        },
+
+    "workload":[
+
+        {
+            "id" : 0,
+            "src" : 0,
+            "dst" : 0,
+            "size" : 8,
+            "dep" : [-1],
+            "type" : "WRITE",
+            "cl" : 0,
+            "pt_required" : 8
+        },
+        {
+            "id" : 1,
+            "src" : 0,
+            "dst" : 1,
+            "size" : 6,
+            "dep" : [-1],
+            "type" : "WRITE",
+            "cl" : 0,
+            "pt_required" : 6
+        }, 
+        {
+            "id" : 2,
+            "src" : 0,
+            "dst" : 2,
+            "size" : 4,
+            "dep" : [-1],
+            "type" : "WRITE",
+            "cl" : 0,
+            "pt_required" : 4
+        },
+        {
+            "id" : 3,
+            "node" : 0,
+            "type" : "COMP_OP",
+            "ct_required" : 40,
+            "dep" : [0]
+        },
+        {
+            "id" : 4,
+            "node" : 1,
+            "type" : "COMP_OP",
+            "ct_required" : 30,
+            "dep" : [1]
+        },
+        {
+            "id" : 5,
+            "node" : 2,
+            "type" : "COMP_OP",
+            "ct_required" : 20,
+            "dep" : [2]
+        },
+        {
+            "id" : 6,
+            "node" : 3,
+            "type" : "COMP_OP",
+            "ct_required" : 60,
+            "dep" : [-1]
+        },
+        {
+            "id" : 7,
+            "src" : 2,
+            "dst" : 3,
+            "size" : 1,
+            "dep" : [5,6],
+            "type" : "WRITE_REQ",
+            "cl" : 0,
+            "pt_required" : 1
+        },
+        {
+            "id" : 8,
+            "src" : 2,
+            "dst" : 4,
+            "size" : 1,
+            "dep" : [5],
+            "type" : "WRITE_REQ",
+            "cl" : 0,
+            "pt_required" : 1
+        }
+    ]
+
+}
