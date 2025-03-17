@@ -64,7 +64,7 @@ class Ant:
         self.current_path = None
 
 
-    def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = True):
+    def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
         """
         Pick the next move of the ant, given the pheromone and heuristic matrices.
         """
@@ -85,17 +85,19 @@ class Ant:
                 outbound_heuristics = eta[d_level-1, current, :]
             else:
                 # find the id of the task on which task_id depends (may be multiple)
-                dependencies = self.task_graph.get_dependencies(task_id)
-                print("The dependencies of the task are:", dependencies)
-                # find the PE on which the dependencies are mapped
-                dependencies_pe = [pe[2] for pe in prev_path if pe[0] in dependencies]
-                print("The PEs on which the dependencies are mapped are:", dependencies_pe)
-                # generate the heuristics to favour the PEs near the  ones where the dependencies are mapped
-                outbound_heuristics = np.zeros(self.domain.size)
-                for pe in dependencies_pe:
-                    for i in range(self.domain.size):
-                        outbound_heuristics[i] += 1 / manhattan_distance(pe, i) if manhattan_distance(pe, i) != 0 else 1
-                outbound_heuristics = outbound_heuristics / np.sum(outbound_heuristics)
+                dependencies = self.graph.get_dependencies(task_id)
+                if len(dependencies) == 0:
+                    outbound_heuristics = eta[d_level-1, current, :]
+                else:
+                    # find the PE on which the dependencies are mapped
+                    dependencies_pe = [pe[2] for pe in prev_path if pe[0] in dependencies]
+                    # generate the heuristics to favour the PEs near the  ones where the dependencies are mapped
+                    outbound_heuristics = np.zeros(self.domain.size)
+                    for pe in dependencies_pe:
+                        for i in range(self.domain.size):
+                            outbound_heuristics[i] += 1 / manhattan_distance(pe, i,self.domain) if manhattan_distance(pe, i, self.domain) != 0 else 1
+                    outbound_heuristics = outbound_heuristics / np.sum(outbound_heuristics)
+
                 
         row = (outbound_pheromones ** self.alpha) * (outbound_heuristics ** self.beta) * mask
         norm_row = (row / row.sum()).flatten()

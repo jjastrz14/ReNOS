@@ -437,7 +437,7 @@ class ParallelAntColony(AntColony):
         self.statistics["mdn"] = []
         self.statistics["std"] = []
         self.statistics["best"] = []
-        self.statistics["absolute_best"] = [(np.inf, "placeholder", np.inf)]
+        self.statistics["absolute_best"] = [np.inf]
 
         #Calculate and store intervals for parallel processing
         
@@ -476,9 +476,9 @@ class ParallelAntColony(AntColony):
             self.evaporate_pheromones(rho_step)
             self.statistics["mdn"].append(moving_average)
             self.statistics["std"].append(moving_std)
-            self.statistics["best"].append(shortest_path)
-            if shortest_path[2] < self.statistics["absolute_best"][-1][2]:
-                self.statistics["absolute_best"].append(shortest_path)
+            self.statistics["best"].append(shortest_path[2])
+            if shortest_path[2] < self.statistics["absolute_best"][-1]:
+                self.statistics["absolute_best"].append(shortest_path[2])
             else:
                 self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
             return shortest_path
@@ -501,8 +501,20 @@ class ParallelAntColony(AntColony):
                 shortest_path = single_iteration(i, once_every, rho_step)
                 if shortest_path[2] < all_time_shortest_path[2]:
                     all_time_shortest_path = shortest_path 
+                    # save the dump of the best solution in data
+                    # 1. get the id of the ant that found the best solution
+                    ant_id = shortest_path[0]
+                    # save the corresponding dump file into data
+                    dump_file = CONFIG_DUMP_DIR + "/dump" + str(ant_id) + ".json"
+                    print("Saving the best solution found by ant", ant_id, "in data/best_solution.json")
+                    os.makedirs("data", exist_ok = True)
+                    os.makedirs("data/ACO", exist_ok = True)
+                    os.system("cp " + dump_file + " data/ACO")
+                    os.system("mv data/ACO/dump" + str(ant_id) + ".json data/ACO/best_solution.json")
+
             # Finalize the simulation: save the data
-            np.save("data/statistics.npy", self.statistics)
+            np.save("data/ACO/statistics.npy", self.statistics)
+            
 
         return all_time_shortest_path
 
@@ -567,7 +579,7 @@ The following python classes for the optimization using  a Genetic Algorithm
 will be primarly be a wrapper for the pyGAD library.
 """
 
-import pygad
+import pygad # type: ignore
 from utils.ga_utils import *
 
 @dataclass
@@ -608,7 +620,7 @@ class GAParameters:
     num_genes : int = None
     init_range_low : float = None
     init_range_high : float = None
-    keep_parents : int = 0
+    keep_parents : int = 1
     gene_type : type = int
     mutation_probability : float = 0.2
     crossover_probability : float = 0.8
@@ -671,7 +683,11 @@ class GeneticAlgorithm(BaseOpt):
                                     mutation_probability = self.par.mutation_probability,
                                     crossover_probability = self.par.crossover_probability,
                                     on_generation = self.pool.on_generation,
+                                    on_stop = self.pool.on_stop,
         )
+
+        
+
 
     def fitness_func(self, ga_instance, solution, solution_idx):
 
@@ -698,6 +714,50 @@ class GeneticAlgorithm(BaseOpt):
         self.ga_instance.run()
 
         return self.ga_instance.best_solution()
+    
 
+class ParallelGA(GeneticAlgorithm):
 
- 
+    def __init__(self, n_procs, optimization_parameters, domain, task_graph):
+        super().__init__(optimization_parameters, domain, task_graph)
+
+        self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
+                                    num_parents_mating = self.par.n_parents_mating,
+                                    sol_per_pop = self.par.sol_per_pop,
+                                    num_genes = self.par.num_genes,
+                                    init_range_low = self.par.init_range_low,
+                                    init_range_high = self.par.init_range_high,
+                                    parent_selection_type = self.par.parent_selection_type,
+                                    keep_parents = self.par.keep_parents,
+                                    gene_type = self.par.gene_type,
+                                    fitness_func = self.fitness_func,
+                                    crossover_type = self.pool.get_cross_func,
+                                    mutation_type = self.pool.get_mut_func,
+                                    mutation_probability = self.par.mutation_probability,
+                                    crossover_probability = self.par.crossover_probability,
+                                    on_generation = self.pool.on_generation,
+                                    on_stop = self.pool.on_stop,
+                                    parallel_processing=["process", n_procs],
+        )
+
+    def fitness_func(self, ga_instance, solution, solution_idx):
+
+        # fitness function is computed using the NoC simulator:
+        # 1. construct the mapping from the solution
+        mapping = {}
+        for task_idx, task in enumerate(self.tasks):
+            mapping[task] = int(solution[task_idx])
+
+        # 2. apply the mapping to the task graph
+        mapper = ma.Mapper()
+        mapper.init(self.task_graph, self.domain)
+        mapper.set_mapping(mapping)
+
+        # 3. determine which process is running the simulation
+        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json", file_to_append=ARCH_FILE)
+
+        # 3. run the simulation
+        stub = ss.SimulatorStub()
+        result, _ = stub.run_simulation(CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json")
+
+        return 1 / result

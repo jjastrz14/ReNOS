@@ -13,7 +13,7 @@ The ga_utils.py module contains the classes and functions used to implement the 
 especially the operators used in the pool extraction process.
 """
 
-
+from dirs import *
 import numpy as np
 from utils.partitioner_utils import PE
 
@@ -420,7 +420,13 @@ class OperatorPool:
         self.F2 = [0 for _ in range(self.num_operators)]
 
         self.cur_cross = CROSSOVER_OPERATORS[0] # used to keep track of the current crossover operator
-        self.cur_mut = MUTATION_OPERATORS[0] # used to keep track of the current mutation operator 
+        self.cur_mut = MUTATION_OPERATORS[0] # used to keep track of the current mutation operator
+
+        self.statistics = {}
+        self.statistics["mdn"] = []
+        self.statistics["std"] = []
+        self.statistics["best"] = []
+        self.statistics["absolute_best"] = [np.inf] 
 
     def add_operator(self, operator, operator_type):
         if operator_type == "crossover":
@@ -473,6 +479,8 @@ class OperatorPool:
         # pick the mutation operator
         self.cur_mut = np.random.choice(self.mutation_pool, p = F_mutation)
 
+        print("The current crossover operator is: ", self.cur_cross)
+        print("The current mutation operator is: ", self.cur_mut)
         # update the last time the operator was selected
         self.last_chosen[self.crossover_pool.index(self.cur_cross)] = cur_it
         self.last_chosen[self.mutation_pool.index(self.cur_mut) + len(self.crossover_pool)] = cur_it
@@ -494,6 +502,29 @@ class OperatorPool:
         
         # udpate the fitness of the previous population
         self.prev_pop_fit = pop_fit
+
+        # save the mean fitness, the standard deviation and the best fitness of the current population
+        self.statistics["mdn"].append(np.mean(1/pop_fit))
+        self.statistics["std"].append(np.std(1/pop_fit))
+        self.statistics["best"].append(1/max(pop_fit))
+
+        if (1/max(pop_fit)) < self.statistics["absolute_best"][-1]:
+            self.statistics["absolute_best"].append(1/max(pop_fit))
+            # save the dump file for the best solution
+            os.makedirs(THIS_DIR + "/data", exist_ok=True)
+            os.makedirs(THIS_DIR + "/data/GA", exist_ok=True)
+            # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
+            os.system("cp " + THIS_DIR + "/config_files/dumps/dump_GA" + str(np.argmax(pop_fit)) + ".json " + THIS_DIR + "/data/GA")
+            # rename the file to "best_solution.json"
+            os.system("mv " + THIS_DIR + "/data/GA/dump_GA" + str(np.argmax(pop_fit)) + ".json " + THIS_DIR + "/data/GA/best_solution.json")
+        print("=====================================================")
+        print("The best latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/max(pop_fit)))
+        print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
+
+    def on_stop(self, ga_instance, last_generation_fitness):
+        # at the end of the optimization process, save the statistics
+        np.save(THIS_DIR + "/data/GA/statistics.npy", self.statistics)
+
     
     def get_cross_func(self, parents, offspring_size, ga_instance):
         offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)

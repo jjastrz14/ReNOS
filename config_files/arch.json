@@ -9,8 +9,9 @@
             "user_defined_traffic" : 1,
             "watch_out" : "-",
             "reconfiguration": 1,
-            "reconf_cycles": 1.0,
+            "reconf_batch_size": 25,
+            "reconf_cycles":  12.5,
             "pe_comp_cycles": 100.0,
-            "max_pe_mem": 11000
+            "max_pe_mem": 30000
         }
 }

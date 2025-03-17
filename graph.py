@@ -33,7 +33,7 @@ class TaskGraph:
     EDGE_INFO = "Edge ID: {0}\nType: {1}\nData Size: {2}\nProcessing Time Required: {3}\nDependencies: {4}"
 
 
-    def __init__(self, source = 0, drain = 8):
+    def __init__(self, source = 0, drain = 20):
         self.graph = nx.DiGraph()
         self.SOURCE_POINT = source
         self.DRAIN_POINT = drain
@@ -355,15 +355,23 @@ class TaskGraph:
         """
         
         structure = []
-        satisfied_dependencies = [-1]
+        packet_dependencies = [-1]
+        workload_dependencies = []
         # Remove elements whose element appearing more than once
         nodes = self.get_nodes()
         edges = self.get_edges()
-        
-    
+
+        # start from the edges and look for the ones whose dependencies are satisfied
+        # then append them to the structure. If no more edges are found with
+        # satisfied dependencies, look for the nodes.
+        # The process is repeated until all the nodes and edges are appended to the structure
+
+        already_appended_packets = []
+        already_appended_workloads = []
+
         while (len(nodes)>0 or len(edges)>0):
             for edge in edges:
-                if set(edge["dep"]).issubset(satisfied_dependencies):
+                if set(edge["dep"]).issubset(packet_dependencies):
                     if self.edges_mapping:
                         edge["src"] = self.edges_mapping[edge["id"]]["src"]
                         edge["dst"] = self.edges_mapping[edge["id"]]["dst"]
@@ -377,12 +385,11 @@ class TaskGraph:
                             print("src: ", self.edges_mapping[edge["id"]]["src"])
                             print("dst: ", self.edges_mapping[edge["id"]]["dst"])
                         print("====================================")
-                    satisfied_dependencies.append(edge["id"])
-                    edges.remove(edge)
-                    break
+                    workload_dependencies.append(edge["id"])
+                    already_appended_packets.append(edge["id"])
             for node in nodes:
                 # check that all the dependeices are satisfied
-                if set(node["dep"]).issubset(satisfied_dependencies):
+                if set(node["dep"]).issubset(workload_dependencies):
                     if self.nodes_mapping:
                         node["node"] = self.nodes_mapping[node["id"]]
                     structure.append(node)
@@ -394,9 +401,19 @@ class TaskGraph:
                             print("Mapping info: ")
                             print("node: ", self.nodes_mapping[node["id"]])
                         print("====================================")
-                    satisfied_dependencies.append(node["id"])
-                    nodes.remove(node)
-                    break
+                    packet_dependencies.append(node["id"])
+                    already_appended_workloads.append(node["id"])
+            
+            # remove the already appended nodes and edges
+            for edge_id in already_appended_packets:
+                edges.remove(self.edges[edge_id])
+            for node_id in already_appended_workloads:
+                nodes.remove(self.nodes[node_id])
+            
+            # reset the already appended lists
+            already_appended_packets = []
+            already_appended_workloads = []
+
 
         assert len(nodes) == 0 and len(edges) == 0
         return structure
@@ -605,6 +622,8 @@ def model_to_graph(model, verbose = False):
         # mem_scaling_factor = 64 # byte/flit
         # comp_scaling_factor = 100 # FLOPs per cycle
 
+        
+
         # assign task ids to the partitions
         for layer, partitions in parts.items():
             for partition in partitions:
@@ -663,7 +682,7 @@ def model_to_graph(model, verbose = False):
                 comm_size = int(weight) 
                 if comm_size == 0:
                     comm_size = 0 if weight == 0 else 1
-                processing_time =int(comm_size)
+                processing_time =int(comm_size* 0.3)
 
                 if comm_size > 0:
                     dep_graph.add_dependency_fully_qualified(first_node, second_node , id = dep_id, type = comm_type , size = comm_size, pt_required= processing_time , cl = 0, dep= [-1] if isinstance(partition1.layer, layers.InputLayer) else [partition1.task_id])
@@ -671,8 +690,18 @@ def model_to_graph(model, verbose = False):
                     second_task = dep_graph.add_task_dep(second_node, dep_id)
                     dep_id += 1
 
-        # Finally, connect the last layer partitions to the "end" node
-        for partition in parts[model.layers[-1].name]:
+        #find the last partitions of the model:
+        # i.e. partitions contained in the list that belong to the furthest layer
+        # down the model
+        print(list(parts.keys()))
+        last_partitions = parts[list(parts.keys())[-1]]
+        for layer in model.layers:
+            if layer.name in [partition for partition in list(parts.keys())] and parts[layer.name] != []:
+                last_partitions = parts[layer.name]
+            
+        print("Last partitions: ", last_partitions)
+        # Finally, connect the last partitions to the end node
+        for partition in last_partitions:
             results = int(np.prod(partition.out_bounds))
             results = 1 if results == 0 else results
             dep_graph.add_dependency_fully_qualified(partition.task_id, "end", id = dep_id, type = "WRITE", size = results, pt_required = processing_time, cl = 0, dep = [partition.task_id])

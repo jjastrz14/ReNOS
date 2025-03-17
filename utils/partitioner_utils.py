@@ -493,8 +493,8 @@ def _split_spatial_dims(layer, split_factor, partitions: Union[None, List[Partit
             # compute the dimensions for the partitions
             if len(input_dims) > 2:
                 # compute the dimensions for the partition on the output
-                output_dims[0] = original_output_dims[0] if s_x == 1 else (original_output_dims[0]//s_x) + 1 if _ < original_output_dims[0] % s_x else original_output_dims[0]//s_x
-                output_dims[1] = original_output_dims[1] if s_y == 1 else (original_output_dims[1]//s_y) + 1 if _ < original_output_dims[1] % s_y else original_output_dims[1]//s_y 
+                output_dims[0] = original_output_dims[0] if s_x == 1 else (original_output_dims[0]//s_x) + 1 if _%s_x < original_output_dims[0] % s_x else original_output_dims[0]//s_x
+                output_dims[1] = original_output_dims[1] if s_y == 1 else (original_output_dims[1]//s_y) + 1 if _%s_y < original_output_dims[1] % s_y else original_output_dims[1]//s_y 
 
             else:
                 # if the layer is Dense, we split the partition by considering only ouput neurons:
@@ -549,8 +549,10 @@ def _split_spatial_dims(layer, split_factor, partitions: Union[None, List[Partit
             cur.set_split_factor('spatial', split_factor)
             new_partitions.append(cur)
         
+        # print(f"Output dimensions: {output_dimensions}")
         return new_partitions
 
+    
 
     # If the partitions array is empty, create a new one
     if partitions is None:
@@ -823,7 +825,7 @@ def _build_partitions_from_layer(layer, spat = 0, out_ch = 1, in_ch = 1):
         p.MACs, p.FLOPs, p.tot_size = analyze_partition(p)
     return partitions
 
-def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 20000):
+def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000):
     """
     The functions selects the best partitioning strategy for a layer, based on the layer's characteristics.
     The main objective is to create the partitions for a layer with the lowest values for the splitting factors that, at the same time,
@@ -844,11 +846,26 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 20000
     - a tuple, representing the parameters to be used for the partitionin of the layer
     - an integer, representing the space that will be needed for the partitions of the layer
     """
-
-    # first check the output shape of the layer
-
+    max_splitting_factor = 6
     available_splitting = ['spatial', 'output', 'input']
     splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
+
+    if isinstance(layer, layers.InputLayer):
+        return 0,1,1
+    # first check the output shape of the layer
+
+    if layer.name == "conv2d":
+        return 5,1,1
+
+
+    if isinstance(layer, layers.MaxPooling2D) or isinstance(layer, layers.AveragePooling2D):
+        # divide using the same splittinf factor as its previous layer
+
+        if layer.name == "max_pooling2d":
+            return 5,1,1
+        else:
+            return 2,splitting_factors['output'], splitting_factors['input']  
+        
     print("====================================================")
     print(f"Adaptive partitioning for layer {layer.name}")
     print(f"Available splitting strategies: {available_splitting}")
@@ -859,6 +876,9 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 20000
         available_splitting.remove('output')
         available_splitting.remove('input')
 
+    # if isinstance(layer, layers.Dense):
+    #     chosen_splitting = 'spatial'
+
     # until the MACs for every single partition of the layer are under the threshold, keep on incrementing the
     # slitting factor for the chosen splitting strategy: if the splitting strategy is not available (only spatial splitting is available)
     # then split by spatial dimensions
@@ -867,13 +887,15 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 20000
         if all([p.FLOPs < FLOP_threshold for p in partitions]):
             break
         splitting_factors[chosen_splitting] += 1
-        print(f"Splitting factor for {chosen_splitting} increased to {splitting_factors[chosen_splitting]}")
-        if splitting_factors[chosen_splitting] > 6:
-            splitting_factors[chosen_splitting] = 6
+        
+        if splitting_factors[chosen_splitting] > max_splitting_factor:
+            print(f"Splitting factor for {chosen_splitting} reached maximum value")
+            splitting_factors[chosen_splitting] = max_splitting_factor
             break
+        else:
+            print(f"Splitting factor for {chosen_splitting} increased to {splitting_factors[chosen_splitting]}")
     print("====================================================")
     return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
-
 
 
 def _build_spatial_deps(partitions_layer1 : List[PartitionInfo], partitions_layer2: List[PartitionInfo], deps: Dict = None):
@@ -1109,7 +1131,7 @@ def _group_partitions(partitions_layer1 : List[PartitionInfo], partitions_layer2
     for i, p1 in enumerate(partitions_layer1):
         for j, p2 in enumerate(partitions_layer2):
             # check that the sum over the row and the column are both equal to 1
-            if connectivity_matrix[i,:].sum() == 1 and connectivity_matrix[:,j].sum() == 1 and connectivity_matrix[i,j] == 1:
+            if connectivity_matrix[i,:].sum() == 1 and connectivity_matrix[:,j].sum() == 1 and connectivity_matrix[i,j] == 1 and ("input" not in p1.id):
                 # mark the partitions
                 _ = _mark_partitions(p1, p2)
 
@@ -1336,7 +1358,7 @@ def build_partitions(model: keras.Model, grouping: bool = True,verbose : bool = 
 
     partitions = {}
     partitions_deps = {}
-    pe = PE(10000)
+    pe = PE()
     print("PE memory size: ", pe.mem_size)
     layer_deps = _build_layer_deps(model)
 
@@ -1539,9 +1561,3 @@ def analyze_ops(model: keras.Model, incl_info = False):
     print(f"Total parameters: {total_parameters}")
     print(f"Total: MACs={total_MACs}, FLOPs={total_FLOPs}")
     print("------------------------------------------------------------------------------------------------------------------------")
-
-
-
-
-
-

@@ -796,11 +796,15 @@ class NoCTimelinePlotter(NoCPlotter):
 
         if legend:
             self.ax2d.legend(
-            #loc='upper right',
+            loc='upper center',
+            ncol=6,
+            bbox_to_anchor=(0.5, 1.05),
             #bbox_to_anchor=(1.17, 1.0),
             #borderaxespad=0.0,
             #fontsize='small',
             #title='Event Types',
+            fancybox=True,
+            shadow=True,
             title_fontsize='medium',
             frameon=True
             )

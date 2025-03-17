@@ -33,17 +33,12 @@ from tensorflow.keras.utils import plot_model
 def test_model(input_shape):
     
     inputs = layers.Input(shape=input_shape)
-    x = layers.Conv2D(3, kernel_size=(3, 3), activation='linear') (inputs)
+    x = layers.Conv2D(16, kernel_size=(5, 5), activation='linear') (inputs)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-    x = layers.Conv2D(6, kernel_size=(3, 3))(x)
-    # x = layers.BatchNormalization()(x)
-    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(32, kernel_size=(5, 5))(x)
     x = layers.MaxPooling2D(pool_size=(2, 2))(x)
     x = layers.Flatten()(x)
-    x = layers.Dense(64)(x)
-    # x = layers.BatchNormalization()(x)
-    x = layers.Activation('relu')(x)
-    x = layers.Dense(24, activation='relu')(x)
+    x = layers.Dense(128)(x)
     x = layers.Dense(10, activation='softmax')(x)
     model = keras.Model(inputs=inputs, outputs=x)
     
@@ -131,7 +126,7 @@ if __name__ == "__main__":
     
 
 
-    model = test_model((28, 28, 3))
+    model = test_model((28, 28, 1))
     # # # model = load_model("ResNet50")
     # # # model = load_model("MobileNet")
     # # # model = load_model("MobileNetV2")
@@ -144,29 +139,31 @@ if __name__ == "__main__":
 
     
     task_graph = model_to_graph(model, verbose=True)
-    # plot_graph(task_graph)
+    plot_graph(task_graph)
 
-    grid = dm.Grid()
-    grid.init(4, 2, dm.Topology.TORUS)
+    # grid = dm.Grid()
+    # grid.init(5, 2, dm.Topology.TORUS)
 
-    params = op.ACOParameters(
-        n_ants = 1,
-        rho = 0.05,
-        n_best = 1,
-        n_iterations = 1,
-        alpha = 1.,
-        beta = 1.2,
-    )
-    # n_procs = 3
-    opt = op.AntColony( params, grid, task_graph)
+    # params = op.ACOParameters(
+    #     n_ants = 36,
+    #     rho = 0.05,
+    #     n_best = 10,
+    #     n_iterations =200,
+    #     alpha = 1.,
+    #     beta = 1.2,
+    # )
+    # n_procs = 6
+    # # opt = op.AntColony( params, grid, task_graph)
     # opt = op.ParallelAntColony(n_procs, params, grid, task_graph)
 
-    shortest = opt.run(once_every=1, show_traces= False)
-    print(shortest)
+    # shortest = opt.run(once_every=1, show_traces= False)
+    # print(shortest)
 
-    file_name_json = "/dump.json"
-    path_timeline = "visual/timeline.png"
-    visualizer.plot_timeline(file_name_json, path_timeline, verbose = False)
+    # # file_name_json = "/../runs/best_solution.json"
+    # # path_timeline = "visual/timeline.png"
+    # file_name_json = "/../../data/ACO/best_solution.json"
+    # path_timeline = "data/ACO/timeline.png"
+    # visualizer.plot_timeline(file_name_json, path_timeline, verbose = False)
     # print(opt.path_length(shortest[0], verbose =False))
     # # # Load the statistics and plot the results
     # # stats = np.load("data/statistics.npy", allow_pickle=True).item()
