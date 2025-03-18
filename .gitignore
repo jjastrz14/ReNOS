@@ -32,6 +32,12 @@
 *.out
 *.app
 
+# Directories produced as build output
+bin/
+lib/
+
+#VS Code
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
