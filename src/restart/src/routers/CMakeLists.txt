@@ -1,19 +1,20 @@
 
-set (SOURCES
+set (routers_SRC
     router.cpp
     iq_router.cpp
     event_router.cpp
     chaos_router.cpp
 )
 
-set (INCLUDES
+set (routers_INC
     router.hpp
     iq_router.hpp
     event_router.hpp
     chaos_router.hpp
 )
 
+PREPEND(routers_SRC)
+PREPEND(routers_INC)
 
-add_library(routers STATIC ${SOURCES} ${INCLUDES})
-
-target_include_directories(routers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set(routers_SRC ${routers_SRC} PARENT_SCOPE)
+set(routers_INC ${routers_INC} PARENT_SCOPE)

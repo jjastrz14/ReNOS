@@ -24,8 +24,8 @@ set(network_INC
     tree4.hpp
 )
 
-PREPEND(topologies_SRC)
-PREPEND(topologies_INC)
+PREPEND(network_SRC)
+PREPEND(network_INC)
 
-set(topologies_SRC ${topologies_SRC} PARENT_SCOPE)
-set(topologies_INC ${topologies_INC} PARENT_SCOPE)
+set(network_SRC ${network_SRC} PARENT_SCOPE)
+set(network_INC ${network_INC} PARENT_SCOPE)

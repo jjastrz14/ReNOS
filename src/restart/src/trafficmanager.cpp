@@ -307,9 +307,8 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
             // ============  Reconfiguration ============
             int reconf = config.getIntField("reconfiguration");
             int pe_mem_size = config.getIntField("max_pe_mem");
-            double reconf_rate = config.getFloatField("reconf_rate");
+            int pe_mem_threshold = config.getIntField("threshold_pe_mem");
             double reconf_cycles = config.getFloatField("reconf_cycles");
-            double reconf_freq = config.getFloatField("reconf_freq");
             if (!reconf){
                 pe_mem_size = 0;
                 reconf_cycles =  -1; // fix for now
@@ -320,13 +319,14 @@ TrafficManager::TrafficManager( const Configuration &config, const vector<Networ
 
             int reconf_batch_size = config.getIntField("reconf_batch_size");
             int flit_size = config.getIntField("flit_size");
-            double pe_comp_cycles = config.getFloatField("pe_comp_cycles");
+            double comp_cycles = config.getFloatField("ANY_comp_cycles");
 
             _params[c] = DependentInjectionProcessParameters::New(
                 _nodes,
                 pe_mem_size,
+                pe_mem_threshold,
                 reconf_cycles,
-                pe_comp_cycles,
+                comp_cycles,
                 reconf_batch_size,
                 flit_size,
                 &_clock,

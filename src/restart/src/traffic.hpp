@@ -57,7 +57,7 @@ public:
   virtual const ComputingWorkload * getNextWorkload(){return NULL;};
   // method to return the iterator to the packet with a specific id
   virtual const Packet * packetByID(int id) const {return NULL;};
-  virtual const ComputingWorkload * workloadByID(int id) const {return NULL;}; ;
+  virtual const ComputingWorkload * workloadByID(int id) const {return NULL;};
   
   // ------------------------------------------------------------------------
   virtual int dest(int source) = 0;

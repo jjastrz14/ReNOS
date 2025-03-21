@@ -19,6 +19,7 @@
 #include <sstream>
 #include <deque>
 #include <cassert>
+#include <algorithm>
 #include "packet.hpp"
 
 
@@ -248,7 +249,7 @@ class EventLogger {
             }
         }
 
-        void initialize_event_info(int size) {
+        void initialize_event_info() {
             _events.emplace_back(Event(_id_counter, EventType::START_SIMULATION, 0, -1));
             _id_counter++;
         }

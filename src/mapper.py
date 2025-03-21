@@ -82,6 +82,8 @@ class Mapper:
         # Write the mapping to a file, using the JSON format
         structure = self.dep_graph.graph_to_json()
         path = os.path.join(os.path.dirname(__file__), file_path)
+        # create the directory if it does not exist
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         # write the JSON-like list to a file
         if not file_to_append:
             with open(path, "w") as f:

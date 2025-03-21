@@ -23,13 +23,39 @@ The Stub class should simply provide and interface from the main.py module to th
 import os
 import sys
 import platform
-import multiprocessing
+import multiprocessing as mpr
 from concurrent.futures import ThreadPoolExecutor
 import time
+from dirs import PYTHON_MODULE_DIR
 
-PATH_TO_SIMULATOR = os.path.join("/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart", "lib")
-sys.path.append(PATH_TO_SIMULATOR)
-import nocsim
+# import the cpython module contained in the directory specified by PYTHON_MODULE_DIR
+sys.path.append(PYTHON_MODULE_DIR)
+import nocsim # type: ignore
+
+def wrapper(func, q, event, *args):
+    q.put(func(*args))
+    event.set()
+
+def dangerwrap(func, *args):
+    event = mpr.Event()
+    q = mpr.Queue()
+
+    f_process = mpr.Process(target=wrapper, args=(func, q, event, *args))
+    f_process.start()
+    try:
+        event.wait()
+    except KeyboardInterrupt:
+        f_process.terminate()
+        f_process.join()
+        print("Caught in dangerwrap")
+        return None
+
+    print("Exiting normally")
+    return q.get()
+
+def run_nocsim_simulation(path_to_config_file):
+    return nocsim.simulate(path_to_config_file, "")
+
 
 class SimulatorStub:
 
@@ -52,9 +78,10 @@ class SimulatorStub:
         
         if verbose:
             print("Running simulation with configuration file: " + path_to_config_file)
-        #os.system(self.path_to_executable + " " + path_to_config_file)
+        
         start = time.time()
-        results, logger = nocsim.simulate(path_to_config_file, "")
+        # use multiprocessing to allow for response to keyboard interrupts
+        results, logger = dangerwrap(run_nocsim_simulation, path_to_config_file)
         end = time.time()
         if verbose:
             print(f"Simulation completed in {end - start:.2f} seconds.")
@@ -79,14 +106,13 @@ class SimulatorStub:
         if verbose:
             print(f"Running simulation on processor {processor} with configuration file: {path_to_config_file}")
 
-        # Verifica se il sistema operativo è diverso da Linux
         if platform.system().lower() != "linux":
             if verbose:
                 print("Setting processor affinity is not supported on this OS.")
         else:
             def set_affinity():
                 os.system(f"taskset -p -c {processor} {os.getpid()}")
-            p = multiprocessing.Process(target=set_affinity)
+            p = mpr.Process(target=set_affinity)
             p.start()
             p.join()
             

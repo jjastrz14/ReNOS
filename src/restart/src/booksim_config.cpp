@@ -188,10 +188,6 @@ BookSimConfig::BookSimConfig( )
   _arch_int["max_outstanding_requests"] = 0; // 0 = unlimited
 
   // Use read/write request reply scheme
-  // ========== Additions for user-defined traffic ==========
-  _arch_int["user_defined_traffic"] = 0;
-  _arch_int["resort_waiting_queues"] = 1;
-  // ========================================================
   _arch_int["use_read_write"] = 0;
   addStrField("use_read_write", ""); // workaraound to allow for vector specification
   _arch_float["write_fraction"] = 0.5;
@@ -234,10 +230,6 @@ BookSimConfig::BookSimConfig( )
   addStrField("read_reply_time", "");
   _arch_int["write_reply_time"] = 0;
   addStrField("write_reply_time", "");
-
-  //==== PE parameters ==========================
-
-  _arch_float["pe_comp_cycles"] = 1.; // cycles to process a FLOP [FLOP/s]
 
   //==== Simulation parameters ==========================
 
@@ -307,15 +299,25 @@ BookSimConfig::BookSimConfig( )
 
   addIntField("logger", 0);
 
+  // ========== Additions for user-defined traffic ==========
+  _arch_int["user_defined_traffic"] = 0;
+  _arch_int["resort_waiting_queues"] = 1;
+  // ========================================================
+
+  //==== PE parameters ==========================
+
+  _arch_float["ANY_comp_cycles"] = 1.; // cycles to process a FLOP [cycle/FLOP]
+  _arch_float["FC_comp_cycles"] = 1.; // cycles to process a FLOP [cycle/FLOP]
+  _arch_float["CONV_comp_cycles"] = 1.; // cycles to process a FLOP [cycle/FLOP]
+
   // ============ Reconfiguration ============
 
   addIntField("reconfiguration", 0);
   addIntField("max_pe_mem", 256000);
+  addIntField("threshold_pe_mem", 200000);
   addIntField("flit_size", 64);
   addIntField("reconf_batch_size", 0);
-  addFloatField("reconf_rate", 0.);
   addFloatField("reconf_cycles", 0.);
-  addFloatField("reconf_freq", 0.);
 
   // ============ Reconfiguration ============
 

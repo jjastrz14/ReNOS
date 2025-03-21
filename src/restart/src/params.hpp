@@ -35,86 +35,9 @@
 #ifndef PARAMS_HPP
 #define PARAMS_HPP
 
-#include <vector>
-#include <set>
-#include <tuple>
-#include <map>
-#include <cassert>
-#include <iostream>
-
 #define COMM_DELAY 1
 #define FLIT_SIZE 64 // in bytes
 #define MAX_LOCAL_MEMORY 56 // in flit size
 #define MAX_NVM_MEMORY 1024 // in flit size
-
-
-
-
-enum class WorkloadType{
-    NONE, // not specified
-    CONV, // convolutional wokload
-    FC, // fully connected workload
-};
-
-class NVMPar {
-    public:
-        // constructor
-        NVMPar( double reconf_rate /* [byte / s] */, double clock_freq /* [cycle/s = Hz] */) : _reconf_rate(reconf_rate), _clock_freq(clock_freq) { assert(_reconf_rate > 0. || _reconf_cycles > 0.);} 
-        NVMPar( double reconf_cycles /* [byte / cycle] */) : _reconf_cycles(reconf_cycles) {}
-
-        int cycles_reconf(int size /* [ byte size ] */, double noc_freq = -1.) const {
-
-            if (_reconf_rate > 0.) {
-                return std::ceil(double(size)/ byte_per_cycles(noc_freq));
-            }
-            return std::ceil(double(size) /  _reconf_cycles);
-        }
         
-        // a method to get the byte per cycles
-        double byte_per_cycles(double noc_freq = -1. /* [Hz] */) const {
-            assert(_reconf_rate > 0);
-            if (noc_freq == -1) {
-                return _reconf_rate / _clock_freq;
-            }
-            double scale = _clock_freq / noc_freq;
-            return _reconf_rate / scale;
-        }
-
-        
-    private:
-        // the reconfiguration rate for a certain technological node [bytes/s]
-        double _reconf_rate;
-        double _reconf_cycles;
-        // the clock frequency used for the NVM [Hz]
-        double _clock_freq;
-};
-        
-
-class NPUPar {
-    public:
-        // constructor
-        NPUPar(double comp_cycles/* [FLOP/cycle] */):_comp_cycles(comp_cycles) {}
-
-        int cycles_workload(int size, WorkloadType type = WorkloadType::NONE) const {
-            return std::ceil(double(size) / flops_per_cycles(type));
-        }
-
-        // a method to get the MAC/FLOP rate for a certain type of workload
-        double flops_per_cycles(WorkloadType type = WorkloadType::NONE) const {
-            if (type == WorkloadType::NONE) {
-                return _comp_cycles;
-            }
-            else {
-                std::cerr << "Error: Specific FLOP cycles per workload type not implemented yet" << std::endl;
-                exit(1);
-            }
-            
-        }
-
-    private:
-        // the FLOP cycles for a certain type of workload
-        std::map<WorkloadType, double> _w_specific_cycles;
-        // cycles used to process a generic FLOP
-        double _comp_cycles;
-};
 #endif

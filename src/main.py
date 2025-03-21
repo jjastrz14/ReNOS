@@ -141,22 +141,22 @@ if __name__ == "__main__":
     task_graph = model_to_graph(model, verbose=True)
     plot_graph(task_graph)
 
-    # grid = dm.Grid()
-    # grid.init(5, 2, dm.Topology.TORUS)
+    grid = dm.Grid()
+    grid.init(5, 2, dm.Topology.TORUS)
 
-    # params = op.ACOParameters(
-    #     n_ants = 36,
-    #     rho = 0.05,
-    #     n_best = 10,
-    #     n_iterations =200,
-    #     alpha = 1.,
-    #     beta = 1.2,
-    # )
+    params = op.ACOParameters(
+        n_ants = 1,
+        rho = 0.05,
+        n_best = 1,
+        n_iterations =100,
+        alpha = 1.,
+        beta = 1.2,
+    )
     # n_procs = 6
-    # # opt = op.AntColony( params, grid, task_graph)
+    opt = op.AntColony( params, grid, task_graph)
     # opt = op.ParallelAntColony(n_procs, params, grid, task_graph)
 
-    # shortest = opt.run(once_every=1, show_traces= False)
+    shortest = opt.run(once_every=1, show_traces= False)
     # print(shortest)
 
     # # file_name_json = "/../runs/best_solution.json"
