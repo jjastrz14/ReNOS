@@ -452,9 +452,6 @@ void MemoryUnit::reconfigure(const ComputingWorkload *& head, const std::deque<c
     // update the head of the queue
     head = w;
 
-    // unset the reconfiguration flag and reset the timer
-    resetTimer();
-
 }
 
 // handy functions
@@ -526,5 +523,3 @@ void MemorySet::init(std::vector<std::deque<const ComputingWorkload * >> & waiti
         _pointed_workload_in_queue[i] = waiting_workloads[i].size() > 0 ? waiting_workloads[i][0] : nullptr;
     }
 }
-
-    

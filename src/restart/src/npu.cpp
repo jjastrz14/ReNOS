@@ -11,8 +11,6 @@
 
 #include "npu.hpp"
 
-
-
 void NPURateRegister::registerWorkloadCycles(WorkloadType type, int cycles){
     _workload_cycles[type] = cycles;// [cycles/FLOP]
 }
@@ -23,7 +21,8 @@ int NPURateRegister::getWorkloadCycles(int size_FLOPs, WorkloadType type) const{
 
 void NPU::setTimer(int size, int start_time, WorkloadType type){
     required_time = _reg->getWorkloadCycles(size, type);
-    start_time = start_time;
+    required_time = required_time > 1 ? required_time : 1;
+    this->start_time = start_time;
     busy = true;
 }
 

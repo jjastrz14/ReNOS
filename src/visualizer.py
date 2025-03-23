@@ -49,7 +49,7 @@ def create_logger(path_to_json = "/test.json", verbose = False):
 
 
 
-    results, logger = stub.run_simulation(path_data, verbose = False, dwrap=True)
+    results, logger = stub.run_simulation(path_data, verbose = False)
     
     if verbose: 
         for event in logger.events:

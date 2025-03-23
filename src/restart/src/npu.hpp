@@ -75,7 +75,7 @@ class NPU{
         }
 
         bool checkComputation(int current_time){
-            return start_time + required_time <= current_time;
+            return start_time + required_time < current_time;
         }
 
     private:
@@ -145,16 +145,12 @@ class NPUSet{
         }
 
         void finalizeComputation(int node, const ComputingWorkload * w, int current_time){
-            _npus[node].resetTimer();
+            
             if (_logger) {
                 _logger->register_event(EventType::END_COMPUTATION, current_time, w->id);
-              }
+            }
+            _npus[node].resetTimer();
         }
-        
-
-
-
-        
 
 };
 
