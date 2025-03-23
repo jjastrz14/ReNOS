@@ -359,7 +359,7 @@ bool MemoryUnit::inNextReconfigBatch(const ComputingWorkload * w, const std::deq
             break;
         }
     }
-
+    return false;
 }
 
 bool MemoryUnit::checkReconfNeed(bool bypass_output_check, const std::deque<const ComputingWorkload *> & waiting_workloads){

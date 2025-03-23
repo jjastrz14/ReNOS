@@ -21,13 +21,13 @@ from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
 import time
-import nocsim
+import nocsim # type: ignore
 
 # Thanks to J. Jastrzebski
 def create_logger(path_to_json = "/test.json", verbose = False):
     
     # Create a SimulatorStub object
-    stub = ss.SimulatorStub(EX_DIR)
+    stub = ss.SimulatorStub()
 
     # Run the simulation in parallel
     
@@ -49,7 +49,7 @@ def create_logger(path_to_json = "/test.json", verbose = False):
 
 
 
-    results, logger = stub.run_simulation(path_data, verbose = False)
+    results, logger = stub.run_simulation(path_data, verbose = False, dwrap=True)
     
     if verbose: 
         for event in logger.events:

@@ -62,7 +62,7 @@ class SimulatorStub:
     def __init__(self, path_to_executable = None):
         self.path_to_executable = path_to_executable
 
-    def run_simulation(self, path_to_config_file, verbose=False):
+    def run_simulation(self, path_to_config_file, verbose=False, dwrap=False):
         """
         Runs the simulation with the given configuration file.
 
@@ -81,7 +81,7 @@ class SimulatorStub:
         
         start = time.time()
         # use multiprocessing to allow for response to keyboard interrupts
-        results, logger = dangerwrap(run_nocsim_simulation, path_to_config_file)
+        results, logger = dangerwrap(run_nocsim_simulation, path_to_config_file) if dwrap else run_nocsim_simulation(path_to_config_file)
         end = time.time()
         if verbose:
             print(f"Simulation completed in {end - start:.2f} seconds.")

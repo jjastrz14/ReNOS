@@ -346,7 +346,7 @@ class AntColony(BaseOpt):
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump.json")
+        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump.json", dwrap=True)
         return result, logger
 
 
@@ -705,7 +705,7 @@ class GeneticAlgorithm(BaseOpt):
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(CONFIG_DUMP_DIR + "/dump_GA.json")
+        result, _ = stub.run_simulation(CONFIG_DUMP_DIR + "/dump_GA.json", dwrap=True)
     
         return 1 / result
     
