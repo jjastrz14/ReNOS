@@ -38,14 +38,14 @@ class NPURateRegister{
         ~NPURateRegister() {};
 
         // a method to register a new entry in the map
-        void registerWorkloadCycles(WorkloadType type, int cycles);
+        void registerWorkloadCycles(WorkloadType type, float cycles);
 
         // a method to get the total number of cycles given the size (in FLOPs) and type of workload
         int getWorkloadCycles(int size_FLOPs, WorkloadType type = WorkloadType::ANY) const;
         
     private:
         // a map to store the computation cycles for each type of workload
-        std::map<WorkloadType, int> _workload_cycles;
+        std::map<WorkloadType, double> _workload_cycles;
 
 };
 

@@ -11,7 +11,7 @@
 
 #include "npu.hpp"
 
-void NPURateRegister::registerWorkloadCycles(WorkloadType type, int cycles){
+void NPURateRegister::registerWorkloadCycles(WorkloadType type, float cycles){
     _workload_cycles[type] = cycles;// [cycles/FLOP]
 }
 
@@ -31,3 +31,4 @@ void NPU::resetTimer(){
     start_time = 0;
     busy = false;
 }
+
