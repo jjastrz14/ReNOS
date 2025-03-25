@@ -91,14 +91,13 @@ void MemoryUnit::printWaitingForReply(std::ostream & os) const{
 
 void MemoryUnit::allocate_(int size){
     // assert that the size is less than the available memory and total size
-    assert(("Not enough memory to allocate", size <= _size && _available - size >= 0));
+    assert(("Not enough memory to allocate", size <= _size && _available - size > 0));
     _available -= size;
 }
 
 void MemoryUnit::deallocate_(int size){
-    assert(("Memory out of bounds", size <= _size && _available + size <= _size));
+    assert(("Memory out of bounds", size <= _size && _available>=0));
     _available += size;
-            
 }
 
 void MemoryUnit::allocateOutput(const ComputingWorkload * w){
