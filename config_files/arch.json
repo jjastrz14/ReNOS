@@ -11,7 +11,7 @@
             "reconfiguration": 1,
             "reconf_batch_size": 25,
             "reconf_cycles":  0.2,
-            "pe_comp_cycles": 0.05,
+            "ANY_comp_cycles": 0.05,
             "max_pe_mem": 30000,
             "threshold_pe_mem": 25000
         }
