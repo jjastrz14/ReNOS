@@ -66,8 +66,8 @@ ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json")
 
 cet = pytz.timezone('CET')
 timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S")  # Format: YYYY-MM-DD_HH-MM-SS
-CONFIG_DUMP_DIR = DEFALUT_CONFIG_DUMP_DIR +"/dumps_input"+ f"_{factor}" + f"_{timestamp}"
-ACO_DIR = os.path.join(DATA_DIR, "ACO_input") + f"_{factor}" + f"_{timestamp}"
-GA_DIR = os.path.join(DATA_DIR, "GA_input") + f"_{factor}" + f"_{timestamp}"
+CONFIG_DUMP_DIR = DEFALUT_CONFIG_DUMP_DIR +"/dumps"+ f"_{factor}" + f"_{timestamp}"
+ACO_DIR = os.path.join(DATA_DIR, "ACO") + f"_{factor}" + f"_{timestamp}"
+GA_DIR = os.path.join(DATA_DIR, "GA") + f"_{factor}" + f"_{timestamp}"
 
 

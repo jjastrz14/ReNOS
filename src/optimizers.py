@@ -17,6 +17,7 @@ import os, sys
 import logging
 import enum
 import numpy as np
+import random
 from numpy.random import seed
 import simulator_stub as ss
 import mapper as ma
@@ -91,7 +92,7 @@ class AntColony(BaseOpt):
 
     optimizerType : ClassVar[Union[str, OptimizerType]] = OptimizerType.ACO
 
-    def __init__(self, optimization_parameters, domain, task_graph):
+    def __init__(self, optimization_parameters, domain, task_graph, seed = None):
         """
         
         Parameters:
@@ -125,6 +126,12 @@ class AntColony(BaseOpt):
         tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
         tasks.insert(0, "start")
         self.tasks = tasks
+        
+        self.seed = seed
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            random.seed(self.seed)
+
     
 
 
@@ -392,7 +399,7 @@ class ParallelAntColony(AntColony):
     optimizerType : ClassVar[Union[str, OptimizerType]] = OptimizerType.ACO
 
 
-    def __init__(self, number_of_processes, optimization_parameters, domain, task_graph):
+    def __init__(self, number_of_processes, optimization_parameters, domain, task_graph, seed = None):
         """
         
         Parameters:
@@ -415,6 +422,10 @@ class ParallelAntColony(AntColony):
         # self.logger.setLevel(logging.INFO)
 
         self.ants = [Ant(i, self.task_graph, self.domain, self.tasks, self.par.alpha, self.par.beta) for i in range(self.par.n_ants)]
+        
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            random.seed(self.seed)
 
         # --- Pheromone and Heuristic Information ---
         # The pheromone and heuristic matrices are shared arrays among the ants
@@ -629,7 +640,7 @@ class GAParameters:
 
 class GeneticAlgorithm(BaseOpt):
 
-    def __init__(self, optimization_parameters, domain, task_graph):
+    def __init__(self, optimization_parameters, domain, task_graph, seed = None):
         """
         
         Parameters:
@@ -666,7 +677,10 @@ class GeneticAlgorithm(BaseOpt):
 
         # --- Pool of Operatros ---
         self.pool = OperatorPool(self)
-
+        
+        # --- Seed ---
+        self.seed = seed
+  
         # --- Initialize the GA object of pyGAD ---
 
         self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
@@ -685,6 +699,7 @@ class GeneticAlgorithm(BaseOpt):
                                     crossover_probability = self.par.crossover_probability,
                                     on_generation = self.pool.on_generation,
                                     on_stop = self.pool.on_stop,
+                                    random_seed = self.seed
         )
 
 
@@ -717,8 +732,8 @@ class GeneticAlgorithm(BaseOpt):
 
 class ParallelGA(GeneticAlgorithm):
 
-    def __init__(self, n_procs, optimization_parameters, domain, task_graph):
-        super().__init__(optimization_parameters, domain, task_graph)
+    def __init__(self, n_procs, optimization_parameters, domain, task_graph, seed = None):
+        super().__init__(optimization_parameters, domain, task_graph, seed = None)
 
         self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
                                     num_parents_mating = self.par.n_parents_mating,
@@ -736,6 +751,7 @@ class ParallelGA(GeneticAlgorithm):
                                     crossover_probability = self.par.crossover_probability,
                                     on_generation = self.pool.on_generation,
                                     on_stop = self.pool.on_stop,
+                                    random_seed= self.seed,
                                     parallel_processing=["process", n_procs],
         )
 

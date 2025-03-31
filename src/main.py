@@ -49,6 +49,17 @@ def test_model(input_shape):
     return model
 
 
+def conv_layer(input_shape):
+    
+    inputs = layers.Input(shape=input_shape)
+    x = layers.Conv2D(16, kernel_size=(5, 5), activation='linear') (inputs)
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    summary = model.summary()
+    return model
+
+
 def load_model(model_name):
     available_models = ["ResNet50", "MobileNetV2", "MobileNet", "ResNet18"]
     if model_name not in available_models:
@@ -75,7 +86,8 @@ if __name__ == "__main__":
     
     start = time.time()
     
-    model = test_model((28, 28, 1))
+    #model = test_model((28, 28, 1))
+    model = conv_layer((28, 28, 1))
     # # # model = load_model("ResNet50")
     # # # model = load_model("MobileNet")
     # # # model = load_model("MobileNetV2")
@@ -97,13 +109,13 @@ if __name__ == "__main__":
             n_ants = 100,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 800,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 50
-        #opt = op.AntColony( params, grid, task_graph)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph)
+        #opt = op.AntColony( params, grid, task_graph, seed = None)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = 2137)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
@@ -127,14 +139,14 @@ if __name__ == "__main__":
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
-        n_generations = 800,
+        n_generations = 1,#800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
         n_procs = 50
-        #opt = op.GeneticAlgorithm(params, grid, task_graph)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph)
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = 2137)
         
         print("Path to used arch.json file in GA: ", ARCH_FILE)
         

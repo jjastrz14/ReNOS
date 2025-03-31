@@ -699,7 +699,7 @@ def model_to_graph(model, verbose = False):
             if layer.name in [partition for partition in list(parts.keys())] and parts[layer.name] != []:
                 last_partitions = parts[layer.name]
             
-        print("Last partitions: ", last_partitions)
+        #print("Last partitions: ", last_partitions)
         # Finally, connect the last partitions to the end node
         for partition in last_partitions:
             results = int(np.prod(partition.out_bounds))

@@ -847,17 +847,17 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
     - an integer, representing the space that will be needed for the partitions of the layer
     """
     #spatial:
-    #max_splitting_factor = 6
+    max_splitting_factor = 6
     #input splitting: 
-    max_splitting_factor = 5
+    #max_splitting_factor = 5
     #output splitting:
     #max_splitting_factor = 5
     
     available_splitting = ['spatial', 'output', 'input']
     #spatial:
-    #splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
+    splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
     #input:
-    splitting_factors = {"spatial" : 0, "output": 1, "input": 2}
+    #splitting_factors = {"spatial" : 0, "output": 1, "input": 2}
     #output: 
     #splitting_factors = {"spatial" : 0, "output": 2, "input": 1}
 
@@ -876,13 +876,13 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
         # divide using the same splitting factor as its previous layer
 
         if layer.name == "max_pooling2d":
-            #return 5,splitting_factors['output'], splitting_factors['input']
+            return 5,splitting_factors['output'], splitting_factors['input']
             #input splitting and output
-            return 4,splitting_factors['output'], splitting_factors['input']
+            #return 4,splitting_factors['output'], splitting_factors['input']
         else:
-            #return 3,splitting_factors['output'], splitting_factors['input']
+            return 3,splitting_factors['output'], splitting_factors['input']
             #input splitting and output
-            return 2,splitting_factors['output'], splitting_factors['input']
+            #return 2,splitting_factors['output'], splitting_factors['input']
         
     print("====================================================")
     print(f"Adaptive partitioning for layer {layer.name}")

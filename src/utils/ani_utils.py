@@ -607,7 +607,7 @@ class NoCPlotter:
         self.plot_pes(self.points[1])
         self.plot_reconf(self.points[2])
         self.gen_activity_animation(logger, pause,file_name, verbose)
-        plt.show()
+        #plt.show()
     ###############################################################################
 
 # Thanks to J. Jastrzebski for the original code of this class
@@ -812,9 +812,335 @@ class NoCTimelinePlotter(NoCPlotter):
             self.fig2d.savefig(filename, dpi=300)
             print(f"Timeline graph saved to {filename}")
         plt.close(self.fig)
+        
+        
+        
+    def plot_timeline_with_debug_annotations(self, filename, legend=True, hihlight_xticks=True, annoate_events = True):
+        """Draw horizontal bars for events."""
+        
+        event_types = [
+        ('comp', 'tomato', 'Computation', 1.0), 
+        ('recon', 'seagreen', 'Reconfiguration', 1.0),
+        ('traf_out', 'dodgerblue', 'Traffic PE out', 0.7),
+        ('traf_in', 'darkorange', 'Traffic PE in', 0.7),
+        ('traf_between', 'silver', 'Traffic NoC', 0.3),
+        ('reply_in','turquoise', 'Reply PE in', 0.7),
+        ('reply_out','gold', 'Reply PE out', 0.7)
+        ]
+
+        used_labels = set()
+
+        for node, events in self.node_events.items():
+            has_events = False
+
+            for event_key, color, label, alpha in event_types:
+                event_list = events.get(event_key, [])
+                if event_list:
+                    has_events = True
+                    
+                    # Extract (start, duration) for plotting
+                    plot_event_list = [(e["start"], e["duration"]) for e in event_list]
+                    
+                    # Add bars
+                    current_label = label if label not in used_labels else None
+                    if event_key == "comp":
+                        self.ax2d.broken_barh(
+                            plot_event_list,
+                            (node - 0.4, 0.8),
+                            facecolors=color,
+                            label=current_label,
+                            alpha=alpha,
+                            edgecolor='black', #add line around rectangle
+                            linewidth=0.5,
+                            linestyle='-'
+                            )
+                    else: 
+                        self.ax2d.broken_barh(
+                            plot_event_list,
+                            (node - 0.4, 0.8),
+                            facecolors=color,
+                            label=current_label,
+                            alpha=alpha,
+                            edgecolor='black', #add line around rectangle
+                            linewidth=0.5,
+                            linestyle='--'
+                            )
+                        
+                    if current_label:
+                        used_labels.add(label)
+
+                    if annoate_events:
+                        # Add text annotations
+                        for event in event_list:
+                            mid_point = event["start"] + event["duration"] / 2
+                            
+                            # Customize text based on event type
+                            if event_key == "comp":
+                                text = f"Comp\nID:{event['id_task']}"  # Comp shows only task ID
+                            elif event_key in ["traf_out", "traf_in", "traf_between", "reply_in", "reply_out"]:
+                                text = f"Mess\nID:{event['id_task']}\n({event['com_type']})"  # Traffic: ID + type
+                            else:
+                                text = None  # Skip recon/others unless needed
+                            
+                            if text:
+                                self.ax2d.text(
+                                    mid_point,
+                                    node,
+                                    text,
+                                    ha='center',
+                                    va='center',
+                                    color='black',
+                                    fontsize=8,
+                                    clip_on=True
+                                )
+
+            if not has_events:
+                print(f"No events found for node {node}")
+        
+        # Set y-ticks to node IDs
+        self.ax2d.set_yticks(range(len(self.points[1])))
+        #for debug purposes, only show first 2 nodes
+        #self.ax2d.set_yticks(range(2))
+        
+        # set x-ticks to cycle numbers
+        self.ax2d.set_xlim(0, self.max_cycle)
+        # Auto-adjust ticks
+        self.ax2d.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+        self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        
+        # Add vertical lines at each major x-tick
+        if hihlight_xticks:
+            for tick in self.ax2d.xaxis.get_major_locator().tick_values(self.ax2d.get_xlim()[0], self.ax2d.get_xlim()[1]):
+                self.ax2d.axvline(x=tick, color='grey', linestyle='-', linewidth=0.5, zorder = 0)
+
+        # Add horizontal lines at the corners of the x nodes
+        for node in range(len(self.points[1])):
+            self.ax2d.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
+            self.ax2d.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
+
+        if legend:
+            self.ax2d.legend(
+            #loc='upper right',
+            #bbox_to_anchor=(1.17, 1.0),
+            #borderaxespad=0.0,
+            #fontsize='small',
+            #title='Event Types',
+            title_fontsize='medium',
+            frameon=True
+            )
+        if filename: 
+            self.fig2d.savefig(filename, dpi=300)
+            print(f"Timeline graph saved to {filename}")
+        plt.close(self.fig)
             
 
+class SynchronizedNoCAnimator:
+    """Handles synchronized 3D NoC + 2D timeline animation."""
+    
+    def __init__(self, noc_plotter, timeline_plotter, logger, config_file):
+        self.noc_plotter = noc_plotter
+        self.timeline_plotter = timeline_plotter
+        self.logger = logger
+        self.config_file = config_file
+        self.current_cycle = 0
+        self.max_cycle = logger.events[-1].cycle
+        
+        # Animation state
+        self.events_pointer = 0
+        self.current_events = set()
+        
+        # Create combined figure
+        self.fig = plt.figure(figsize=(20, 8))
+        self.ax3d = self.fig.add_subplot(121, projection='3d')
+        self.ax2d = self.fig.add_subplot(122)
+        
+        # Initialize visualizations
+        self._add_timeline_elements()
+        self._initialize_plotters()
+        
 
+    def _initialize_plotters(self):
+        """Initialize both visualizations and collect blit artists."""
+        # Initialize 3D plot
+        self.noc_plotter.init(self.config_file)
+        self.noc_plotter.fig = self.fig
+        self.noc_plotter.ax = self.ax3d
+        self.noc_plotter.plot_connections()
+        self.noc_plotter.annotate_points()
+        self.noc_plotter.plot_nodes(self.noc_plotter.points[0])
+        self.noc_plotter.plot_pes(self.noc_plotter.points[1])
+        self.noc_plotter.plot_reconf(self.noc_plotter.points[2])
+        
+        self.noc_plotter.timeStamp = self.ax3d.text(0, 0, 1., 0, size=12, color='red', 
+                                              fontdict={'weight': 'bold'}, 
+                                              transform=self.ax3d.transAxes)
+
+        # Initialize timeline
+        self.timeline_plotter.setup_timeline(self.logger, self.config_file)
+        self.timeline_plotter.ax2d = self.ax2d 
+        #Timeliene without legedn, no higlight of the x thick, annotaiton of events - YES
+        self.timeline_plotter.plot_timeline(None,legend = False, hihlight_xticks = False, annoate_events = True)
+        
+        # Collect artists that need blitting
+        self.blit_artists = [self.current_line]
+        
+        # Handle connection artists
+        for conn_group in [self.noc_plotter.artists_hconnections,
+                         self.noc_plotter.artists_vconnections,
+                         self.noc_plotter.artists_reconf_connections]:
+            for conn in conn_group.values():
+                if isinstance(conn, list):
+                    self.blit_artists.extend(conn)
+                else:
+                    self.blit_artists.append(conn)
+                
+        self.blit_artists += [
+            *self.noc_plotter.artists_points[0],
+            *self.noc_plotter.artists_points[1],
+            *self.noc_plotter.artists_points[2],
+            self.noc_plotter.timeStamp
+        ]
+        
+        # Collect all text artists from the timeline
+        timeline_text_artists = self.ax2d.texts  # Get all text objects in the timeline
+        self.blit_artists.extend(timeline_text_artists)  # Add them to blit list
+        
+    def _init_anim(self):
+        """Initialization function for blitting"""
+        return self.blit_artists
+
+
+    def _add_timeline_elements(self):
+        """Add timeline animation elements"""
+        self.current_line = self.ax2d.axvline(x=0, color='red', linestyle='--', alpha=0.7)
+        self.ax2d.set_xlim(0, int(min(20, self.max_cycle))) #here integers?
+        #self.ax2d.set_xticks(np.arange(0, self.max_cycle + 1, 1))
+        self.fig.tight_layout()
+
+    def _process_events(self, cycle):
+        """Replicated event processing logic from original _update_graph"""
+        # Process events for current cycle
+        while self.events_pointer < len(self.logger.events) and cycle >= self.logger.events[self.events_pointer].cycle:
+            event = self.logger.events[self.events_pointer]
+            anti_events_map = {
+                nocsim.EventType.IN_TRAFFIC: nocsim.EventType.OUT_TRAFFIC,
+                nocsim.EventType.END_COMPUTATION: nocsim.EventType.START_COMPUTATION,
+                nocsim.EventType.END_RECONFIGURATION: nocsim.EventType.START_RECONFIGURATION,
+                nocsim.EventType.END_SIMULATION: nocsim.EventType.START_SIMULATION
+            }
+            
+            if event.type in anti_events_map.values():
+                self.current_events.add(self.events_pointer)
+            else:
+                event_type = anti_events_map[event.type]
+                additional_info = event.additional_info
+                ctype = event.ctype
+                to_remove = next(
+                    (e for e in self.current_events 
+                     if self.logger.events[e].type == event_type 
+                     and self.logger.events[e].additional_info == additional_info 
+                     and self.logger.events[e].ctype == ctype),
+                    None
+                )
+                if to_remove is not None:
+                    self.current_events.remove(to_remove)
+            self.events_pointer += 1
+
+    def _update_combined(self, frame):
+        """Combined update function for both visualizations"""
+        self.current_cycle = frame
+        
+        # Process events for current cycle
+        self._process_events(frame)
+        
+        # Update 3D visualization using original colorize methods
+        currently_active_nodes = set()
+        currently_active_pes_comp = set()
+        currently_active_pes_reconf = set()
+        currently_active_pes_traf = set()
+        currently_active_connections = set()
+
+        for event_idx in self.current_events:
+            event = self.logger.events[event_idx]
+            if event.type == nocsim.EventType.OUT_TRAFFIC:
+                for h in event.info.history:
+                    if h.start <= frame and h.end > frame:
+                        currently_active_nodes.add(h.rsource)
+                        currently_active_nodes.add(h.rsink)
+                        currently_active_connections.add(tuple(sorted([h.rsource, h.rsink])))
+                        if h.rsource == h.rsink:
+                            currently_active_pes_traf.add(h.rsource)
+                        break
+                    elif h.start > frame:
+                        currently_active_nodes.add(h.rsource)
+                        break
+            elif event.type == nocsim.EventType.START_COMPUTATION:
+                currently_active_pes_comp.add(event.info.node)
+            elif event.type == nocsim.EventType.START_RECONFIGURATION:
+                currently_active_pes_reconf.add(event.additional_info)
+
+        self.noc_plotter.colorize_nodes(currently_active_nodes)
+        self.noc_plotter.colorize_pes(currently_active_pes_comp, 
+                                    currently_active_pes_traf, 
+                                    currently_active_pes_reconf)
+        self.noc_plotter.colorize_connections(currently_active_connections)
+        self.noc_plotter.colorize_reconf(currently_active_pes_reconf)
+        self.noc_plotter.timeStamp.set_text(f"Cycle: {frame}")
+            
+        
+        # Update timeline visualization
+        self.current_line.set_xdata([frame, frame])
+        # ===================================================================
+        # x-axis limits and ticks
+        # ===================================================================
+        window_size = 20  # Total cycles to show in the timeline
+        
+        # Calculate left/right bounds dynamically
+        left = max(0, frame - window_size//2)  # Center the frame in the window
+        right = left + window_size
+        
+        # Handle edge cases where window exceeds simulation duration
+        if right > self.max_cycle:
+            right = self.max_cycle
+            left = max(0, right - window_size)  # Show last 'window_size' cycles
+        
+        # Apply the calculated bounds
+        self.ax2d.set_xlim(left, right)
+        self.ax2d.set_xticks(np.arange(left, right + 1, 1))  # Ticks every cycle
+        # ===================================================================
+
+            
+        #self.ax2d.xaxis.set_major_locator(MaxNLocator(integer=True))
+            
+        return self.blit_artists
+
+    def create_animation(self, filename, fps=30):
+        """Create and save synchronized animation"""
+        # Configure FFmpeg writer properly
+        writer = FFMpegWriter(
+            fps=fps,
+            extra_args=['-preset', 'veryslow', '-crf', '18']
+        )
+        
+        ani = FuncAnimation(
+            self.fig,
+            self._update_combined,
+            frames=range(self.max_cycle),
+            init_func=self._init_anim,
+            interval=1000//fps,
+            blit=True
+        )
+
+        if filename:
+            ani.save(
+                filename,
+                writer=writer, 
+                dpi=150,
+                savefig_kwargs={'facecolor': 'white'}
+            )
+            print(f"Combined animation saved to {filename}")
+        
+        plt.close(self.fig)
 
 
 
