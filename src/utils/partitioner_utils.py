@@ -846,25 +846,43 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
     - a tuple, representing the parameters to be used for the partitionin of the layer
     - an integer, representing the space that will be needed for the partitions of the layer
     """
-    max_splitting_factor = 6
+    #spatial:
+    #max_splitting_factor = 6
+    #input splitting: 
+    max_splitting_factor = 5
+    #output splitting:
+    #max_splitting_factor = 5
+    
     available_splitting = ['spatial', 'output', 'input']
-    splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
+    #spatial:
+    #splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
+    #input:
+    splitting_factors = {"spatial" : 0, "output": 1, "input": 2}
+    #output: 
+    #splitting_factors = {"spatial" : 0, "output": 2, "input": 1}
 
     if isinstance(layer, layers.InputLayer):
         return 0,1,1
     # first check the output shape of the layer
 
     if layer.name == "conv2d":
-        return 5,1,1
+        # return 5,1,1
+        splitting_factors['input'] = 1
+        splitting_factors['spatial'] = 4
+        return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
 
 
     if isinstance(layer, layers.MaxPooling2D) or isinstance(layer, layers.AveragePooling2D):
-        # divide using the same splittinf factor as its previous layer
+        # divide using the same splitting factor as its previous layer
 
         if layer.name == "max_pooling2d":
-            return 5,1,1
+            #return 5,splitting_factors['output'], splitting_factors['input']
+            #input splitting and output
+            return 4,splitting_factors['output'], splitting_factors['input']
         else:
-            return 2,splitting_factors['output'], splitting_factors['input']  
+            #return 3,splitting_factors['output'], splitting_factors['input']
+            #input splitting and output
+            return 2,splitting_factors['output'], splitting_factors['input']
         
     print("====================================================")
     print(f"Adaptive partitioning for layer {layer.name}")
@@ -876,8 +894,8 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
         available_splitting.remove('output')
         available_splitting.remove('input')
 
-    # if isinstance(layer, layers.Dense):
-    #     chosen_splitting = 'spatial'
+    if isinstance(layer, layers.Dense):
+        chosen_splitting = 'spatial'
 
     # until the MACs for every single partition of the layer are under the threshold, keep on incrementing the
     # slitting factor for the chosen splitting strategy: if the splitting strategy is not available (only spatial splitting is available)

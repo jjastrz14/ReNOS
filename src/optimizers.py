@@ -125,6 +125,7 @@ class AntColony(BaseOpt):
         tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
         tasks.insert(0, "start")
         self.tasks = tasks
+    
 
 
     def run_and_show_traces(self, single_iteration_func, **kwargs):
@@ -209,8 +210,8 @@ class AntColony(BaseOpt):
             return []
                 
 
-        ani = animation.FuncAnimation(fig, update, frames = kwargs["n_iterations"], repeat = False) 
-        plt.show()
+        #ani = animation.FuncAnimation(fig, update, frames = kwargs["n_iterations"], repeat = False) 
+        #plt.show()
         return all_time_shortest_path[0]
 
     def run(self, once_every = 10, show_traces = False):
@@ -506,14 +507,14 @@ class ParallelAntColony(AntColony):
                     ant_id = shortest_path[0]
                     # save the corresponding dump file into data
                     dump_file = CONFIG_DUMP_DIR + "/dump" + str(ant_id) + ".json"
-                    print("Saving the best solution found by ant", ant_id, "in data/best_solution.json")
-                    os.makedirs("data", exist_ok = True)
-                    os.makedirs("data/ACO", exist_ok = True)
-                    os.system("cp " + dump_file + " data/ACO")
-                    os.system("mv data/ACO/dump" + str(ant_id) + ".json data/ACO/best_solution.json")
+                    print("Saving the best solution found by ant", ant_id, "in " + ACO_DIR + "/best_solution.json")
+                    #os.makedirs("data", exist_ok = True)
+                    os.makedirs(ACO_DIR, exist_ok = True)
+                    os.system("cp " + dump_file + " " + ACO_DIR)
+                    os.system("mv " + ACO_DIR + "/dump" + str(ant_id) + ".json " + ACO_DIR + "/best_solution.json")
 
             # Finalize the simulation: save the data
-            np.save("data/ACO/statistics.npy", self.statistics)
+            np.save(ACO_DIR + "/statistics.npy", self.statistics)
             
 
         return all_time_shortest_path
@@ -685,8 +686,6 @@ class GeneticAlgorithm(BaseOpt):
                                     on_generation = self.pool.on_generation,
                                     on_stop = self.pool.on_stop,
         )
-
-        
 
 
     def fitness_func(self, ga_instance, solution, solution_idx):

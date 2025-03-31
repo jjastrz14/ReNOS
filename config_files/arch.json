@@ -1,7 +1,7 @@
 {
     "arch":{
             "topology" : "torus",
-            "k" : 3,
+            "k" : 5,
             "n" : 2,
             "use_read_write" : 1,
             "routing_function" : "dim_order",
@@ -9,8 +9,8 @@
             "user_defined_traffic" : 1,
             "watch_out" : "-",
             "reconfiguration": 1,
-            "reconf_batch_size": 25,
-            "reconf_cycles":  0.2,
+            "reconf_batch_size": 0,
+            "reconf_cycles":  0.4,
             "ANY_comp_cycles": 0.05,
             "max_pe_mem": 30000,
             "threshold_pe_mem": 25000

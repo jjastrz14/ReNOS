@@ -215,5 +215,8 @@ cython_debug/
 .pypirc
 
 # dump directory
-config_files/dumps/
-
+config_files/
+# data directory
+data/
+# visual directory
+visual/

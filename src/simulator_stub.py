@@ -50,7 +50,7 @@ def dangerwrap(func, *args):
         print("Caught in dangerwrap")
         return None
 
-    print("Exiting normally")
+    #print("Exiting normally")
     return q.get()
 
 def run_nocsim_simulation(path_to_config_file):

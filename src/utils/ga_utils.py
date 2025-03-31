@@ -511,19 +511,20 @@ class OperatorPool:
         if (1/max(pop_fit)) < self.statistics["absolute_best"][-1]:
             self.statistics["absolute_best"].append(1/max(pop_fit))
             # save the dump file for the best solution
-            os.makedirs(MAIN_DIR + "/data", exist_ok=True)
-            os.makedirs(MAIN_DIR + "/data/GA", exist_ok=True)
+            #os.makedirs(MAIN_DIR + "/data", exist_ok=True)
+            os.makedirs(GA_DIR, exist_ok=True)
             # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
-            os.system("cp " + MAIN_DIR + "/config_files/dumps/dump_GA" + str(np.argmax(pop_fit)) + ".json " + MAIN_DIR + "/data/GA")
+            os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
             # rename the file to "best_solution.json"
-            os.system("mv " + MAIN_DIR + "/data/GA/dump_GA" + str(np.argmax(pop_fit)) + ".json " + MAIN_DIR + "/data/GA/best_solution.json")
+            os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
         print("=====================================================")
         print("The best latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/max(pop_fit)))
         print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
+        print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + GA_DIR + "/best_solution.json")
 
     def on_stop(self, ga_instance, last_generation_fitness):
         # at the end of the optimization process, save the statistics
-        np.save(MAIN_DIR + "/data/GA/statistics.npy", self.statistics)
+        np.save(GA_DIR + "/statistics.npy", self.statistics)
     
     def get_cross_func(self, parents, offspring_size, ga_instance):
         offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)
