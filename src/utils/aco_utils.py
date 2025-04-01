@@ -195,13 +195,20 @@ class Ant:
         pass
 
 
-def walk_batch(ants):
+def walk_batch(args):
     """
     Perform a walk of the ants in the batch.
     """
-    __seed = (os.getpid() * int(time.time())) % 123456789
-    random.seed(__seed)
-    np.random.seed(__seed)
+    ants, seed = args
+    
+    if seed is None:
+        __seed = (os.getpid() * int(time.time())) % 123456789
+        random.seed(__seed)
+        np.random.seed(__seed)
+    else:
+        __seed = seed
+        random.seed(__seed)
+        np.random.seed(__seed)
 
     # pick a random number
     # print("Random number: ", random.randint(0, 100))

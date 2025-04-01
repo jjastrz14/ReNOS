@@ -127,12 +127,9 @@ class AntColony(BaseOpt):
         tasks.insert(0, "start")
         self.tasks = tasks
         
+        #seed
         self.seed = seed
-        if self.seed is not None:
-            np.random.seed(self.seed)
-            random.seed(self.seed)
 
-    
 
 
     def run_and_show_traces(self, single_iteration_func, **kwargs):
@@ -225,6 +222,10 @@ class AntColony(BaseOpt):
         """
         Run the algorithm
         """
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            random.seed(self.seed)
+
 
         def single_iteration(i, once_every, rho_step = 0):
             all_paths = self.generate_colony_paths()
@@ -413,7 +414,7 @@ class ParallelAntColony(AntColony):
 
         """
 
-        super().__init__(optimization_parameters, domain, task_graph)
+        super().__init__(optimization_parameters, domain, task_graph, seed)
 
         # The number of executors that will be used to run the algorithm
         self.n_processes = number_of_processes
@@ -423,9 +424,8 @@ class ParallelAntColony(AntColony):
 
         self.ants = [Ant(i, self.task_graph, self.domain, self.tasks, self.par.alpha, self.par.beta) for i in range(self.par.n_ants)]
         
-        if self.seed is not None:
-            np.random.seed(self.seed)
-            random.seed(self.seed)
+        #seed for repeating simulations
+        self.seed = seed
 
         # --- Pheromone and Heuristic Information ---
         # The pheromone and heuristic matrices are shared arrays among the ants
@@ -538,20 +538,27 @@ class ParallelAntColony(AntColony):
         vardict["eta"] = eta_
         vardict["tau.size"] = tau_shape
         vardict["eta.size"] = eta_shape
-        
 
     def generate_colony_paths(self):
         # generate the colony of ants (parallel workers)
         
-        with closing(mp.Pool(processes = self.n_processes, initializer = ParallelAntColony.init, initargs = (self.tau_start, self.tau, self.eta, (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)))) as pool:
+        with closing(mp.Pool
+                     (processes = self.n_processes, 
+                      initializer = ParallelAntColony.init, 
+                      initargs = (self.tau_start, self.tau, self.eta, 
+                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
+                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)),
+                                 )) as pool:
             # generate the paths in parallel: each process is assigned to a subsed of the ants
             # evenly distributed
-            colony_paths = pool.map_async(walk_batch,[self.ants[start:end] for start, end in self.intervals])
+            # seed below allows for setting same seed for each ants (set it by passing seed to the constructor)
+            colony_paths = pool.map_async(walk_batch,[(self.ants[start:end], self.seed)for start, end in self.intervals])
             colony_paths = colony_paths.get()
         pool.join()
         # unpack the batches of paths
         colony_paths = [path for batch in colony_paths for path in batch]
         return colony_paths
+    
     
     def evaporate_pheromones(self, step):
         if self.par.rho is not None:
@@ -732,8 +739,8 @@ class GeneticAlgorithm(BaseOpt):
 
 class ParallelGA(GeneticAlgorithm):
 
-    def __init__(self, n_procs, optimization_parameters, domain, task_graph, seed = None):
-        super().__init__(optimization_parameters, domain, task_graph, seed = None)
+    def __init__(self, n_procs, optimization_parameters, domain, task_graph, seed):
+        super().__init__(optimization_parameters, domain, task_graph, seed)
 
         self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
                                     num_parents_mating = self.par.n_parents_mating,

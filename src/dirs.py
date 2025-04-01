@@ -58,7 +58,9 @@ elif comp_cycles == 0.025:
 elif comp_cycles == 0.1:
     factor = "x25"
 else:
-    factor = comp_cycles
+    #this should be changed to allow change form "." to "/" in the name of the file, check it below!
+    factor = str(comp_cycles).replace(".", "_")
+    #factor = comp_cycles
 
 #copty the default arch file to the new arch file
 shutil.copy(DEFALUT_ARCH_FILE, os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json"))

@@ -86,8 +86,8 @@ if __name__ == "__main__":
     
     start = time.time()
     
-    #model = test_model((28, 28, 1))
-    model = conv_layer((28, 28, 1))
+    model = test_model((28, 28, 1))
+    #model = conv_layer((28, 28, 1))
     # # # model = load_model("ResNet50")
     # # # model = load_model("MobileNet")
     # # # model = load_model("MobileNetV2")
@@ -114,7 +114,7 @@ if __name__ == "__main__":
             beta = 1.2,
         )
         n_procs = 50
-        #opt = op.AntColony( params, grid, task_graph, seed = None)
+        #opt = op.AntColony( params, grid, task_graph, seed = 2137)
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = 2137)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         )
         
         n_procs = 50
-        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = 2137)
         opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = 2137)
         
         print("Path to used arch.json file in GA: ", ARCH_FILE)
