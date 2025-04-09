@@ -276,6 +276,10 @@ class AntColony(BaseOpt):
         """
         Pick the next move of the ant, given the pheromone and heuristic matrices.
         """
+        
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            random.seed(self.seed)
 
         # compute a mask to filter out the resources that are already used
         mask = np.array([0 if pe.mem_used + added_space > pe.mem_size else 1 for pe in resources])
@@ -462,6 +466,10 @@ class ParallelAntColony(AntColony):
         """
         Run the algorithm
         """
+        
+        if self.seed is not None:
+            np.random.seed(self.seed)
+            random.seed(self.seed)
 
         def single_iteration(i, once_every, rho_step = 0):
             all_paths = self.generate_colony_paths()
@@ -526,6 +534,7 @@ class ParallelAntColony(AntColony):
 
             # Finalize the simulation: save the data
             np.save(ACO_DIR + "/statistics.npy", self.statistics)
+            print("Saving results in: " + ACO_DIR)
             
 
         return all_time_shortest_path

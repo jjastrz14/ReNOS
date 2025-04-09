@@ -36,7 +36,7 @@ def create_logger(path_to_json = "/test.json", verbose = False):
     # results, logger = stub.run_simulations_in_parallel(config_files=config_files, processors=processors, verbose=True)
     # results, logger = stub.run_simulation("config_files/dumps/dump.json", verbose = True)
 
-    path_data = CONFIG_DUMP_DIR + path_to_json
+    path_data = path_to_json
     os.makedirs(os.path.dirname(path_data), exist_ok=True)
     # append "logger" : 1, to the arch field of the json file while 
     # leaving the rest of the file unchanged
@@ -108,3 +108,28 @@ def plot_timeline(path_to_json = "/test.json", timeline_path = "visual/test.png"
     if verbose:
         plotter_timeline._print_node_events()
     print("Timeline plotting done!")
+    
+def plot_timeline_factor_back(path_to_json = "/test.json", timeline_path = "visual/test.png", verbose = False):
+    
+    logger, path_data = create_logger(path_to_json)
+    
+    # Initialize timeline plotter
+    plotter_timeline = NoCTimelinePlotter()
+
+    print("Plotting timeline...")
+    # Generate 2D timeline
+    plotter_timeline.setup_timeline(logger, path_data)
+    plotter_timeline.plot_timeline_factor_back(timeline_path, factor_comp = 25.0 , factor_recon = 1.0)
+    #factor_comp = 0.01 , factor_recon = 0.08
+    if verbose:
+        plotter_timeline._print_node_events()
+    print("Timeline plotting factor bakc done!")
+    
+    
+if __name__ == "__main__":
+    # Example usage
+    # plot_3d_animaiton(path_to_json = "/test.json", fps = 2, gif_path = "visual/test.gif")
+    #plot_timeline(path_to_json = "data/ACO_seed_2137_x25_2025-04-08_13-45-38/best_solution.json", timeline_path = "visual/test_ACO_x25.png", verbose = False)
+    plot_timeline_factor_back(path_to_json = "data/data_mixed_part_seed_2137_2April25/GA_seed_2137_x25_2025-04-01_23-54-31/best_solution.json",
+                              timeline_path = "visual/test_GA_refactored_from_x25.png", verbose = False)
+    #GA_seed_2137_x1_2025-04-02_00-00-20

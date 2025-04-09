@@ -16,14 +16,37 @@ Those where originally distributed in the different classes of the project.
 """
 
 import os
+import sys
 import numpy as np
 import networkx as nx
+import pydot
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from domain import Grid
 from mapper import Mapper
-import pydot
 from utils.partitioner_utils import PartitionInfo
+
+"""
+ = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+ = = = = = = = = = = = = = = = = LOGGER CLASS = = = = = = = = = = = = = = = = =
+ = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+"""
+class Logger:
+    def __init__(self, log_file_path):
+        self.terminal = sys.stdout
+        self.log_file = open(log_file_path, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+
+    def flush(self):
+        # This is needed for compatibility with sys.stdout
+        self.terminal.flush()
+        self.log_file.flush()
+
+    def close(self):
+        self.log_file.close()
 
 
 """
@@ -62,7 +85,7 @@ def plot_graph(graph, file_path = None):
         if file_path is not None:
             file_path = os.path.join(os.path.dirname(__file__), file_path)
             plt.savefig(file_path)
-        plt.show()
+        #plt.show()
 
 
 """

@@ -607,7 +607,7 @@ def model_to_graph(model, verbose = False):
         """
 
         dep_graph = TaskGraph()
-        parts, deps = build_partitions(model)
+        parts, deps = build_partitions(model, verbose = True )
 
         if verbose:
             print("Plotting the partitions and dependencies of the model...")

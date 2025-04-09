@@ -932,7 +932,118 @@ class NoCTimelinePlotter(NoCPlotter):
             self.fig2d.savefig(filename, dpi=300)
             print(f"Timeline graph saved to {filename}")
         plt.close(self.fig)
+        
+        
+    def plot_timeline_factor_back(self, filename, factor_comp, factor_recon, legend=True, hihlight_xticks=True):
+        """Draw horizontal bars for events."""
+        
+        #(key, color, label, alpha)
+        event_types = [
+        ('comp', 'tomato', 'Computation', 1.0), 
+        ('recon', 'seagreen', 'Reconfiguration', 1.0),
+        ('traf_out', 'cornflowerblue', 'Traffic PE out', 0.7),
+        ('traf_in', 'orange', 'Traffic PE in', 0.7),
+        ('traf_between', 'silver', 'Traffic NoC', 0.3),
+        ('reply_in','turquoise', 'Reply PE in', 0.7),
+        ('reply_out','gold', 'Reply PE out', 0.7)
+        ]
+        
+        # Create factor mapping and initialize data structures
+        event_factors = {
+            'comp': factor_comp,
+            'recon': factor_recon,
+            'traf_out': 1.0,
+            'traf_in': 1.0,
+            'traf_between': 1.0,
+            'reply_in': 1.0,
+            'reply_out': 1.0
+        }
+        
+        # Global timeline processing
+        global_timeline = []
+        
+        # 1. Collect all events from all nodes (same as before)
+        for node, node_events in self.node_events.items():
+            for event_key, events in node_events.items():
+                for start, duration in events:
+                    global_timeline.append((start, duration, event_key, node))
+        
+        # 2. Sort events by their original sped-up start time (same as before)
+        global_timeline.sort(key=lambda x: x[0])
+        
+        # 3. PROCESS EVENTS - CORRECTED SECTION START
+        reverted_events = {}
+        max_cycle = 0
+
+        for start_spedup, duration_spedup, event_key, node in global_timeline:
+            factor = event_factors[event_key]
             
+            # CORRECTED CALCULATIONS: Use division to undo speed-up
+            original_start = start_spedup * factor
+            original_duration = duration_spedup * factor
+            
+            # Store in reverted structure
+            if node not in reverted_events:
+                reverted_events[node] = {}
+            reverted_events[node].setdefault(event_key, []).append(
+                (original_start, original_duration)
+            )
+            
+            # Track maximum cycle
+            max_cycle = max(max_cycle, original_start + original_duration)
+
+        used_labels = set()
+        for node in self.node_events:
+            has_events = False
+            for event_key, color, label, alpha in event_types:
+                events = reverted_events.get(node, {}).get(event_key, [])
+                
+                if events:
+                    has_events = True
+                    current_label = label if label not in used_labels else None
+                    
+                    self.ax2d.broken_barh(
+                        events,
+                        (node - 0.4, 0.8),
+                        facecolors=color,
+                        label=current_label,
+                        alpha=alpha
+                    )
+                    
+                    if current_label:
+                        used_labels.add(label)
+            
+            if not has_events:
+                print(f"No events found for node {node}")
+        
+        self.ax2d.set_yticks(range(len(self.points[1])))
+        self.ax2d.set_xlim(0, max_cycle)
+        self.ax2d.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+        self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        
+        if hihlight_xticks:
+            for tick in self.ax2d.xaxis.get_major_locator().tick_values(self.ax2d.get_xlim()[0], self.ax2d.get_xlim()[1]):
+                self.ax2d.axvline(x=tick, color='grey', linestyle='-', linewidth=0.5, zorder=0)
+
+        for node in range(len(self.points[1])):
+            self.ax2d.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
+            self.ax2d.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
+
+        if legend:
+            self.ax2d.legend(
+                loc='upper center',
+                ncol=6,
+                bbox_to_anchor=(0.5, 1.05),
+                fancybox=True,
+                shadow=True,
+                title_fontsize='medium',
+                frameon=True
+            )
+            
+        if filename: 
+            self.fig2d.savefig(filename, dpi=300)
+            print(f"Timeline graph saved to {filename}")
+        plt.close(self.fig)   
 
 class SynchronizedNoCAnimator:
     """Handles synchronized 3D NoC + 2D timeline animation."""

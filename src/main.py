@@ -14,6 +14,8 @@ The main.py module contains the main function of the program.
 """
 
 import os
+import time
+import argparse
 import graph as dg
 from graph import model_to_graph
 import domain as dm
@@ -29,45 +31,9 @@ import visualizer
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
-import time
-import argparse
 
-def test_model(input_shape):
-    
-    inputs = layers.Input(shape=input_shape)
-    x = layers.Conv2D(16, kernel_size=(5, 5), activation='linear') (inputs)
-    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-    x = layers.Conv2D(32, kernel_size=(5, 5))(x)
-    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-    x = layers.Flatten()(x)
-    x = layers.Dense(128)(x)
-    x = layers.Dense(10, activation='softmax')(x)
-    model = keras.Model(inputs=inputs, outputs=x)
-    
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    summary = model.summary()
-    return model
+from models import *
 
-
-def conv_layer(input_shape):
-    
-    inputs = layers.Input(shape=input_shape)
-    x = layers.Conv2D(16, kernel_size=(5, 5), activation='linear') (inputs)
-    model = keras.Model(inputs=inputs, outputs=x)
-    
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    summary = model.summary()
-    return model
-
-
-def load_model(model_name):
-    available_models = ["ResNet50", "MobileNetV2", "MobileNet", "ResNet18"]
-    if model_name not in available_models:
-        raise ValueError(f"Model not available. Please choose from the following: {', '.join(available_models)}")
-    
-    # Load the model
-    model = keras.applications.__getattribute__(model_name)(weights='imagenet')
-    return model
 
 if __name__ == "__main__":
     
@@ -86,36 +52,47 @@ if __name__ == "__main__":
     
     start = time.time()
     
-    model = test_model((28, 28, 1))
-    #model = conv_layer((28, 28, 1))
-    # # # model = load_model("ResNet50")
-    # # # model = load_model("MobileNet")
-    # # # model = load_model("MobileNetV2")
+    model = test_model((28, 28, 1), verbose= True)
+    # model = conv_layer((28, 28, 1))
+    # model = load_model("ResNet50")
+    # model = load_model("MobileNet")
+    # model = load_model("MobileNetV2")
 
-    # # # model.summary()
     # # # plot_model(model, to_file="visual/model.png", show_shapes=True)
     # # # analyze_ops(model, True)
-
-    task_graph = model_to_graph(model, verbose=True)
-    plot_graph(task_graph)
-
-    grid = dm.Grid()
-    grid.init(5, 2, dm.Topology.TORUS)
+    
+    # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
+    size_of_grid = 5
+    
+    cet = pytz.timezone('CET')
+    timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S") 
     
     if ACO:
+        #logger class
+        os.makedirs(ACO_DIR, exist_ok=True)
+        log_file_path = os.path.join(ACO_DIR, "log_ACO_" + f"{timestamp}" + ".out")
+        # Redirect stdout to the Logger
+        sys.stdout = Logger(log_file_path)
+        
+        task_graph = model_to_graph(model, verbose=False)
+        #plot_graph(task_graph)
+
+        grid = dm.Grid()
+        grid.init(size_of_grid, 2, dm.Topology.TORUS)
+        
         print("Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
             n_ants = 100,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 1,
+            n_iterations = 800,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 50
         #opt = op.AntColony( params, grid, task_graph, seed = 2137)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = 2137)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
@@ -131,22 +108,32 @@ if __name__ == "__main__":
         print("Done!")
 
     if GA: 
-        
         print("Running Genetic Algoriothm Optimization...")
+        #logger class
+        os.makedirs(GA_DIR, exist_ok=True)
+        log_file_path = os.path.join(GA_DIR, "log_GA_" + f"{timestamp}" + ".out")
+        # Redirect stdout to the Logger
+        sys.stdout = Logger(log_file_path)
+        
+        task_graph = model_to_graph(model, verbose=False)
+        #plot_graph(task_graph)
+
+        grid = dm.Grid()
+        grid.init(size_of_grid, 2, dm.Topology.TORUS)
         
         params = op.GAParameters(
         sol_per_pop =100,
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
-        n_generations = 1,#800,
+        n_generations = 800, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
         n_procs = 50
         #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = 2137)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = 2137)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in GA: ", ARCH_FILE)
         

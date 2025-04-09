@@ -517,14 +517,15 @@ class OperatorPool:
             os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
             # rename the file to "best_solution.json"
             os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
+            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + GA_DIR + "/best_solution.json")
         print("=====================================================")
         print("The best latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/max(pop_fit)))
         print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
-        print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + GA_DIR + "/best_solution.json")
 
     def on_stop(self, ga_instance, last_generation_fitness):
         # at the end of the optimization process, save the statistics
         np.save(GA_DIR + "/statistics.npy", self.statistics)
+        print("Saving results in: " + GA_DIR)
     
     def get_cross_func(self, parents, offspring_size, ga_instance):
         offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)
