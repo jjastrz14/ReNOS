@@ -6,13 +6,25 @@
             "use_read_write" : 1,
             "routing_function" : "dim_order",
             "num_vcs" : 16,
+            "vc_buf_size": 8,
+            "flit_size" : 64,
             "user_defined_traffic" : 1,
             "watch_out" : "-",
+            "internal_speedup": 2.0,
+            "speculative": 1,
+            "input_speedup": 2,
+            "output_speedup": 2,
+            "routing_delay" : 0,
+            "vc_allocator": "islip",
+            "vc_alloc_delay" : 1,
+            "sw_allocator": "islip",
+            "sw_alloc_delay" : 1,
+            "st_final_delay" : 1,
             "reconfiguration": 1,
             "reconf_batch_size": 0,
             "reconf_cycles":  2.0,
             "ANY_comp_cycles": 0.25,
             "max_pe_mem": 262144,
             "threshold_pe_mem": 249036
-        }
+            }
 }

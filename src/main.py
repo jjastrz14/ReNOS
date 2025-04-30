@@ -74,7 +74,8 @@ if __name__ == "__main__":
         # Redirect stdout to the Logger
         sys.stdout = Logger(log_file_path)
         
-        task_graph = model_to_graph(model, verbose=False)
+        #drain point cannot exceed size_of_grid x size_of_grid - 1
+        task_graph = model_to_graph(model, source = 1, drain = 24, verbose=False)
         #plot_graph(task_graph)
 
         grid = dm.Grid()
@@ -83,16 +84,16 @@ if __name__ == "__main__":
         print("Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 100,
+            n_ants = 5,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 800,
+            n_iterations = 5,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 50
-        #opt = op.AntColony( params, grid, task_graph, seed = 2137)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        opt = op.AntColony( params, grid, task_graph, seed = None)
+        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
@@ -115,7 +116,8 @@ if __name__ == "__main__":
         # Redirect stdout to the Logger
         sys.stdout = Logger(log_file_path)
         
-        task_graph = model_to_graph(model, verbose=False)
+        #drain point cannot exceed size_of_grid x size_of_grid - 1
+        task_graph = model_to_graph(model, source = 0, drain = 24, verbose=False)
         #plot_graph(task_graph)
 
         grid = dm.Grid()
@@ -126,7 +128,7 @@ if __name__ == "__main__":
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
-        n_generations = 800, #800,
+        n_generations = 1, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )

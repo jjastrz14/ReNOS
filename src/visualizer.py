@@ -119,17 +119,21 @@ def plot_timeline_factor_back(path_to_json = "/test.json", timeline_path = "visu
     print("Plotting timeline...")
     # Generate 2D timeline
     plotter_timeline.setup_timeline(logger, path_data)
-    plotter_timeline.plot_timeline_factor_back(timeline_path, factor_comp = 25.0 , factor_recon = 1.0)
+    plotter_timeline.plot_timeline_factor_back(timeline_path, factor_comp = 2.0 , factor_recon = 1.0)
     #factor_comp = 0.01 , factor_recon = 0.08
     if verbose:
         plotter_timeline._print_node_events()
-    print("Timeline plotting factor bakc done!")
+    print("Timeline plotting factor back done!")
     
     
 if __name__ == "__main__":
     # Example usage
     # plot_3d_animaiton(path_to_json = "/test.json", fps = 2, gif_path = "visual/test.gif")
-    #plot_timeline(path_to_json = "data/ACO_seed_2137_x25_2025-04-08_13-45-38/best_solution.json", timeline_path = "visual/test_ACO_x25.png", verbose = False)
-    plot_timeline_factor_back(path_to_json = "data/data_mixed_part_seed_2137_2April25/GA_seed_2137_x25_2025-04-01_23-54-31/best_solution.json",
-                              timeline_path = "visual/test_GA_refactored_from_x25.png", verbose = False)
+    #plot_timeline(path_to_json = "data/data_mixed_part_seed_2137_2April25/ACO_seed_2137_x2_2025-04-08_13-47-07/best_solution.json",
+                  #timeline_path = "visual/seed_ACO_x2_refactored_from_test.png", verbose = False)
+    #plot_timeline_factor_back(path_to_json = "data/ACO_onecyclerouter_x1_2025-04-28_14-10-49/best_solution.json",
+    #                          timeline_path = "visual/ACO_router_oncecycle_x1.png", verbose = False)
+    plot_timeline(path_to_json = "data/ACO_check_drain_x1_2025-04-30_17-40-39/best_solution.json",
+                              timeline_path = "visual/check_1.png", verbose = False)
     #GA_seed_2137_x1_2025-04-02_00-00-20
+    #GA_seed_2137_x25_2025-04-01_23-54-31

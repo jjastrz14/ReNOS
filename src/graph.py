@@ -33,13 +33,13 @@ class TaskGraph:
     EDGE_INFO = "Edge ID: {0}\nType: {1}\nData Size: {2}\nProcessing Time Required: {3}\nDependencies: {4}"
 
 
-    def __init__(self, source = 0, drain = 20):
+    def __init__(self, source = 0, drain = 1):
         self.graph = nx.DiGraph()
         self.SOURCE_POINT = source
         self.DRAIN_POINT = drain
         # Starting and ending nodes to group starting and ending dependencies
         self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
-        self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = 999999, color = 'indianred')
+        self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred') 
         self.nodes = {}
         self.nodes_mapping = {}
         self.edges = {}
@@ -75,7 +75,7 @@ class TaskGraph:
 
         self.graph.clear()
         self.graph.add_node("start", node = 0, type = "START", layer = -1, color = 'lightgreen')
-        self.graph.add_node("end", node = 8, type = "END", layer = np.inf, color = 'indianred')
+        self.graph.add_node("end", node = 1, type = "END", layer = np.inf, color = 'indianred')
         self.nodes = {}
         self.nodes_mapping = {}
         self.edges = {}
@@ -595,7 +595,7 @@ class TaskGraph:
             
 
 
-def model_to_graph(model, verbose = False):
+def model_to_graph(model, source = 0, drain = 24, verbose = False):
         """
         A function to create the depencency graph of the model that will be used for the simulation on the NoC.
 
@@ -606,7 +606,7 @@ def model_to_graph(model, verbose = False):
         - a dependency graph of the model
         """
 
-        dep_graph = TaskGraph()
+        dep_graph = TaskGraph(source = source, drain = drain)
         parts, deps = build_partitions(model, verbose = True )
 
         if verbose:
@@ -618,12 +618,7 @@ def model_to_graph(model, verbose = False):
         # dep_id starts from the closest power of 10 that is greater than the number of tasks
         dep_id = 10**math.ceil(math.log10(len(parts) + 1)) 
         layer_id = 0
-        # DIRTY FIX: the scaling factors should be included in restart rather than simopty
-        # mem_scaling_factor = 64 # byte/flit
-        # comp_scaling_factor = 100 # FLOPs per cycle
-
         
-
         # assign task ids to the partitions
         for layer, partitions in parts.items():
             for partition in partitions:

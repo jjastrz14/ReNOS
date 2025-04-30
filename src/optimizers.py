@@ -120,15 +120,26 @@ class AntColony(BaseOpt):
         # self.tau_start = np.zeros((domain.size))
         # self.tau_start[4] = 1
         self.tau_start = np.ones((domain.size))/ domain.size
-        self.tau = np.ones((task_graph.n_nodes-1, domain.size, domain.size))/ (task_graph.n_nodes * domain.size * domain.size) # Pheromone matrix
-        self.eta = np.ones((task_graph.n_nodes-1, domain.size, domain.size)) # Heuristic matrix
+        self.tau_end = np.ones((domain.size))/ domain.size
+        self.tau = np.ones((task_graph.n_nodes, domain.size, domain.size))/ (task_graph.n_nodes * domain.size * domain.size) # Pheromone matrix
+        self.eta = np.ones((task_graph.n_nodes, domain.size, domain.size)) # Heuristic matrix
 
+        #create a list of task ID ensuring the start node is the first element
         tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
         tasks.insert(0, "start")
+        tasks.append("end")
+        
         self.tasks = tasks
         
         #seed
         self.seed = seed
+        
+        #statistics measure
+        self.statistics = {}
+        self.statistics["mdn"] = []
+        self.statistics["std"] = []
+        self.statistics["best"] = []
+        self.statistics["absolute_best"] = [np.inf]
 
 
 
@@ -243,13 +254,20 @@ class AntColony(BaseOpt):
             self.update_heuristics()
             shortest_path = min(all_paths, key=lambda x: x[1])
             moving_average = np.mean([path[1] for path in all_paths])
+            moving_std = np.std([path[1] for path in all_paths])
             if once_every is not None and i%once_every == 0:
                 print("Iteration #", i, ", chosen path is:", shortest_path)
                 print("Moving average for the path lenght is:", moving_average)
             
             self.evaporate_pheromones(rho_step)
+            self.statistics["mdn"].append(moving_average)
+            self.statistics["std"].append(moving_std)
+            self.statistics["best"].append(shortest_path[1])
+            if shortest_path[1] < self.statistics["absolute_best"][-1]:
+                self.statistics["absolute_best"].append(shortest_path[1])
+            else:
+                self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
             return shortest_path
-
 
         shortest_path = None
         all_time_shortest_path = ("placeholder", np.inf)
@@ -266,15 +284,29 @@ class AntColony(BaseOpt):
         else:
             for i in range(self.par.n_iterations):
                 shortest_path = single_iteration(i, once_every, rho_step)
+                print(f"This is {shortest_path[1]} and this is {all_time_shortest_path[1]} ")
                 if shortest_path[1] < all_time_shortest_path[1]:
                     all_time_shortest_path = shortest_path 
-
+                    
+                    #save the dump of the best solution in data
+                    #save the corresponding dump file into data
+                    dump_file = CONFIG_DUMP_DIR + "/dump.json"
+                    print("Saving the best solution found by ant in" + ACO_DIR + "/best_solution.json")
+                    os.makedirs(ACO_DIR, exist_ok = True)
+                    os.system("cp " + dump_file + " " + ACO_DIR)
+                    os.system("mv " + ACO_DIR + "/dump.json " + ACO_DIR + "/best_solution.json")
+                    
+            # Finalize the simulation: save the data
+            np.save(ACO_DIR + "/statistics.npy", self.statistics)
+            print("Saving results in: " + ACO_DIR)
+        
         return all_time_shortest_path
 
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
         """
         Pick the next move of the ant, given the pheromone and heuristic matrices.
+        if random_heuristic chosen to False then the heuristic is the manhattan distance!
         """
         
         if self.seed is not None:
@@ -285,13 +317,16 @@ class AntColony(BaseOpt):
         mask = np.array([0 if pe.mem_used + added_space > pe.mem_size else 1 for pe in resources])
 
         if d_level == 0:
+            #init tau start
             outbound_pheromones = self.tau_start
             outbound_heuristics = np.ones(self.domain.size)
         else:
+            #next step taus and pheromonoes
             outbound_pheromones = self.tau[d_level-1,current,:]
             if random_heuristic:
                 outbound_heuristics = self.eta[d_level-1, current, :]
             else:
+                #tau updated as manhattan distance
                 # find the id of the task on which task_id depends (may be multiple)
                 dependencies = self.task_graph.get_dependencies(task_id)
                 # print("The dependencies of the task are:", dependencies)
@@ -322,20 +357,76 @@ class AntColony(BaseOpt):
 
 
     def generate_ant_path(self, verbose = False):
+        """
+        Generate a path for the ant based on pheromone and heuristic matrices.
+        
+        The path consists of tuples (task_id, current_node, next_node) representing:
+        - The task being processed
+        - The node where the task starts
+        - The node where the task will be executed
+        
+        The ant starts from a source node and ends at a drain node defined in the task graph.
+        The first entry has current_node=-1 and next_node=source_node.
+        
+        Returns:
+            list: A path represented as a list of (task_id, current_node, next_node) tuples
+        """
+        
+        #initilaize the path and resource tracking
         # No need to specify the start node, all the ants start from the "start" node
         path = []
         # A list of the available resources for each PE
         resources = [PE() for _ in range(self.domain.size)]
-        prev = -1
+        
+        # the last node is decalred as drain point and the starting point is source point
+        source_node = self.task_graph.SOURCE_POINT
+        drain_node = self.task_graph.DRAIN_POINT
+        
+        #start with previous node as -1 (no previous node yet)
+        prev_node = -1
+    
         for d_level, task_id in enumerate(self.tasks):
-            current = prev
-            added_space = self.task_graph.get_node(task_id)["size"] if task_id != "start" and task_id != "end" else 0
-            move = self.pick_move(task_id, d_level, current, resources, added_space, path) if d_level != self.task_graph.n_nodes else np.inf
+            current_node = prev_node
+            
+            #determine resources requirmnets for this task
+            if task_id not in ("start", "end"):
+                task_size = self.task_graph.get_node(task_id)["size"]
+            else:
+                task_size = 0
+            
+            #Handle special case for start and end tasks
+            if task_id == "start":
+                next_node = source_node
+            #case to map last on the drain node
+            
+            ########################################################################################################
+            
+            #to get EDOs code: delete all things connected to "end" in the task_graph
+            #try to just set the drain node as the last node
+            #EDos version was to in the last task id set the node to inf (215, 0, 24), (216, 24, inf)
+            #then it means that the last task is allocated on the drain node
+            #if in your model the last layer is the output layer which is fully connected giving some output then it's hard to split it otherwise this solution is
+            #imposing some constraints to the mapping of the last layer
+            
+            #solution to thing about: impose last task_id to send data to the drain node, then you should see several lines of data traffic in the drain node. (or allocation of the solution)
+            ########################################################################################################
+            
+            elif d_level == self.task_graph.n_nodes: 
+                next_node = drain_node
+            elif task_id == "end": #case to connect last to "end"
+                current_node = drain_node
+                next_node = np.inf
+            else:
+                # Pick the next node based on pheromone, heuristic, and resource availability
+                next_node = self.pick_move(task_id, d_level, current_node, resources, task_size, path)
+            
             # udpate the resources
-            if task_id != "start" and task_id != "end" and move != np.inf:
-                resources[move].mem_used += added_space
-            path.append((task_id, current, move))
-            prev = move
+            if task_id != "start" and task_id != "end" and next_node != np.inf:
+                resources[next_node].mem_used += task_size
+            
+            #normal case
+            path.append((task_id, current_node, next_node))
+            prev_node = next_node
 
         if verbose:
             print("The path found by the ant is:", path)
@@ -378,6 +469,7 @@ class AntColony(BaseOpt):
             raise ValueError("The evaporation rate is not set")
         self.tau_start = (1 - self.rho) * self.tau_start
         self.tau = (1 - self.rho) * self.tau
+        self.tau_end = (1 - self.rho) * self.tau_end
 
     def update_pheromones(self, colony_paths):
         if self.par.n_best is None:
@@ -390,6 +482,10 @@ class AntColony(BaseOpt):
                     self.tau_start[path_node[2]] += 1 / path_length
                 elif d_level-1 < self.tau.shape[0]:
                     self.tau[d_level-1, path_node[1], path_node[2]] += 1 / path_length
+                elif path_node[2] == np.inf: #ending decision level
+                    self.tau_end[path_node[1]] += 1 / path_length
+                else:
+                    raise ValueError("The path node is not valid")
 
     def update_heuristics(self):
         """
@@ -552,12 +648,12 @@ class ParallelAntColony(AntColony):
         # generate the colony of ants (parallel workers)
         
         with closing(mp.Pool
-                     (processes = self.n_processes, 
-                      initializer = ParallelAntColony.init, 
-                      initargs = (self.tau_start, self.tau, self.eta, 
-                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
-                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)),
-                                 )) as pool:
+                    (processes = self.n_processes, 
+                    initializer = ParallelAntColony.init, 
+                    initargs = (self.tau_start, self.tau, self.eta, 
+                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
+                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)),
+                                )) as pool:
             # generate the paths in parallel: each process is assigned to a subsed of the ants
             # evenly distributed
             # seed below allows for setting same seed for each ants (set it by passing seed to the constructor)

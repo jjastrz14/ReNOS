@@ -66,13 +66,13 @@ else:
 shutil.copy(DEFALUT_ARCH_FILE, os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json"))
 ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json")
 
-#ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_x1_.json")
-#factor = "x1"
+#ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_x25_.json")
+#factor = "x25"
 
 cet = pytz.timezone('CET')
 timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S")  # Format: YYYY-MM-DD_HH-MM-SS
 CONFIG_DUMP_DIR = DEFALUT_CONFIG_DUMP_DIR +"/dumps"+ f"_{factor}" + f"_{timestamp}"
-ACO_DIR = os.path.join(DATA_DIR, "ACO_seed_2137") + f"_{factor}" + f"_{timestamp}"
-GA_DIR = os.path.join(DATA_DIR, "GA_test") + f"_{factor}" + f"_{timestamp}"
+ACO_DIR = os.path.join(DATA_DIR, "ACO_check_drain") + f"_{factor}" + f"_{timestamp}"
+GA_DIR = os.path.join(DATA_DIR, "GA") + f"_{factor}" + f"_{timestamp}"
 
 

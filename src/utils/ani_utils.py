@@ -780,6 +780,7 @@ class NoCTimelinePlotter(NoCPlotter):
         
         # set x-ticks to cycle numbers
         self.ax2d.set_xlim(0, self.max_cycle)
+        #self.ax2d.set_xlim(0, 11200)
         # Auto-adjust ticks
         self.ax2d.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
         self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
@@ -959,38 +960,91 @@ class NoCTimelinePlotter(NoCPlotter):
             'reply_out': 1.0
         }
         
+        # reverted_events = {}
+        # max_cycle = 0
+
+        # # Process each node independently
+        # for node, node_events in self.node_events.items():
+        #     # Sort events by original sped-up start time
+        #     sorted_events = []
+        #     for event_key, events in node_events.items():
+        #         for start, duration in events:
+        #             sorted_events.append((start, duration, event_key))
+        #     sorted_events.sort(key=lambda x: x[0])
+            
+        #     reverted_node_events = {}
+        #     cumulative_shift = 0.0
+        #     last_end = 0.0
+            
+        #     for start_spedup, duration_spedup, event_key in sorted_events:
+        #         factor = event_factors[event_key]
+                
+        #         # Calculate real start time accounting for previous scaling
+        #         real_start = start_spedup + cumulative_shift
+                
+        #         if event_key in ['comp', 'recon']:
+        #             # Scale the event
+        #             real_duration = duration_spedup * factor
+        #             # Calculate how much this event stretches the timeline
+        #             stretch = (real_duration - duration_spedup)
+        #             cumulative_shift += stretch
+        #         else:
+        #             # Non-scaled event keeps original duration
+        #             real_duration = duration_spedup
+                
+        #         # Store the reverted event
+        #         if event_key not in reverted_node_events:
+        #             reverted_node_events[event_key] = []
+        #         reverted_node_events[event_key].append((real_start, real_duration))
+                
+        #         # Update maximum cycle
+        #         max_cycle = max(max_cycle, real_start + real_duration)
+        #         last_end = real_start + real_duration
+            
+        #     reverted_events[node] = reverted_node_events
+        
         # Global timeline processing
         global_timeline = []
         
-        # 1. Collect all events from all nodes (same as before)
+        # 1. Collect all events from all nodes with node info
         for node, node_events in self.node_events.items():
             for event_key, events in node_events.items():
                 for start, duration in events:
                     global_timeline.append((start, duration, event_key, node))
         
-        # 2. Sort events by their original sped-up start time (same as before)
+        # 2. Sort events by original sped-up start time globally
         global_timeline.sort(key=lambda x: x[0])
         
-        # 3. PROCESS EVENTS - CORRECTED SECTION START
+        # 3. Process events in global order with cumulative shifts
         reverted_events = {}
         max_cycle = 0
+        cumulative_shift = 0.0
+        last_end = 0.0
 
         for start_spedup, duration_spedup, event_key, node in global_timeline:
             factor = event_factors[event_key]
             
-            # CORRECTED CALCULATIONS: Use division to undo speed-up
-            original_start = start_spedup * factor
-            original_duration = duration_spedup * factor
+            # Calculate real start time accounting for global shifts
+            real_start = start_spedup + cumulative_shift
             
-            # Store in reverted structure
+            if event_key in ['comp', 'recon']:
+                # Scale the event
+                real_duration = duration_spedup * factor
+                # Track timeline stretching
+                stretch = real_duration - duration_spedup
+                cumulative_shift += stretch
+            else:
+                # Preserve duration for non-scaled events
+                real_duration = duration_spedup
+            
+            # Update node's event list
             if node not in reverted_events:
                 reverted_events[node] = {}
-            reverted_events[node].setdefault(event_key, []).append(
-                (original_start, original_duration)
-            )
+            reverted_events[node].setdefault(event_key, []).append((real_start, real_duration))
             
-            # Track maximum cycle
-            max_cycle = max(max_cycle, original_start + original_duration)
+            # Track maximum cycle and last event end
+            max_cycle = max(max_cycle, real_start + real_duration)
+            last_end = max(last_end, real_start + real_duration)
 
         used_labels = set()
         for node in self.node_events:
