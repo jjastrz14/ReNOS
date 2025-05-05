@@ -445,7 +445,6 @@ class TaskGraph:
         elif isinstance(dep, list):
             node["dep"].extend(dep)
 
-                     
     def get_node(self, id,  verbose = False):
         """
         Returns the node with the given id.
@@ -470,7 +469,6 @@ class TaskGraph:
 
         return node
             
-        return None
     
     def get_edge(self, id, verbose = False):
         """
@@ -494,8 +492,6 @@ class TaskGraph:
             print(self.EDGE_INFO.format(edge["id"], edge["type"], edge["size"], edge["pt_required"], edge["dep"]))
             print("====================================")
         return edge
-            
-        return None
     
 
     def get_edge_id(self, src, dst):
@@ -595,7 +591,7 @@ class TaskGraph:
             
 
 
-def model_to_graph(model, source = 0, drain = 24, verbose = False):
+def model_to_graph(model, source = 0, drain = 1, verbose = False):
         """
         A function to create the depencency graph of the model that will be used for the simulation on the NoC.
 
@@ -647,7 +643,6 @@ def model_to_graph(model, source = 0, drain = 24, verbose = False):
                                 "spatial_max": [max_bond for max_bond in partition.out_bounds[1]],
                                 "ch_bounds": [ch for ch in partition.out_ch] if partition.out_ch is not None else []}
 
-
                 if task_size > 0 and computing_time > 0:
                     dep_graph.add_task_fully_qualified(id=partition.task_id, type = "COMP_OP", layer_id = partition.layer_id, size = task_size, weight_size= weight_size,input_range=input_range,output_range=output_range,ct_required= computing_time, dep = [])
                     task_id += 1
@@ -669,7 +664,7 @@ def model_to_graph(model, source = 0, drain = 24, verbose = False):
                 except StopIteration:
                     raise ValueError(f"Partition with id {dep[1]} not found in partitions2")
             
-                first_node ="start" if isinstance(partition1.layer, layers.InputLayer) else partition1.task_id
+                first_node = "start" if isinstance(partition1.layer, layers.InputLayer) else partition1.task_id
                 second_node = partition2.task_id
 
                 # Define communication type and size

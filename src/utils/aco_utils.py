@@ -46,8 +46,6 @@ def random_heuristic_update(graph, domain):
     eta = np.random.rand(graph.n_nodes-1, domain.size, domain.size)
     return eta
 
-
-
 # dictionary to store the shared variables (pheromone and heuristic matrices)
 vardict = {}
 

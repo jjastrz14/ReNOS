@@ -86,6 +86,120 @@ def plot_graph(graph, file_path = None):
             file_path = os.path.join(os.path.dirname(__file__), file_path)
             plt.savefig(file_path)
         #plt.show()
+        plt.savefig("task_graph.png", dpi = 600)
+        
+
+def print_dependencies(graph, file_path=None):
+    """
+    Prints the dependencies between nodes in a format like "[node] connected to [node1, node2, ...]",
+    showing connections from first nodes to last ones.
+    
+    Parameters
+    ----------
+    graph : Graph object
+        The graph containing nodes and edges
+    file_path : str, optional
+        The path where to save the output. If None, output is printed to console.
+    
+    Returns
+    -------
+    None
+    """
+    # Get all nodes sorted by layer (if available)
+    try:
+        nodes_by_layer = {}
+        for node in graph.graph.nodes():
+            layer = graph.graph.nodes[node]["layer"]
+            if layer not in nodes_by_layer:
+                nodes_by_layer[layer] = []
+            nodes_by_layer[layer].append(node)
+        
+        # Sort layers
+        sorted_layers = sorted(nodes_by_layer.keys())
+        
+        # Prepare output string
+        output_lines = ["# Node Dependencies (by layer)", ""]
+        
+        # Print dependencies layer by layer
+        for layer in sorted_layers:
+            output_lines.append(f"## Layer {layer}")
+            for node in nodes_by_layer[layer]:
+                # Get successors (nodes this node connects to)
+                successors = list(graph.graph.successors(node))
+                
+                # Clean up the successor nodes - ensure they're clean values
+                clean_successors = []
+                for succ in successors:
+                    # If the successor is a list or other complex structure, extract just the node ID
+                    if isinstance(succ, (list, tuple)):
+                        # Try to extract clean values from complex structure
+                        clean_values = [str(item).strip() for item in succ if str(item).strip() and str(item).strip() not in [',', '[', ']']]
+                        clean_successors.extend(clean_values)
+                    else:
+                        clean_successors.append(str(succ).strip())
+                
+                # Remove any empty strings or special characters
+                clean_successors = [s for s in clean_successors if s and s not in [',', '[', ']']]
+                
+                if clean_successors:
+                    connections = ", ".join(clean_successors)
+                    output_lines.append(f"[{node}] connected to [{connections}]")
+                else:
+                    output_lines.append(f"[{node}] has no outgoing connections")
+            output_lines.append("")  # Empty line between layers
+            
+    except (KeyError, AttributeError):
+        # Fallback if layers are not defined
+        output_lines = ["# Node Dependencies", ""]
+        
+        # Sort nodes topologically if possible
+        try:
+            import networkx as nx
+            sorted_nodes = list(nx.topological_sort(graph.graph))
+        except:
+            sorted_nodes = list(graph.graph.nodes())
+        
+        # Print dependencies for each node
+        for node in sorted_nodes:
+            successors = list(graph.graph.successors(node))
+            
+            # Clean up the successor nodes
+            clean_successors = []
+            for succ in successors:
+                if isinstance(succ, (list, tuple)):
+                    # Try to extract clean values from complex structure
+                    clean_values = [str(item).strip() for item in succ if str(item).strip() and str(item).strip() not in [',', '[', ']']]
+                    clean_successors.extend(clean_values)
+                else:
+                    clean_successors.append(str(succ).strip())
+            
+            # Remove any empty strings or special characters
+            clean_successors = [s for s in clean_successors if s and s not in [',', '[', ']']]
+            
+            if clean_successors:
+                connections = ", ".join(clean_successors)
+                output_lines.append(f"[{node}] connected to [{connections}]")
+            else:
+                output_lines.append(f"[{node}] has no outgoing connections")
+    
+    # Join all lines
+    output_text = "\n".join(output_lines)
+    
+    # Output to file or console
+    if file_path is not None:
+        import os
+        full_path = os.path.join(os.path.dirname(__file__), file_path)
+        with open(full_path, 'w') as f:
+            f.write(output_text)
+        print(f"Dependencies written to {full_path}")
+        
+        # Also save as plain text file
+        txt_path = full_path.rsplit('.', 1)[0] + '.txt' if '.' in file_path else full_path + '.txt'
+        with open(txt_path, 'w') as f:
+            f.write(output_text)
+    else:
+        print(output_text)
+        
 
 
 """

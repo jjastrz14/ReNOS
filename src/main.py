@@ -53,7 +53,7 @@ if __name__ == "__main__":
     start = time.time()
     
     model = test_model((28, 28, 1), verbose= True)
-    # model = conv_layer((28, 28, 1))
+    # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
@@ -77,6 +77,7 @@ if __name__ == "__main__":
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = 1, drain = 24, verbose=False)
         #plot_graph(task_graph)
+        print_dependencies(task_graph)
 
         grid = dm.Grid()
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
@@ -84,20 +85,21 @@ if __name__ == "__main__":
         print("Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 5,
+            n_ants = 10,
             rho = 0.05,
             n_best = 10,
             n_iterations = 5,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 50
+        n_procs = 5
         opt = op.AntColony( params, grid, task_graph, seed = None)
         #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
         shortest = opt.run(once_every=1, show_traces= False)
+        print("The best path found is: ")
         print(shortest)
         
         end = time.time()
@@ -141,6 +143,7 @@ if __name__ == "__main__":
         
         shortest = opt.run()
         # #opt.ga_instance.plot_fitness()
+        print("The best path found is: ")
         print(shortest[0], 1/shortest[1])
         
         end = time.time()

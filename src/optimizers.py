@@ -127,9 +127,11 @@ class AntColony(BaseOpt):
         #create a list of task ID ensuring the start node is the first element
         tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
         tasks.insert(0, "start")
-        tasks.append("end")
+        
+        #tasks.append("end")
         
         self.tasks = tasks
+        breakpoint()
         
         #seed
         self.seed = seed
@@ -252,9 +254,9 @@ class AntColony(BaseOpt):
             # plt.close()
 
             self.update_heuristics()
-            shortest_path = min(all_paths, key=lambda x: x[1])
-            moving_average = np.mean([path[1] for path in all_paths])
-            moving_std = np.std([path[1] for path in all_paths])
+            shortest_path = min(all_paths, key=lambda x: x[2])
+            moving_average = np.mean([path[2] for path in all_paths])
+            moving_std = np.std([path[2] for path in all_paths])
             if once_every is not None and i%once_every == 0:
                 print("Iteration #", i, ", chosen path is:", shortest_path)
                 print("Moving average for the path lenght is:", moving_average)
@@ -262,15 +264,16 @@ class AntColony(BaseOpt):
             self.evaporate_pheromones(rho_step)
             self.statistics["mdn"].append(moving_average)
             self.statistics["std"].append(moving_std)
-            self.statistics["best"].append(shortest_path[1])
-            if shortest_path[1] < self.statistics["absolute_best"][-1]:
-                self.statistics["absolute_best"].append(shortest_path[1])
+            self.statistics["best"].append(shortest_path[2])
+            if shortest_path[2] < self.statistics["absolute_best"][-1]:
+                self.statistics["absolute_best"].append(shortest_path[2])
             else:
                 self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
             return shortest_path
 
         shortest_path = None
-        all_time_shortest_path = ("placeholder", np.inf)
+        #correction to count also ants
+        all_time_shortest_path = (np.inf, "placeholder", np.inf)
 
         if self.par.rho_start is not None and self.par.rho_end is not None:
             self.rho = self.par.rho_start
@@ -284,17 +287,17 @@ class AntColony(BaseOpt):
         else:
             for i in range(self.par.n_iterations):
                 shortest_path = single_iteration(i, once_every, rho_step)
-                print(f"This is {shortest_path[1]} and this is {all_time_shortest_path[1]} ")
-                if shortest_path[1] < all_time_shortest_path[1]:
+                if shortest_path[2] < all_time_shortest_path[2]:
                     all_time_shortest_path = shortest_path 
                     
+                    ant_int = str(shortest_path[0])
                     #save the dump of the best solution in data
                     #save the corresponding dump file into data
-                    dump_file = CONFIG_DUMP_DIR + "/dump.json"
-                    print("Saving the best solution found by ant in" + ACO_DIR + "/best_solution.json")
+                    dump_file = CONFIG_DUMP_DIR + "/dump" + ant_int + ".json"
+                    print(f"Saving the best solution found by ant {ant_int} in" + ACO_DIR + "/best_solution.json")
                     os.makedirs(ACO_DIR, exist_ok = True)
                     os.system("cp " + dump_file + " " + ACO_DIR)
-                    os.system("mv " + ACO_DIR + "/dump.json " + ACO_DIR + "/best_solution.json")
+                    os.system("mv " + ACO_DIR + "/dump" + ant_int + ".json " + ACO_DIR + "/best_solution.json")
                     
             # Finalize the simulation: save the data
             np.save(ACO_DIR + "/statistics.npy", self.statistics)
@@ -433,7 +436,7 @@ class AntColony(BaseOpt):
         return path
 
 
-    def path_length(self, path, verbose = False):
+    def path_length(self, ant_id, path, verbose = False):
         """
         Compute the "length" of the path using the NoC simulator.
         """
@@ -444,13 +447,14 @@ class AntColony(BaseOpt):
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump.json", file_to_append=ARCH_FILE)
+        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), file_to_append=ARCH_FILE)
         
         if verbose:
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump.json", dwrap=True)
+        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
+        #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
         return result, logger
 
 
@@ -458,8 +462,10 @@ class AntColony(BaseOpt):
         colony_paths = []
         for _ in range(self.par.n_ants):
             ant_path = self.generate_ant_path()
-            path_length = self.path_length(ant_path)
-            colony_paths.append((ant_path, path_length[0]))
+            #pass and id and ant_path to restart to measure the path length
+            path_length = self.path_length( _ , ant_path)
+            #append ant_id, ant_path and length of this path
+            colony_paths.append((_ , ant_path, path_length[0]))
         return colony_paths
     
     def evaporate_pheromones(self, step):
@@ -469,6 +475,7 @@ class AntColony(BaseOpt):
             raise ValueError("The evaporation rate is not set")
         self.tau_start = (1 - self.rho) * self.tau_start
         self.tau = (1 - self.rho) * self.tau
+        #to moze trzeba usunac
         self.tau_end = (1 - self.rho) * self.tau_end
 
     def update_pheromones(self, colony_paths):
@@ -476,7 +483,7 @@ class AntColony(BaseOpt):
             self.par.n_best = len(colony_paths)
         sorted_paths = sorted(colony_paths, key = lambda x : x[1])
         best_paths = sorted_paths[:self.par.n_best]
-        for path, path_length in best_paths:
+        for ant_id, path, path_length in best_paths:
             for d_level, path_node in enumerate(path):
                 if path_node[1] == -1: # starting decision level
                     self.tau_start[path_node[2]] += 1 / path_length
