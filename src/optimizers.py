@@ -117,18 +117,16 @@ class AntColony(BaseOpt):
         # The DAG on which to optimize is made out of implementation points, particular combinations
         # of tasks and PEs, representig to which PE a task is mapped to.
         #  the number of nodes in this new graph = #tasks * #PEs
-        # self.tau_start = np.zeros((domain.size))
-        # self.tau_start[4] = 1
+
         self.tau_start = np.ones((domain.size))/ domain.size
-        self.tau_end = np.ones((domain.size))/ domain.size
+        #self.tau_end = np.ones((domain.size))/ domain.size
+        #Question: if there is tau_start for the start node, should we add also a tau_end for the end node or it is enough to have this in tau matirx?
+        
         self.tau = np.ones((task_graph.n_nodes, domain.size, domain.size))/ (task_graph.n_nodes * domain.size * domain.size) # Pheromone matrix
         self.eta = np.ones((task_graph.n_nodes, domain.size, domain.size)) # Heuristic matrix
 
-        #create a list of task ID ensuring the start node is the first element
-        tasks = [task["id"] for task in self.task_graph.get_nodes()] # if task["id"] != "start"]
-        
-        #tasks.insert(0, "start")
-        #tasks.append("end")
+        #create a list of task ID ensuring the start node is the first element and end node is the last
+        tasks = [task["id"] for task in self.task_graph.get_nodes()] 
         
         self.tasks = tasks
                 
@@ -401,29 +399,14 @@ class AntColony(BaseOpt):
                 next_node = source_node
             #case to map last on the drain node
             
-            ########################################################################################################
-            
-            #to get EDOs code: delete all things connected to "end" in the task_graph
-            #try to just set the drain node as the last node
-            #EDos version was to in the last task id set the node to inf (215, 0, 24), (216, 24, inf)
-            #then it means that the last task is allocated on the drain node
-            #if in your model the last layer is the output layer which is fully connected giving some output then it's hard to split it otherwise this solution is
-            #imposing some constraints to the mapping of the last layer
-            
-            #solution to thing about: impose last task_id to send data to the drain node, then you should see several lines of data traffic in the drain node. (or allocation of the solution)
-            ########################################################################################################
-            
-            elif d_level == self.task_graph.n_nodes: 
-                next_node = drain_node
             elif task_id == "end": #case to connect last to "end"
-                current_node = drain_node
-                next_node = np.inf
+                next_node = drain_node 
             else:
                 # Pick the next node based on pheromone, heuristic, and resource availability
                 next_node = self.pick_move(task_id, d_level, current_node, resources, task_size, path)
             
             # udpate the resources
-            if task_id != "start" and task_id != "end" and next_node != np.inf:
+            if task_id != "start" and task_id != "end":
                 resources[next_node].mem_used += task_size
             
             #normal case
@@ -474,22 +457,19 @@ class AntColony(BaseOpt):
             raise ValueError("The evaporation rate is not set")
         self.tau_start = (1 - self.rho) * self.tau_start
         self.tau = (1 - self.rho) * self.tau
-        #to moze trzeba usunac
-        self.tau_end = (1 - self.rho) * self.tau_end
 
     def update_pheromones(self, colony_paths):
         if self.par.n_best is None:
             self.par.n_best = len(colony_paths)
         sorted_paths = sorted(colony_paths, key = lambda x : x[1])
         best_paths = sorted_paths[:self.par.n_best]
+        
         for ant_id, path, path_length in best_paths:
             for d_level, path_node in enumerate(path):
                 if path_node[1] == -1: # starting decision level
                     self.tau_start[path_node[2]] += 1 / path_length
                 elif d_level-1 < self.tau.shape[0]:
                     self.tau[d_level-1, path_node[1], path_node[2]] += 1 / path_length
-                elif path_node[2] == np.inf: #ending decision level
-                    self.tau_end[path_node[1]] += 1 / path_length
                 else:
                     raise ValueError("The path node is not valid")
 

@@ -63,6 +63,10 @@ if __name__ == "__main__":
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
     size_of_grid = 5
+    source = 0
+    drain = 24
+    
+    assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     
     cet = pytz.timezone('CET')
     timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S") 
@@ -75,7 +79,7 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_file_path)
         
         #drain point cannot exceed size_of_grid x size_of_grid - 1
-        task_graph = model_to_graph(model, source = 1, drain = 24, verbose=False)
+        task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
         #plot_graph(task_graph)
         #print_dependencies(task_graph)
 
@@ -88,13 +92,13 @@ if __name__ == "__main__":
             n_ants = 10,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 5,
+            n_iterations = 50,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 5
-        #opt = op.AntColony( params, grid, task_graph, seed = None)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        opt = op.AntColony( params, grid, task_graph, seed = None)
+        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
@@ -119,7 +123,7 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_file_path)
         
         #drain point cannot exceed size_of_grid x size_of_grid - 1
-        task_graph = model_to_graph(model, source = 0, drain = 24, verbose=False)
+        task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
         #plot_graph(task_graph)
 
         grid = dm.Grid()
@@ -130,14 +134,14 @@ if __name__ == "__main__":
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
-        n_generations = 1, #800,
+        n_generations = 5, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
         n_procs = 50
-        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = 2137)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = 2137)
+        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in GA: ", ARCH_FILE)
         
@@ -153,16 +157,6 @@ if __name__ == "__main__":
         print("\n ... End Genetic Algoriothm Optimization")
         print(f"Time elapsed: {int(hours):02d}:{int(minutes):02d}:{seconds:.2f}")
         print("Done!")
-        
-    # # file_name_json = "/../runs/best_solution.json"
-    # # path_timeline = "visual/timeline.png"
-    # file_name_json = "/../../data/ACO/best_solution.json"
-    # path_timeline = "data/ACO/timeline.png"
-    # visualizer.plot_timeline(file_name_json, path_timeline, verbose = False)
-    # print(opt.path_length(shortest[0], verbose =False))
-    # # # Load the statistics and plot the results
-    # # stats = np.load("data/statistics.npy", allow_pickle=True).item()
-    # # print(stats)
 
 
 

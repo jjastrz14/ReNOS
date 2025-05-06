@@ -39,11 +39,6 @@ class TaskGraph:
         self.DRAIN_POINT = drain
         # Starting and ending nodes to group starting and ending dependencies
         self.nodes = {}
-        
-        #self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
-        #self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred') 
-        #self.nodes["start"] = {"id": "start", "type": "START", "layer_id": -1, "size": 0, "ct_required": 0, "dep": []}
-        #self.nodes["end"] = {"id": "end", "type": "END", "layer_id": np.inf, "size": 0, "ct_required": 0, "dep": []}
 
         self.nodes_mapping = {}
         self.edges = {}
@@ -78,8 +73,8 @@ class TaskGraph:
         """
 
         self.graph.clear()
-        self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
-        self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred')
+        #self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
+        #self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred')
         self.nodes = {}
         self.nodes_mapping = {}
         self.edges = {}
@@ -270,8 +265,9 @@ class TaskGraph:
         self.nodes_mapping = mapping
         for edge_id in self.edges.keys():
             self.edges_mapping[edge_id] = {"src": None, "dst": None}
-        # Check that all the nodes are in the mapping
-        assert set(self.nodes.keys()).issubset(set(self.nodes_mapping.keys())), "Some nodes are missing in the mapping."
+
+        # Check that all the nodes are in the mapping without "start" and "end" which are not mapped onto the NoC grid
+        assert set(k for k in self.nodes.keys() if k not in ["start", "end"]).issubset(set(self.nodes_mapping.keys())), "Some nodes are missing in the mapping."
         
         for node_id, node in self.nodes.items():
             # if any of the node's dependencies are in the edges list, set the "dst" attribute of the edge
@@ -290,6 +286,7 @@ class TaskGraph:
 
         # If, at the end of the mapping, there are still some edges without a "src" or "dst" attribute,
         # set them to "start" and "end" respectively
+
         for edge in self.edges_mapping.values():
             if edge["src"] is None:
                 edge["src"] = self.SOURCE_POINT
@@ -297,8 +294,6 @@ class TaskGraph:
                 edge["dst"] = self.DRAIN_POINT
 
         return self.nodes_mapping, self.edges_mapping
-
-        
 
     def add_task_fully_qualified(self, id, type, layer_id, size, weight_size, input_range, output_range, ct_required, dep, color = "lightblue"):
         """
@@ -507,7 +502,7 @@ class TaskGraph:
         packet_dependencies = [-1]
         workload_dependencies = []
         # Remove elements whose element appearing more than once
-        nodes = self.get_nodes()
+        nodes = [node for node in self.get_nodes() if node["id"] not in ["start", "end"]] # all without "start" and "end"
         edges = self.get_edges()
 
         # start from the edges and look for the ones whose dependencies are satisfied
@@ -563,7 +558,7 @@ class TaskGraph:
             already_appended_workloads = []
 
 
-        assert len(nodes) == 0 and len(edges) == 0
+        assert len(nodes) == 0 and len(edges) == 0, "Stomething went wrong: not all the nodes and edges were appended to the structure"
         return structure
     
     def add_task_dep(self, id, dep):
@@ -617,6 +612,9 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
         dep_id = 10**math.ceil(math.log10(len(parts) + 1)) 
         layer_id = 0
         
+        #create the start node (source point)
+        dep_graph.add_task_fully_qualified(id="start", type = "START", layer_id = -1, size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
+        
         # assign task ids to the partitions
         for layer, partitions in parts.items():
             for partition in partitions:
@@ -650,6 +648,9 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
                     task_id += 1
             layer_id += 1
 
+        #create the end node (drain point)
+        dep_graph.add_task_fully_qualified(id="end", type = "END", layer_id = np.inf, size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
+        
         for key, value in deps.items():
             partitions1 = parts[key[0]]
             partitions2 = parts[key[1]]
