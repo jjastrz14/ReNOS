@@ -38,9 +38,13 @@ class TaskGraph:
         self.SOURCE_POINT = source
         self.DRAIN_POINT = drain
         # Starting and ending nodes to group starting and ending dependencies
-        self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
-        self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred') 
         self.nodes = {}
+        
+        #self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
+        #self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred') 
+        #self.nodes["start"] = {"id": "start", "type": "START", "layer_id": -1, "size": 0, "ct_required": 0, "dep": []}
+        #self.nodes["end"] = {"id": "end", "type": "END", "layer_id": np.inf, "size": 0, "ct_required": 0, "dep": []}
+
         self.nodes_mapping = {}
         self.edges = {}
         self.edges_mapping = {}
@@ -74,8 +78,8 @@ class TaskGraph:
         """
 
         self.graph.clear()
-        self.graph.add_node("start", node = 0, type = "START", layer = -1, color = 'lightgreen')
-        self.graph.add_node("end", node = 1, type = "END", layer = np.inf, color = 'indianred')
+        self.graph.add_node("start", node = self.SOURCE_POINT, type = "START", layer = -1, color = 'lightgreen')
+        self.graph.add_node("end", node = self.DRAIN_POINT, type = "END", layer = np.inf, color = 'indianred')
         self.nodes = {}
         self.nodes_mapping = {}
         self.edges = {}
@@ -97,6 +101,151 @@ class TaskGraph:
 
         self.nodes_mapping = {}
         self.edges_mapping = {}
+        
+        
+    def get_node(self, id,  verbose = False):
+        """
+        Returns the node with the given id.
+
+        Parameters
+        ----------
+        id : int
+            The id of the node to be returned.
+        
+        Returns
+        -------
+        dict
+            The node with the given id.
+        """
+
+        node = self.nodes.get(id)
+
+        if verbose:
+            print("====================================")
+            print(self.NODE_INFO.format(node["id"], node["type"], node["layer_id"],node["size"], node["ct_required"], node["dep"]))
+            print("====================================")
+
+        return node
+            
+    
+    def get_edge(self, id, verbose = False):
+        """
+        Returns the edge with the given id.
+
+        Parameters
+        ----------
+        id : int
+            The id of the edge to be returned.
+        
+        Returns
+        -------
+        dict
+            The edge with the given id.
+        """
+
+        edge = self.edges.get(id)
+
+        if verbose:
+            print("====================================")
+            print(self.EDGE_INFO.format(edge["id"], edge["type"], edge["size"], edge["pt_required"], edge["dep"]))
+            print("====================================")
+        return edge
+    
+
+    def get_edge_id(self, src, dst):
+        """
+        Checks if an edge exists between two nodes. 
+        If so, returns the id of the edge.
+
+        Parameters
+        ----------
+        src : int
+            The source node.
+        dst : int
+            The destination node.
+        
+        Returns
+        -------
+        bool
+            the id of the edge if it exists, False otherwise.
+        """
+
+        return self.graph.get_edge_data(src, dst)["id"] if self.graph.has_edge(src, dst) else False
+    
+
+    def get_nodes(self, verbose = False):
+        """
+        Returns the list of nodes.
+
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        list
+            The list of nodes.
+        """
+        
+        if verbose:
+            print("------------------------------------")
+            print("\t\t\tNODES (", len(self.nodes), ")")
+            print("------------------------------------")
+            for node in self.nodes.values():
+                print("====================================")
+                print(self.NODE_INFO.format(node["id"], node["type"], node["layer_id"], node["size"], node["ct_required"], node["dep"]))
+                print("====================================")
+
+        #return list of id's of nodes (task_ids from the dependency graph)
+        return list(self.nodes.values())
+    
+    def get_edges(self, verbose = False):
+        """
+        Returns the list of edges.
+
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        dict
+            The list of edges.
+        """
+
+        if verbose:
+            print("------------------------------------")
+            print("\t\t\tEDGES (", len(self.edges), ")")
+            print("------------------------------------")
+            for edge in self.edges.values():
+                print("====================================")
+                print(self.EDGE_INFO.format(edge["id"], edge["type"], edge["size"], edge["pt_required"], edge["dep"]))
+                print("====================================")   
+
+
+        return list(self.edges.values())
+    
+    def get_dependencies(self, node_id):
+        """
+        Returns the tasks on which the given task depends.
+
+        Parameters
+        ----------
+        node_id : int
+            The id of the task.
+
+        Returns
+        -------
+        list
+            The list of tasks on which the given task depends.
+        """
+
+        messages =  self.nodes[node_id]["dep"]
+        dep_tasks = []
+        for message in messages:
+            if self.edges[message]["dep"][0] != -1:
+                dep_tasks.append(self.edges[message]["dep"][0])
+        return dep_tasks
 
     def apply_mapping(self, mapping):
         """
@@ -403,7 +552,6 @@ class TaskGraph:
                         print("====================================")
                     packet_dependencies.append(node["id"])
                     already_appended_workloads.append(node["id"])
-            
             # remove the already appended nodes and edges
             for edge_id in already_appended_packets:
                 edges.remove(self.edges[edge_id])
@@ -445,152 +593,6 @@ class TaskGraph:
         elif isinstance(dep, list):
             node["dep"].extend(dep)
 
-    def get_node(self, id,  verbose = False):
-        """
-        Returns the node with the given id.
-
-        Parameters
-        ----------
-        id : int
-            The id of the node to be returned.
-        
-        Returns
-        -------
-        dict
-            The node with the given id.
-        """
-
-        node = self.nodes.get(id)
-
-        if verbose:
-            print("====================================")
-            print(self.NODE_INFO.format(node["id"], node["type"], node["layer_id"],node["size"], node["ct_required"], node["dep"]))
-            print("====================================")
-
-        return node
-            
-    
-    def get_edge(self, id, verbose = False):
-        """
-        Returns the edge with the given id.
-
-        Parameters
-        ----------
-        id : int
-            The id of the edge to be returned.
-        
-        Returns
-        -------
-        dict
-            The edge with the given id.
-        """
-
-        edge = self.edges.get(id)
-
-        if verbose:
-            print("====================================")
-            print(self.EDGE_INFO.format(edge["id"], edge["type"], edge["size"], edge["pt_required"], edge["dep"]))
-            print("====================================")
-        return edge
-    
-
-    def get_edge_id(self, src, dst):
-        """
-        Checks if an edge exists between two nodes. 
-        If so, returns the id of the edge.
-
-        Parameters
-        ----------
-        src : int
-            The source node.
-        dst : int
-            The destination node.
-        
-        Returns
-        -------
-        bool
-            the id of the edge if it exists, False otherwise.
-        """
-
-        return self.graph.get_edge_data(src, dst)["id"] if self.graph.has_edge(src, dst) else False
-    
-
-    def get_nodes(self, verbose = False):
-        """
-        Returns the list of nodes.
-
-        Parameters
-        ----------
-        None
-        
-        Returns
-        -------
-        list
-            The list of nodes.
-        """
-        
-        if verbose:
-            print("------------------------------------")
-            print("\t\t\tNODES (", len(self.nodes), ")")
-            print("------------------------------------")
-            for node in self.nodes.values():
-                print("====================================")
-                print(self.NODE_INFO.format(node["id"], node["type"], node["layer_id"], node["size"], node["ct_required"], node["dep"]))
-                print("====================================")
-
-
-        return list(self.nodes.values())
-    
-    def get_edges(self, verbose = False):
-        """
-        Returns the list of edges.
-
-        Parameters
-        ----------
-        None
-        
-        Returns
-        -------
-        dict
-            The list of edges.
-        """
-
-        if verbose:
-            print("------------------------------------")
-            print("\t\t\tEDGES (", len(self.edges), ")")
-            print("------------------------------------")
-            for edge in self.edges.values():
-                print("====================================")
-                print(self.EDGE_INFO.format(edge["id"], edge["type"], edge["size"], edge["pt_required"], edge["dep"]))
-                print("====================================")   
-
-
-        return list(self.edges.values())
-    
-    def get_dependencies(self, node_id):
-        """
-        Returns the tasks on which the given task depends.
-
-        Parameters
-        ----------
-        node_id : int
-            The id of the task.
-
-        Returns
-        -------
-        list
-            The list of tasks on which the given task depends.
-        """
-
-        messages =  self.nodes[node_id]["dep"]
-        dep_tasks = []
-        for message in messages:
-            if self.edges[message]["dep"][0] != -1:
-                dep_tasks.append(self.edges[message]["dep"][0])
-        return dep_tasks
-            
-
-
 def model_to_graph(model, source = 0, drain = 1, verbose = False):
         """
         A function to create the depencency graph of the model that will be used for the simulation on the NoC.
@@ -603,7 +605,7 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
         """
 
         dep_graph = TaskGraph(source = source, drain = drain)
-        parts, deps = build_partitions(model, verbose = True )
+        parts, deps = build_partitions(model, verbose = True)
 
         if verbose:
             print("Plotting the partitions and dependencies of the model...")
@@ -683,7 +685,7 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
         #find the last partitions of the model:
         # i.e. partitions contained in the list that belong to the furthest layer
         # down the model
-        print(list(parts.keys()))
+        print(f"Connected layers: {list(parts.keys())}")
         last_partitions = parts[list(parts.keys())[-1]]
         for layer in model.layers:
             if layer.name in [partition for partition in list(parts.keys())] and parts[layer.name] != []:
@@ -696,5 +698,6 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
             results = 1 if results == 0 else results
             dep_graph.add_dependency_fully_qualified(partition.task_id, "end", id = dep_id, type = "WRITE", size = results, pt_required = processing_time, cl = 0, dep = [partition.task_id])
             dep_id += 1
-
+            
+            
         return dep_graph

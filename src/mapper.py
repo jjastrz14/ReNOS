@@ -79,8 +79,10 @@ class Mapper:
         # Clear the previous mapping and set the new one
         self.dep_graph.clear_mapping()
         self.dep_graph.apply_mapping(self.mapping)
+        
         # Write the mapping to a file, using the JSON format
         structure = self.dep_graph.graph_to_json()
+        
         path = os.path.join(os.path.dirname(__file__), file_path)
         # create the directory if it does not exist
         os.makedirs(os.path.dirname(path), exist_ok=True)

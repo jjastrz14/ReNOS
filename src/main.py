@@ -77,7 +77,7 @@ if __name__ == "__main__":
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = 1, drain = 24, verbose=False)
         #plot_graph(task_graph)
-        print_dependencies(task_graph)
+        #print_dependencies(task_graph)
 
         grid = dm.Grid()
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
@@ -93,8 +93,8 @@ if __name__ == "__main__":
             beta = 1.2,
         )
         n_procs = 5
-        opt = op.AntColony( params, grid, task_graph, seed = None)
-        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        #opt = op.AntColony( params, grid, task_graph, seed = None)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 

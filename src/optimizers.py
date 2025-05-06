@@ -125,14 +125,13 @@ class AntColony(BaseOpt):
         self.eta = np.ones((task_graph.n_nodes, domain.size, domain.size)) # Heuristic matrix
 
         #create a list of task ID ensuring the start node is the first element
-        tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
-        tasks.insert(0, "start")
+        tasks = [task["id"] for task in self.task_graph.get_nodes()] # if task["id"] != "start"]
         
+        #tasks.insert(0, "start")
         #tasks.append("end")
         
         self.tasks = tasks
-        breakpoint()
-        
+                
         #seed
         self.seed = seed
         

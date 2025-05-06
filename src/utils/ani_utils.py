@@ -691,7 +691,6 @@ class NoCTimelinePlotter(NoCPlotter):
                             # self.node_events[history_bit.rsource]["traf_between"].append((history_bit.start, duration))
                             # self.node_events[history_bit.rsink]["traf_between"].append((history_bit.start, duration))
                         else: 
-                            breakpoint()
                             raise ValueError(f"Error: I don't know what to do with this history bit {history_bit} of {event} ")
                     else:
                         raise ValueError(f"Error: No history bit found for OUT_TRAFFIC event at cycle {start}")

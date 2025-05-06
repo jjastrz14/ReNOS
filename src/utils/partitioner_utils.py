@@ -1356,7 +1356,7 @@ def _build_straight_through_deps(partitions: Dict[str, List[PartitionInfo]], par
     
     return partitions, partitions_deps
 
-def build_partitions(model: keras.Model, grouping: bool = True,verbose : bool = False)-> Tuple[dict, dict]:
+def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool = False)-> Tuple[dict, dict]:
     """
     The function creates the partitions for each layer in the model, based on the partitioning strategies defined above.
 
