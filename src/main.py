@@ -92,7 +92,7 @@ if __name__ == "__main__":
             n_ants = 10,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 50,
+            n_iterations = 2,
             alpha = 1.,
             beta = 1.2,
         )

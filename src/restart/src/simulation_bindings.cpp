@@ -13,7 +13,6 @@
 
 namespace py = pybind11;
 
-
 PYBIND11_MODULE(nocsim, m) {
     m.doc() = "Reconfigurable Network-on-Chip simulator";
     m.def("simulate", &SimulateWrapper, "Run the simulation with the given configuration file");

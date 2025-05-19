@@ -1,0 +1,23 @@
+# Core dependencies
+tensorflow==2.10.0
+keras==2.10.0
+networkx>=2.8.0
+numpy>=1.22.0
+matplotlib>=3.5.0
+pytz
+prettytable
+pydot
+pybind11
+
+# Graph and machine learning libraries
+larq>=0.12.2
+
+# ONNX ecosystem (optional)
+onnx>=1.12.0
+onnxruntime>=1.12.0
+skl2onnx>=1.12.0
+onnxconverter-common>=1.12.0
+
+# Development tools (optional)
+jupyter
+pytest

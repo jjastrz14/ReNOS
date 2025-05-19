@@ -30,6 +30,7 @@ from dirs import PYTHON_MODULE_DIR
 
 # import the cpython module contained in the directory specified by PYTHON_MODULE_DIR
 sys.path.append(PYTHON_MODULE_DIR)
+print("Just before importing nocsim")
 import nocsim # type: ignore
 
 def wrapper(func, q, event, *args):

@@ -48,7 +48,6 @@ Stats * GetStats(const std::string & name, const SimulationContext* context) {
 }
 
 
- 
 /////////////////////////////////////////////////////////////////////////////
 
 int Simulate( BookSimConfig const & config, SimulationContext & context, tRoutingParameters & par ) {
