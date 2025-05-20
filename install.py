@@ -16,7 +16,8 @@ REQUIREMENTS = [
     "pytz",                # Timezone support
     "prettytable",         # Pretty table formatting
     "pydot",              # For parallel processing
-    "pybind11"
+    "pybind11",
+    "pygad",            # Genetic Algorithm library
     
     # Domain-specific packages
     "larq>=0.12.2",        # Binarized Neural Networks library

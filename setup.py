@@ -1,30 +1,33 @@
 from setuptools import setup, Extension
-import sys
+import pybind11, glob, os
 
-# TO DO: customize template
+cpp_files = [
+    f for f in glob.glob('src/restart/**/*.cpp', recursive=True)
+    if not os.path.basename(f) == 'main.cpp'
+]
 
-# Define the C++ extension module
+include_dirs = ['include', 'src/restart/include', pybind11.get_include()]
+
+for root, dirs, files in os.walk('src/restart/src'):
+    include_dirs.append(root)
+
+
 ext_modules = [
     Extension(
-        'nocsim',  # Name of the module
-        sources=[
-            'src/simulation_bindings.cpp',  # Source file for pybind11 bindings
-            'src/routers/router.cpp',        # Router implementation
-            'src/arbiters/arbiter.cpp',      # Arbiter implementation
-            'src/allocators/allocator.cpp',  # Allocator implementation
-            'src/power/power.cpp',           # Power management implementation
-            'src/networks/network.cpp'        # Network implementation
-        ],
-        include_dirs=['include'],  # Include directory for headers
-        language='c++',  # Specify C++ language
+        'nocsim',
+        sources=cpp_files,
+        include_dirs=include_dirs,
+        language='c++',
+        extra_compile_args=['-std=c++17'],
     )
 ]
 
-# Setup function for the package
 setup(
-    name='my-python-cpp-project',  # Package name
-    version='0.1.0',               # Package version
-    description='A Python project with C++ extensions using pybind11',  # Description
-    ext_modules=ext_modules,       # C++ extensions
-    zip_safe=False,                 # Not safe to install as a .egg file
+    name='nocsim',
+    version='0.1.0',
+    description='A NoC simulator with C++ core and pybind11 bindings',
+    ext_modules=ext_modules,
+    setup_requires=['pybind11>=2.6'],
+    install_requires=['pybind11>=2.6'],
+    zip_safe=False,
 )

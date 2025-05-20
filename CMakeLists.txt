@@ -20,8 +20,13 @@ set(CMAKE_GENERATOR "Unix Makefiles")
 
 # check the system, if its apple and arm64, then set the architecture to arm64,
 # also activate debug mode
-if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture" FORCE)
+if(APPLE)
+    # Force libc++ and enable macOS-specific flags
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture" FORCE)
+    endif()
 endif()
 
 # function to prepend the current source directory to a list of files

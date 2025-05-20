@@ -10,7 +10,7 @@ The primary goal is to implement a NoC simulator to use for processing applicati
 
 ## <b> 2. <span style="color:sandybrown">Running the code </span> </b>
 
-###  2.1.  How to compile
+###  2.1.  How to compile for UNIX systems
 The code can be complied with the following comands, in the main directory of the project:
 ```bash
 
@@ -24,6 +24,18 @@ To clean the build directory, use the following command:
 ```bash
 $ make clean
 ```
+
+Unfortunelty software is not avaialbe for Windows
+
+### 2.2. Dependencies
+
+Two additional requirements are needed to run the code:
+
+- <a href=https://github.com/catchorg/Catch2>Catch2</a>: a unit testing framework for C++ , which is included in the `test` directory of the project. The library is not needed for the main code to run. The compilation will still give errors if the library is not found: to avoid this, the `CMakeLists.txt` file should be modified to remove the lines that include the testing directory.
+
+- <a href=https://github.com/nlohmann/json>JSON for Modern C++</a>: a JSON, header-only parser for C++ to allow the parsing of the configuration file (differently from the original Booksim, which defined a custom format for the configuration `.txt` file).
+
+Both of these libraries can be installed using the most common package managers, such as `apt` for Ubuntu or `brew` for MacOS.
 
 
 # Interactive mode 
