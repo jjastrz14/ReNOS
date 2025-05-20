@@ -24,7 +24,7 @@ ext_modules = [
 
 setup(
     name='nocsim',
-    version='0.1.0',
+    version='1.1.0',
     description='A NoC simulator with C++ core and pybind11 bindings',
     ext_modules=ext_modules,
     setup_requires=['pybind11>=2.6'],

@@ -134,6 +134,6 @@ if __name__ == "__main__":
     #plot_timeline_factor_back(path_to_json = "data/ACO_onecyclerouter_x1_2025-04-28_14-10-49/best_solution.json",
     #                          timeline_path = "visual/ACO_router_oncecycle_x1.png", verbose = False)
     plot_timeline(path_to_json = "data/best_solution.json",
-                              timeline_path = "visual/check_drain.png", verbose = False)
+                              timeline_path = "visual/test_1.png", verbose = False)
     #GA_seed_2137_x1_2025-04-02_00-00-20
     #GA_seed_2137_x25_2025-04-01_23-54-31
