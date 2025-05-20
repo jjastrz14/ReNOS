@@ -22,7 +22,7 @@ set(CMAKE_GENERATOR "Unix Makefiles")
 # also activate debug mode
 if(APPLE)
     # Force libc++ and enable macOS-specific flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wno-unused-value")
 
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
         set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture" FORCE)

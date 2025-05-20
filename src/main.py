@@ -68,15 +68,14 @@ if __name__ == "__main__":
     
     assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     
-    cet = pytz.timezone('CET')
-    timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S") 
+    print("Config dump dir in main: ", CONFIG_DUMP_DIR)
+    os.makedirs(CONFIG_DUMP_DIR, exist_ok=True)
     
     if ACO:
-        #logger class
+        #prepare ACO_DIR
         os.makedirs(ACO_DIR, exist_ok=True)
-        log_file_path = os.path.join(ACO_DIR, "log_ACO_" + f"{timestamp}" + ".out")
         # Redirect stdout to the Logger
-        sys.stdout = Logger(log_file_path)
+        sys.stdout = Logger(log_file_path_ACO)
         
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
@@ -89,7 +88,7 @@ if __name__ == "__main__":
         print("Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 10,
+            n_ants = 5,
             rho = 0.05,
             n_best = 10,
             n_iterations = 2,
@@ -97,8 +96,8 @@ if __name__ == "__main__":
             beta = 1.2,
         )
         n_procs = 5
-        opt = op.AntColony( params, grid, task_graph, seed = None)
-        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        #opt = op.AntColony( params, grid, task_graph, seed = None)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         print("Path to used arch.json file in ACO: ", ARCH_FILE)
 
@@ -115,12 +114,11 @@ if __name__ == "__main__":
         print("Done!")
 
     if GA: 
-        print("Running Genetic Algoriothm Optimization...")
-        #logger class
+        #prepare GA_DIR
         os.makedirs(GA_DIR, exist_ok=True)
-        log_file_path = os.path.join(GA_DIR, "log_GA_" + f"{timestamp}" + ".out")
+        print("Running Genetic Algoriothm Optimization...")
         # Redirect stdout to the Logger
-        sys.stdout = Logger(log_file_path)
+        sys.stdout = Logger(log_file_path_GA)
         
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)

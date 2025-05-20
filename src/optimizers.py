@@ -292,7 +292,7 @@ class AntColony(BaseOpt):
                     #save the corresponding dump file into data
                     dump_file = CONFIG_DUMP_DIR + "/dump" + ant_int + ".json"
                     print(f"Saving the best solution found by ant {ant_int} in" + ACO_DIR + "/best_solution.json")
-                    os.makedirs(ACO_DIR, exist_ok = True)
+                    #os.makedirs(ACO_DIR, exist_ok = True)
                     os.system("cp " + dump_file + " " + ACO_DIR)
                     os.system("mv " + ACO_DIR + "/dump" + ant_int + ".json " + ACO_DIR + "/best_solution.json")
                     
@@ -513,6 +513,7 @@ class ParallelAntColony(AntColony):
         #seed for repeating simulations
         self.seed = seed
 
+        assert self.n_processes <= self.par.n_ants, "The number of processes cannot exceed the number of ants"
         # --- Pheromone and Heuristic Information ---
         # The pheromone and heuristic matrices are shared arrays among the ants
 
@@ -610,7 +611,7 @@ class ParallelAntColony(AntColony):
                     dump_file = CONFIG_DUMP_DIR + "/dump" + str(ant_id) + ".json"
                     print("Saving the best solution found by ant", ant_id, "in " + ACO_DIR + "/best_solution.json")
                     #os.makedirs("data", exist_ok = True)
-                    os.makedirs(ACO_DIR, exist_ok = True)
+                    #os.makedirs(ACO_DIR, exist_ok = True)
                     os.system("cp " + dump_file + " " + ACO_DIR)
                     os.system("mv " + ACO_DIR + "/dump" + str(ant_id) + ".json " + ACO_DIR + "/best_solution.json")
 

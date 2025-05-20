@@ -512,7 +512,7 @@ class OperatorPool:
             self.statistics["absolute_best"].append(1/max(pop_fit))
             # save the dump file for the best solution
             #os.makedirs(MAIN_DIR + "/data", exist_ok=True)
-            os.makedirs(GA_DIR, exist_ok=True)
+            #os.makedirs(GA_DIR, exist_ok=True)
             # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
             os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
             # rename the file to "best_solution.json"

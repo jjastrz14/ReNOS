@@ -17,7 +17,7 @@ The code can be complied with the following comands, in the main directory of th
 $ mkdir build
 $ cd build
 $ cmake ..
-$ make
+$ make -j4
 
 ``` 
 To clean the build directory, use the following command:
@@ -26,7 +26,8 @@ $ make clean
 ```
 
 ###  2.2.  How to install python dependencies
-We recommand using python version == 3.11
+We recommand using python version == 3.11 and having intalled setuptools in your base environment
+
 #### Interactive mode 
 ```python 
 python install.py
@@ -48,16 +49,20 @@ python install.py --env-name renos --use-pip
 python install.py --use-pip
 ```
 
+after installation activate created environment
+
+```bash
+$ conda activate name_of_environment
+```
+
 ###  2.3.  Install NoC simulator as python library
 
 if you are using MacOS it is recomended to build NoC simulator as python library using (run this is source library of ReNOS): 
 
+
 ```python
 python -m pip install .
 ```
-
-steps to run the code
-1. First create conda env with install.py and python3 = 3.11.11
 
 Unfortunelty software is not avaialbe for Windows
 

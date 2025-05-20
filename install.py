@@ -5,7 +5,6 @@ import subprocess
 import argparse
 from pathlib import Path
 import platform
-import setup
 
 # Define package requirements (excluding TensorFlow which will be handled separately)
 REQUIREMENTS = [

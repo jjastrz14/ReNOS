@@ -134,21 +134,54 @@ class Ant:
         
     def walk(self):
         """
-        Perform a walk of the ant on the grid.
+        Perform a walk of the ant on the gird
+        Generate a path for the ant based on pheromone and heuristic matrices.
+        
+        The path consists of tuples (task_id, current_node, next_node) representing:
+        - The task being processed
+        - The node where the task starts
+        - The node where the task will be executed
+        
+        The ant starts from a source node and ends at a drain node defined in the task graph.
+        The first entry has current_node=-1 and next_node=source_node.
+        
+        Returns:
+            tuple: (ant_id, path, path_length) where path is a list of (task_id, current_node, next_node) tuples
         """
-
+        #initliaze the path
         path = []
+        #a list of available resources
         resources = [PE() for _ in range(self.domain.size)]
-        prev = -1
+        #node initialization
+        prev_node = -1
+        # The last node is declared as drain point and the starting point is source point
+        source_node = self.graph.SOURCE_POINT
+        drain_node = self.graph.DRAIN_POINT
+        
         for d_level, task_id in enumerate(self.tasks):
-            current = prev
-            added_space = self.graph.get_node(task_id)["size"] if task_id != "start" and task_id != "end" else 0
-            move = self.pick_move(task_id, d_level, current, resources, added_space, path) if d_level != self.graph.n_nodes else np.inf
+            current_node = prev_node
+            
+            if task_id not in ("start", "end"):
+                task_size = self.graph.get_node(task_id)["size"]
+            else:
+                task_size = 0
+
+            #Handle spacal case for start and end tasks
+            if task_id == "start":
+                next_node = source_node
+            elif task_id == "end":
+                next_node = drain_node
+            else:
+                # Pick the next node based on pheromone, heuristic, and resource availability
+                next_node = self.pick_move(task_id, d_level, current_node, resources, task_size, path)
+
             # update the resources
-            if task_id != "start" and task_id != "end" and move != np.inf:
-                resources[move].mem_used += added_space
-            path.append((task_id, current, move))
-            prev = move
+            if task_id not in ("start", "end"):
+                resources[next_node].mem_used += task_size
+            
+            #add step to path
+            path.append((task_id, current_node, next_node))
+            prev_node = next_node
         
         path_lenght = self.path_lenght(self.graph, self.domain, path)
         self.current_path = (self.id, path, path_lenght[0])

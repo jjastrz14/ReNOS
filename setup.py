@@ -1,5 +1,5 @@
 from setuptools import setup, Extension
-import pybind11, glob, os
+import pybind11, glob, os, sys
 
 cpp_files = [
     f for f in glob.glob('src/restart/**/*.cpp', recursive=True)
