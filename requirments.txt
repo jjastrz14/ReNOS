@@ -8,6 +8,11 @@ pytz
 prettytable
 pydot
 pybind11
+pygad
+scipy
+pybind>=2.6
+prettytable
+pandas
 
 # Graph and machine learning libraries
 larq>=0.12.2

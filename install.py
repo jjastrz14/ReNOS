@@ -5,6 +5,7 @@ import subprocess
 import argparse
 from pathlib import Path
 import platform
+import setup
 
 # Define package requirements (excluding TensorFlow which will be handled separately)
 REQUIREMENTS = [
@@ -18,6 +19,9 @@ REQUIREMENTS = [
     "pydot",              # For parallel processing
     "pybind11",
     "pygad",            # Genetic Algorithm library
+    "scipy",
+    "pybind11>=2.6",         # Python bindings for C++ code
+    "pandas>=1.3.0",        # Data manipulation and analysis
     
     # Domain-specific packages
     "larq>=0.12.2",        # Binarized Neural Networks library

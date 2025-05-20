@@ -10,7 +10,7 @@ The primary goal is to implement a NoC simulator to use for processing applicati
 
 ## <b> 2. <span style="color:sandybrown">Running the code </span> </b>
 
-###  2.1.  How to compile for UNIX systems
+###  2.1.  How to compile C++ library for UNIX systems
 The code can be complied with the following comands, in the main directory of the project:
 ```bash
 
@@ -25,6 +25,40 @@ To clean the build directory, use the following command:
 $ make clean
 ```
 
+###  2.2.  How to install python dependencies
+We recommand using python version == 3.11
+#### Interactive mode 
+```python 
+python install.py
+```
+#### Create a new environment
+```python 
+python install.py --create-env --env-name renos --python-version 3.11
+```
+#### Install in existing environment using conda
+```python 
+python install.py --env-name renos
+```
+#### Install using pip in an existing environment
+```python 
+python install.py --env-name renos --use-pip
+```
+# Install using pip without conda
+```python
+python install.py --use-pip
+```
+
+###  2.3.  Install NoC simulator as python library
+
+if you are using MacOS it is recomended to build NoC simulator as python library using (run this is source library of ReNOS): 
+
+```python
+python -m pip install .
+```
+
+steps to run the code
+1. First create conda env with install.py and python3 = 3.11.11
+
 Unfortunelty software is not avaialbe for Windows
 
 ### 2.2. Dependencies
@@ -36,30 +70,3 @@ Two additional requirements are needed to run the code:
 - <a href=https://github.com/nlohmann/json>JSON for Modern C++</a>: a JSON, header-only parser for C++ to allow the parsing of the configuration file (differently from the original Booksim, which defined a custom format for the configuration `.txt` file).
 
 Both of these libraries can be installed using the most common package managers, such as `apt` for Ubuntu or `brew` for MacOS.
-
-
-# Interactive mode 
-```python 
-python install.py
-```
-# Create a new environment
-```python 
-python install.py --create-env --env-name renos --python-version 3.10
-```
-# Install in existing environment using conda
-```python 
-python install.py --env-name renos
-```
-# Install using pip in an existing environment
-```python 
-python install.py --env-name renos --use-pip
-```
- 
-# Install using pip without conda
-```python
-python install.py --use-pip
-```
-
-
-steps to run the code
-1. First create conda env with install.py and python3 = 3.11.11
