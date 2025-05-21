@@ -128,18 +128,18 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
         
         params = op.GAParameters(
-        sol_per_pop =100,
+        sol_per_pop = 20,
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
-        n_generations = 5, #800,
+        n_generations = 2, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
         n_procs = 50
-        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
         # #opt.ga_instance.plot_fitness()

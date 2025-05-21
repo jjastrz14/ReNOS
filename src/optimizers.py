@@ -793,8 +793,8 @@ class GeneticAlgorithm(BaseOpt):
         self.domain = domain
         self.task_graph = task_graph
 
-        self.tasks = [task["id"] for task in self.task_graph.get_nodes() if task["id"] != "start"]
-
+        self.tasks = [task["id"] for task in self.task_graph.get_nodes()]
+        
         # --- Pool of Operatros ---
         self.pool = OperatorPool(self)
         
@@ -831,9 +831,12 @@ class GeneticAlgorithm(BaseOpt):
 
         # fitness function is computed using the NoC simulator:
         # 1. construct the mapping from the solution
+        # constuct the mapping form the path
+        
         mapping = {}
         for task_idx, task in enumerate(self.tasks):
-            mapping[task] = int(solution[task_idx])
+            if task_idx != "start" and task_idx != "end":
+                mapping[task] = int(solution[task_idx])
 
         if not self.CONFIG_DUMP_DIR:
             raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
@@ -842,12 +845,12 @@ class GeneticAlgorithm(BaseOpt):
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA.json", file_to_append=self.ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) + ".json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA.json", dwrap=True)
-    
+        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
+
         return 1 / result
     
     def run(self):
@@ -888,7 +891,8 @@ class ParallelGA(GeneticAlgorithm):
         # 1. construct the mapping from the solution
         mapping = {}
         for task_idx, task in enumerate(self.tasks):
-            mapping[task] = int(solution[task_idx])
+            if task_idx != "start" and task_idx != "end":
+                mapping[task] = int(solution[task_idx])
 
         # 2. apply the mapping to the task graph
         mapper = ma.Mapper()
@@ -899,10 +903,10 @@ class ParallelGA(GeneticAlgorithm):
             raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
 
         # 3. determine which process is running the simulation
-        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json", file_to_append=self.ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json")
+        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
 
         return 1 / result

@@ -243,7 +243,7 @@ def cross_multivariate(parents, offspring_size, ga_instance):
 
     return np.array(offspring)
 
-def  cross_shuffle(parents, offspring_size, ga_instance):
+def cross_shuffle(parents, offspring_size, ga_instance):
     offspring = []
     idx = 0
     k = int(0.25 * offspring_size[1]) # number of genes to shuffle
@@ -531,7 +531,7 @@ class OperatorPool:
         print("=====================================================")
         print("The best latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/max(pop_fit)))
         print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
-
+        
     def on_stop(self, ga_instance, last_generation_fitness):
         # at the end of the optimization process, save the statistics
         np.save(self.GA_DIR + "/statistics.npy", self.statistics)
@@ -570,6 +570,9 @@ class OperatorPool:
         # The function returns true is the offspring is valid, false otherwise.
 
         resources = [PE() for _ in range(self.optimizer.domain.size)]
+        
+        source_node = self.optimizer.task_graph.SOURCE_POINT
+        drain_node = self.optimizer.task_graph.DRAIN_POINT
 
         for gene in range(offspring.shape[0]):
             if resources[offspring[gene]].mem_used + self.optimizer.task_graph.get_node(self.optimizer.tasks[gene])["size"] > resources[offspring[gene]].mem_size:
