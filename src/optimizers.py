@@ -26,7 +26,7 @@ import matplotlib.patches as patches
 import matplotlib.animation as animation
 from dataclasses import dataclass
 from typing import Union, ClassVar, Optional
-from dirs import *
+from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE, get_ACO_DIR
 from utils.plotting_utils import plot_mapping_gif
 
 import ctypes as c
@@ -139,6 +139,10 @@ class AntColony(BaseOpt):
         self.statistics["std"] = []
         self.statistics["best"] = []
         self.statistics["absolute_best"] = [np.inf]
+        
+        self.ACO_DIR = get_ACO_DIR()
+        self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+        self.ARCH_FILE = get_ARCH_FILE()
 
 
 
@@ -148,6 +152,8 @@ class AntColony(BaseOpt):
         execution of the algorithm.
         It produces a gif file, evaluating the pheromone traces at a certain iteration and 
         finally plotting those, then stiching them up to create the animation
+        
+        Legacy animation function, not used anymore - need adjustments to work with the new ACO implementation
         """
 
         fig, ax = plt.subplots()
@@ -224,9 +230,12 @@ class AntColony(BaseOpt):
             return []
                 
 
-        #ani = animation.FuncAnimation(fig, update, frames = kwargs["n_iterations"], repeat = False) 
-        #plt.show()
-        return all_time_shortest_path[0]
+        #ani = animation.FuncAnimation(fig, update, frames = kwargs["n_iterations"], repeat = False)
+        #path = os.path.join(self.ACO_DIR, "pheromone_traces.png")
+        #plt.savefig(path, dpi = 100)
+        #plt.close()
+
+        return all_time_shortest_path
 
     def run(self, once_every = 10, show_traces = False):
         """
@@ -288,17 +297,23 @@ class AntColony(BaseOpt):
                     all_time_shortest_path = shortest_path 
                     
                     ant_int = str(shortest_path[0])
-                    #save the dump of the best solution in data
+                    #check if globals are initialized
+                    if not self.CONFIG_DUMP_DIR or not self.ACO_DIR:
+                        raise RuntimeError("Directories not initialized. Call initialize_globals() first.")
+
+                    dump_file = os.path.join(self.CONFIG_DUMP_DIR, f"dump{ant_int}.json")
+                    #dump_file = CONFIG_DUMP_DIR + "/dump" + ant_int + ".json"
+                    print(f"Saving the best solution found by ant {ant_int} in" + self.ACO_DIR + "/best_solution.json")
+                    
                     #save the corresponding dump file into data
-                    dump_file = CONFIG_DUMP_DIR + "/dump" + ant_int + ".json"
-                    print(f"Saving the best solution found by ant {ant_int} in" + ACO_DIR + "/best_solution.json")
-                    #os.makedirs(ACO_DIR, exist_ok = True)
-                    os.system("cp " + dump_file + " " + ACO_DIR)
-                    os.system("mv " + ACO_DIR + "/dump" + ant_int + ".json " + ACO_DIR + "/best_solution.json")
+                    os.system(f"cp {dump_file} {self.ACO_DIR}")
+                    #save the dump of the best solution in data
+                    os.system(f"mv {self.ACO_DIR}/dump{ant_int}.json {self.ACO_DIR}/best_solution.json")
+                    #os.system("mv " + ACO_DIR + "/dump" + ant_int + ".json " + ACO_DIR + "/best_solution.json")
                     
             # Finalize the simulation: save the data
-            np.save(ACO_DIR + "/statistics.npy", self.statistics)
-            print("Saving results in: " + ACO_DIR)
+            np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
+            print("Saving results in: " + self.ACO_DIR)
         
         return all_time_shortest_path
 
@@ -422,6 +437,8 @@ class AntColony(BaseOpt):
         """
         Compute the "length" of the path using the NoC simulator.
         """
+        if not self.CONFIG_DUMP_DIR:
+            raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
 
         # constuct the mapping form the path
         mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
@@ -429,13 +446,13 @@ class AntColony(BaseOpt):
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), file_to_append=ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), file_to_append=self.ARCH_FILE)
         
         if verbose:
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
+        result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
         #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
         return result, logger
 
@@ -608,16 +625,20 @@ class ParallelAntColony(AntColony):
                     # 1. get the id of the ant that found the best solution
                     ant_id = shortest_path[0]
                     # save the corresponding dump file into data
-                    dump_file = CONFIG_DUMP_DIR + "/dump" + str(ant_id) + ".json"
-                    print("Saving the best solution found by ant", ant_id, "in " + ACO_DIR + "/best_solution.json")
-                    #os.makedirs("data", exist_ok = True)
-                    #os.makedirs(ACO_DIR, exist_ok = True)
-                    os.system("cp " + dump_file + " " + ACO_DIR)
-                    os.system("mv " + ACO_DIR + "/dump" + str(ant_id) + ".json " + ACO_DIR + "/best_solution.json")
+                    if not self.CONFIG_DUMP_DIR or not self.ACO_DIR:
+                        raise RuntimeError("Directories not initialized. Call initialize_globals() first.")
+                
+                    dump_file = os.path.join(self.CONFIG_DUMP_DIR, f"dump{ant_id}.json")
+                    
+                    print("Saving the best solution found by ant", ant_id, "in " + self.ACO_DIR + "/best_solution.json")
+                    #save the corresponding dump file into data
+                    os.system(f"cp {dump_file} {self.ACO_DIR}")
+                    #save the dump of the best solution in data
+                    os.system(f"mv {self.ACO_DIR}/dump{ant_id}.json {self.ACO_DIR}/best_solution.json")
 
             # Finalize the simulation: save the data
-            np.save(ACO_DIR + "/statistics.npy", self.statistics)
-            print("Saving results in: " + ACO_DIR)
+            np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
+            print("Saving results in: " + self.ACO_DIR)
             
 
         return all_time_shortest_path
@@ -779,7 +800,7 @@ class GeneticAlgorithm(BaseOpt):
         
         # --- Seed ---
         self.seed = seed
-  
+        
         # --- Initialize the GA object of pyGAD ---
 
         self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
@@ -800,6 +821,10 @@ class GeneticAlgorithm(BaseOpt):
                                     on_stop = self.pool.on_stop,
                                     random_seed = self.seed
         )
+        
+        self.GA_DIR = get_GA_DIR()
+        self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+        self.ARCH_FILE = get_ARCH_FILE()
 
 
     def fitness_func(self, ga_instance, solution, solution_idx):
@@ -810,15 +835,18 @@ class GeneticAlgorithm(BaseOpt):
         for task_idx, task in enumerate(self.tasks):
             mapping[task] = int(solution[task_idx])
 
+        if not self.CONFIG_DUMP_DIR:
+            raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
+        
         # 2. apply the mapping to the task graph
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump_GA.json", file_to_append=ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA.json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(CONFIG_DUMP_DIR + "/dump_GA.json", dwrap=True)
+        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA.json", dwrap=True)
     
         return 1 / result
     
@@ -866,12 +894,15 @@ class ParallelGA(GeneticAlgorithm):
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)
+        
+        if not self.CONFIG_DUMP_DIR:
+            raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
 
         # 3. determine which process is running the simulation
-        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json", file_to_append=ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json")
+        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA"+ str(solution_idx)+".json")
 
         return 1 / result

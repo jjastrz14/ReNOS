@@ -49,9 +49,18 @@ if __name__ == "__main__":
     elif args.algo == "GA":
         ACO = False
         GA = True
+        
+    print(f"Selected algorithm: {args.algo}")
+        
+    # Initialize global directories
+    initialize_globals(args.algo)
+    # Get the shared timestamp
+    # Debug - Print the global variables to check they're set correctly
+    print(f"After initialization:")
+    debug_globals()
     
+    #measute time of the optmiization
     start = time.time()
-    
     model = test_model((28, 28, 1), verbose= True)
     # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
@@ -68,15 +77,11 @@ if __name__ == "__main__":
     
     assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     
-    print("Config dump dir in main: ", CONFIG_DUMP_DIR)
-    os.makedirs(CONFIG_DUMP_DIR, exist_ok=True)
-    
     if ACO:
-        #prepare ACO_DIR
-        os.makedirs(ACO_DIR, exist_ok=True)
+        print("Running Ant Colony Optimization...")
         # Redirect stdout to the Logger
-        sys.stdout = Logger(log_file_path_ACO)
-        
+        log_path = get_aco_log_path()
+        sys.stdout = Logger(log_path)
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
         #plot_graph(task_graph)
@@ -84,23 +89,19 @@ if __name__ == "__main__":
 
         grid = dm.Grid()
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
-        
-        print("Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 5,
+            n_ants = 10,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 2,
+            n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 5
+        n_procs = 10
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
-        print("Path to used arch.json file in ACO: ", ARCH_FILE)
-
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
         print(shortest)
@@ -114,11 +115,10 @@ if __name__ == "__main__":
         print("Done!")
 
     if GA: 
-        #prepare GA_DIR
-        os.makedirs(GA_DIR, exist_ok=True)
         print("Running Genetic Algoriothm Optimization...")
         # Redirect stdout to the Logger
-        sys.stdout = Logger(log_file_path_GA)
+        log_path = get_ga_log_path()
+        sys.stdout = Logger(log_path)
         
         #drain point cannot exceed size_of_grid x size_of_grid - 1
         task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
@@ -138,11 +138,9 @@ if __name__ == "__main__":
         )
         
         n_procs = 50
-        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = 2137)
-        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
-        
-        print("Path to used arch.json file in GA: ", ARCH_FILE)
-        
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+                
         shortest = opt.run()
         # #opt.ga_instance.plot_fitness()
         print("The best path found is: ")

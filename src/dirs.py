@@ -1,38 +1,29 @@
+'''
+==================================================
+File: dirs.py
+Project: ReNOS
+File Created: Wednesday, 21th May 2025
+Author: Jakub Jastrzebski and Edoardo Cabiati (jakubandrzej.jastrzebski@polimi.it)
+Under the supervision of: Politecnico di Milano
+==================================================
+'''
+
+"""
+The dirs.py module contains the DirectoryManager class, which is responsible for managing the directories and files used in the project and called via mutliple processes.
+"""
+
+
 import os
 import shutil
-import time
 import json
 import pytz
+import sys
+from typing import Optional
 from datetime import datetime
 
-def get_json_field(json_file_path, field_name, default_value=None):
-    """
-    Extract a specific field from a JSON file.
-    
-    Args:
-        json_file_path (str): Path to the JSON file
-        field_name (str): Name of the field to extract
-        default_value: Value to return if the field doesn't exist
-        
-    Returns:
-        The value of the specified field, or default_value if not found
-    """
-    try:
-        with open(json_file_path, 'r') as f:
-            data = json.load(f)
-        
-            # For fields inside arch object without specifying arch prefix
-            if field_name in data.get('arch', {}):
-                return data['arch'][field_name]
-        
-    except (FileNotFoundError, json.JSONDecodeError, TypeError) as e:
-        print(f"Error reading JSON field '{field_name}' from {json_file_path}: {e}")
-        return default_value
-
-####################################################################################################
-# Directories
-####################################################################################################
-    
+# -----------------------------------------------------------------------------
+# Static Directory Path)
+# -----------------------------------------------------------------------------
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_DIR = os.path.dirname(SRC_DIR)
@@ -41,41 +32,196 @@ RESTART_DIR = os.path.join(SRC_DIR, "restart")
 RUN_FILES_DIR = os.path.join(CONFIG_FILES_DIR, "runs")
 DATA_DIR = os.path.join(MAIN_DIR, "data")
 PYTHON_MODULE_DIR = os.path.join(MAIN_DIR, "build/lib")
+DEFAULT_ARCH_FILE = os.path.join(CONFIG_FILES_DIR, "arch.json")
+DEFAULT_CONFIG_DUMP_DIR = os.path.join(CONFIG_FILES_DIR, "dumps")
 
-DEFALUT_ARCH_FILE = os.path.join(CONFIG_FILES_DIR, "arch.json")
-DEFALUT_CONFIG_DUMP_DIR = os.path.join(CONFIG_FILES_DIR, "dumps")
+# Create static directories
+os.makedirs(CONFIG_FILES_DIR, exist_ok=True)
+os.makedirs(RESTART_DIR, exist_ok=True)
+os.makedirs(RUN_FILES_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(PYTHON_MODULE_DIR, exist_ok=True)
+os.makedirs(DEFAULT_CONFIG_DUMP_DIR, exist_ok=True)
 
-comp_cycles = get_json_field(DEFALUT_ARCH_FILE, "ANY_comp_cycles", 0)
+# -----------------------------------------------------------------------------
+# Class-based Directory Manager
+# -----------------------------------------------------------------------------
 
-if comp_cycles == 0.25:
-    factor = "x1"
-elif comp_cycles == 0.125:
-    factor = "x2"
-elif comp_cycles == 0.05:
-    factor = "x5"
-elif comp_cycles == 0.025:
-    factor = "x10"
-elif comp_cycles == 0.01:
-    factor = "x25"
-else:
-    #this should be changed to allow change form "." to "/" in the name of the file, check it below!
-    factor = str(comp_cycles).replace(".", "_")
-    #factor = comp_cycles
+class DirectoryManager:
+    def __init__(self):
+        self._initialized = False
+        self._shared_timestamp = None
+        self.arch_file = None
+        self.config_dump_dir = None
+        self.aco_dir = None
+        self.ga_dir = None
+        self.log_file_path_ga = None
+        self.log_file_path_aco = None
+    
+    def get_json_field(self, json_file_path, field_name, default_value=None):
+        """Extract a specific field from a JSON file."""
+        try:
+            with open(json_file_path, 'r') as f:
+                data = json.load(f)
+                return data.get('arch', {}).get(field_name, default_value)
+        except (FileNotFoundError, json.JSONDecodeError, TypeError) as e:
+            print(f"Error reading JSON field '{field_name}' from {json_file_path}: {e}")
+            return default_value
+    
+    def _calculate_factor(self, comp_cycles):
+        """Determine the factor string based on comp_cycles value."""
+        factors = {
+            0.25: "x1",
+            0.125: "x2",
+            0.05: "x5",
+            0.025: "x10",
+            0.01: "x25"
+        }
+        
+        if comp_cycles not in factors:
+            print(f"Warning: comp_cycles value {comp_cycles} not in predefined factors, using default")
+            return str(comp_cycles).replace(".", "_")
+        
+        return factors.get(comp_cycles)
+    
+    def initialize(self, input_algo):
+        """Initialize all dynamic paths and timestamps"""
+        if self._initialized:
+            return
+        
+        print("Starting directory initialization...")
+        
+        # Check if DEFAULT_ARCH_FILE exists
+        if not os.path.exists(DEFAULT_ARCH_FILE):
+            print(f"Warning: DEFAULT_ARCH_FILE does not exist at {DEFAULT_ARCH_FILE}")
+            # Create an empty arch.json file with minimal contents
+            with open(DEFAULT_ARCH_FILE, 'w') as f:
+                json.dump({"arch": {"ANY_comp_cycles": 0.25}}, f)
+        
+        # Calculate factor
+        comp_cycles = self.get_json_field(DEFAULT_ARCH_FILE, "ANY_comp_cycles", 0.25)
+        factor = self._calculate_factor(comp_cycles)
+        print(f"Calculated factor: {factor} from comp_cycles: {comp_cycles}")
+        
+        # Generate timestamp
+        cet = pytz.timezone('CET')
+        self._shared_timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S")
+        print(f"Generated timestamp: {self._shared_timestamp}")
+        
+        # Create arch file copy
+        arch_filename = f"arch_{factor}_.json"
+        self.arch_file = os.path.join(CONFIG_FILES_DIR, arch_filename)
+        try:
+            shutil.copy(DEFAULT_ARCH_FILE, self.arch_file)
+            print(f"Created arch file copy at: {self.arch_file}")
+        except Exception as e:
+            print(f"Error copying arch file: {e}")
+        
+        # Create both directories
+        self.aco_dir = os.path.join(DATA_DIR, f"ACO_{factor}_{self._shared_timestamp}")
+        self.ga_dir = os.path.join(DATA_DIR, f"GA_{factor}_{self._shared_timestamp}")
+        
+        # Set CONFIG_DUMP_DIR and ACO_DIR based on algorithm
+        if input_algo == "ACO":
+            os.makedirs(self.aco_dir, exist_ok=True)
+            print(f"Created ACO_DIR: {self.aco_dir}")
+            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_ACO_{factor}_{self._shared_timestamp}")
+            self.log_file_path_aco = os.path.join(self.aco_dir, f"log_ACO_{self._shared_timestamp}.out")
+            print(f"Log paths set - ACO: {self.log_file_path_aco}")
+        elif input_algo == "GA":
+            os.makedirs(self.ga_dir, exist_ok=True)
+            print(f"Created GA_DIR: {self.ga_dir}")
+            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_GA_{factor}_{self._shared_timestamp}")
+            self.log_file_path_ga = os.path.join(self.ga_dir, f"log_GA_{self._shared_timestamp}.out")
+            print(f"Log paths set - GA: {self.log_file_path_ga}")
+        else:
+            raise ValueError("Invalid algorithm specified. Use 'ACO' or 'GA'.")
+        
+        # Create config dump directory
+        os.makedirs(self.config_dump_dir, exist_ok=True)
+        print(f"Created CONFIG_DUMP_DIR: {self.config_dump_dir}")
+        
+        
+        self._initialized = True
+        print("Directory initialization complete.")
+    
+    def get_timestamp(self):
+        if not self._initialized:
+            raise RuntimeError("Directory manager not initialized. Call initialize() first.")
+        return self._shared_timestamp
+    
+    def get_aco_log_path(self):
+        if not self._initialized:
+            raise RuntimeError("Directory manager not initialized. Call initialize() first.")
+        return self.log_file_path_aco
+    
+    def get_ga_log_path(self):
+        if not self._initialized:
+            raise RuntimeError("Directory manager not initialized. Call initialize() first.")
+        return self.log_file_path_ga
+    
+    def debug_print(self):
+        """Print current variable values for debugging."""
+        print("\nDebug Directory Manager:")
+        print(f"_initialized: {self._initialized}")
+        print(f"_shared_timestamp: {self._shared_timestamp}")
+        print(f"aco_dir: {self.aco_dir}")
+        print(f"ga_dir: {self.ga_dir}")
+        print(f"arch_file: {self.arch_file}")
+        print(f"config_dump_dir: {self.config_dump_dir}")
+        print(f"log_file_path_ga: {self.log_file_path_ga}")
+        print(f"log_file_path_aco: {self.log_file_path_aco}")
 
-#copty the default arch file to the new arch file
-shutil.copy(DEFALUT_ARCH_FILE, os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json"))
-ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_{factor}_.json")
+# Create a singleton instance
+_dir_manager = DirectoryManager()
 
-#ARCH_FILE = os.path.join(CONFIG_FILES_DIR, f"arch_x25_.json")
-#factor = "x25"
+# -----------------------------------------------------------------------------
+# Public API (functions and variables to be imported)
+# -----------------------------------------------------------------------------
 
-cet = pytz.timezone('CET')
-timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S")  # Format: YYYY-MM-DD_HH-MM-SS
+# Functions
+def initialize_globals(input_algo):
+    _dir_manager.initialize(input_algo)
 
-CONFIG_DUMP_DIR = DEFALUT_CONFIG_DUMP_DIR +"/dumps"+ f"_{factor}" + f"_{timestamp}"
-ACO_DIR = os.path.join(DATA_DIR, "ACO") + f"_{factor}" + f"_{timestamp}"
-GA_DIR = os.path.join(DATA_DIR, "GA") + f"_{factor}" + f"_{timestamp}"
+def get_timestamp():
+    return _dir_manager.get_timestamp()
 
-log_file_path_GA = os.path.join(GA_DIR, "log_GA_" + f"{timestamp}" + ".out")
-log_file_path_ACO = os.path.join(ACO_DIR, "log_ACO_" + f"{timestamp}" + ".out")
+def get_aco_log_path():
+    return _dir_manager.get_aco_log_path()
 
+def get_ga_log_path():
+    return _dir_manager.get_ga_log_path()
+
+def debug_globals():
+    _dir_manager.debug_print()
+
+# Global variables that can be imported
+def get_ACO_DIR():
+    return _dir_manager.aco_dir
+
+def get_GA_DIR():
+    return _dir_manager.ga_dir
+
+def get_ARCH_FILE():
+    return _dir_manager.arch_file
+
+def get_CONFIG_DUMP_DIR():
+    return _dir_manager.config_dump_dir
+
+# For testing
+if __name__ == "__main__":
+    print("Testing dirs module...")
+    try:
+        initialize_globals("ACO")
+        debug_globals()
+        
+        # Update the global variables to match the manager's state
+        ACO_DIR = get_ACO_DIR()
+        GA_DIR = get_GA_DIR()
+        ARCH_FILE = get_ARCH_FILE()
+        CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+        
+        print(f"ACO_DIR: {ACO_DIR}")
+        print(f"GA_DIR: {GA_DIR}")
+    except Exception as e:
+        print(f"Error during testing: {e}")

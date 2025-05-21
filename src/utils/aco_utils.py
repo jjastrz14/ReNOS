@@ -12,13 +12,14 @@ Under the supervision of: Politecnico di Milano
 The parallel_aco_utils.py module contains the classes and functions used to implement the parallel version of the Ant Colony Optimization algorithm.
 """
 
+import os
 import ctypes as c
 import numpy as np
 import random
 import time
 import simulator_stub as ss
 import mapper as mp
-from dirs import *
+from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE
 from utils.partitioner_utils import PE
 from domain import Grid, Topology
 
@@ -60,6 +61,9 @@ class Ant:
         self.beta = beta
 
         self.current_path = None
+        
+        self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+        self.ARCH_FILE = get_ARCH_FILE()
 
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
@@ -118,6 +122,8 @@ class Ant:
         """
         Compute the lenght of the path.
         """
+        if not self.CONFIG_DUMP_DIR or not self.ARCH_FILE:
+            raise ValueError("The CONFIG_DUMP_DIR or ARCH_FILE is not set.")
 
         # constuct the mapping form the path
         mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
@@ -125,11 +131,11 @@ class Ant:
         mapper = mp.Mapper()
         mapper.init(graph, domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=ARCH_FILE)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=self.ARCH_FILE)
         
 
         stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
+        result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
         return result, logger
         
     def walk(self):

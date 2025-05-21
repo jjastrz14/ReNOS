@@ -16,6 +16,8 @@ especially the operators used in the pool extraction process.
 from dirs import *
 import numpy as np
 from utils.partitioner_utils import PE
+from dirs import get_CONFIG_DUMP_DIR, get_GA_DIR
+
 
     
 """
@@ -365,7 +367,7 @@ class OperatorPool:
     A class representing the pool of operators to be used in the Genetic Algorithm.
     A reward mechanism is used to select the operators to be used in the next generation.
     It uses two different metrics:
-     - F1 records the previous perfomance of each operator:
+    - F1 records the previous perfomance of each operator:
 
             F1 = [ max(C_1^t, C_2^t, ..., C_n^t) - max(C_1^(t-1), C_2^(t-1), ..., C_n^(t-1)) ] / max (C_1^t, C_2^t, ..., C_n^t)
 
@@ -374,7 +376,7 @@ class OperatorPool:
                 n is the number of individuals in the population
                 t is the current iteration
 
-     - F2 records the last time the operator was used
+    - F2 records the last time the operator was used
 
             F2 = 1 / (t_op - t_op')
 
@@ -386,7 +388,7 @@ class OperatorPool:
 
 
         F(n) = F(n-1) +  beta * e^(1/(N+1-n)) * F1 * F2   iff F1 > 0
-             = F(n-1)                                     iff F1 <= 0
+            = F(n-1)                                     iff F1 <= 0
 
         where:
             beta is a constant ( = 100)
@@ -427,6 +429,10 @@ class OperatorPool:
         self.statistics["std"] = []
         self.statistics["best"] = []
         self.statistics["absolute_best"] = [np.inf] 
+        
+        self.GA_DIR = get_GA_DIR()
+        self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+
 
     def add_operator(self, operator, operator_type):
         if operator_type == "crossover":
@@ -511,21 +517,25 @@ class OperatorPool:
         if (1/max(pop_fit)) < self.statistics["absolute_best"][-1]:
             self.statistics["absolute_best"].append(1/max(pop_fit))
             # save the dump file for the best solution
-            #os.makedirs(MAIN_DIR + "/data", exist_ok=True)
-            #os.makedirs(GA_DIR, exist_ok=True)
+            if not self.GA_DIR or not self.CONFIG_DUMP_DIR:
+                raise ValueError("The GA_DIR or CONFIG_DUMP_DIR is not set.")
+            
             # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
-            os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
+            os.system(f"cp {self.CONFIG_DUMP_DIR}/dump_GA{np.argmax(pop_fit)}.json {self.GA_DIR}")
+            #os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
             # rename the file to "best_solution.json"
-            os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
-            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + GA_DIR + "/best_solution.json")
+            os.system(f"mv {self.GA_DIR}/dump_GA{np.argmax(pop_fit)}.json {self.GA_DIR}/best_solution.json")
+            #os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
+            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + self.GA_DIR + "/best_solution.json")
+            
         print("=====================================================")
         print("The best latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/max(pop_fit)))
         print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
 
     def on_stop(self, ga_instance, last_generation_fitness):
         # at the end of the optimization process, save the statistics
-        np.save(GA_DIR + "/statistics.npy", self.statistics)
-        print("Saving results in: " + GA_DIR)
+        np.save(self.GA_DIR + "/statistics.npy", self.statistics)
+        print("Saving results in: " + self.GA_DIR)
     
     def get_cross_func(self, parents, offspring_size, ga_instance):
         offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)
