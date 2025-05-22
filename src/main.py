@@ -71,9 +71,9 @@ if __name__ == "__main__":
     # # # analyze_ops(model, True)
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
-    size_of_grid = 5
+    size_of_grid = 6
     source = 0
-    drain = 24
+    drain = 35
     
     assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     
@@ -91,10 +91,10 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
 
         params = op.ACOParameters(
-            n_ants = 10,
+            n_ants = 50,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 10,
+            n_iterations = 100,
             alpha = 1.,
             beta = 1.2,
         )
@@ -138,8 +138,8 @@ if __name__ == "__main__":
         )
         
         n_procs = 50
-        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
         # #opt.ga_instance.plot_fitness()

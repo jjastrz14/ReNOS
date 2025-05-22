@@ -856,7 +856,6 @@ class GeneticAlgorithm(BaseOpt):
     def run(self):
 
         self.ga_instance.run()
-
         return self.ga_instance.best_solution()
     
 
