@@ -395,7 +395,7 @@ void Configuration::PreprocessPackets(std::ostream * o){
             temp_pt_required = packet.pt_required; //pt_required as defined in json
                 }
         
-        // cast to intger because size and pt_required are integers
+        // cast to integer because size and pt_required are integers
         packet.size = static_cast<int>(temp_size);
         packet.pt_required = static_cast<int>(temp_pt_required);
 

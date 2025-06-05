@@ -91,16 +91,16 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
 
         params = op.ACOParameters(
-            n_ants = 50,
+            n_ants = 10,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 100,
+            n_iterations = 150,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 10
         #opt = op.AntColony( params, grid, task_graph, seed = None)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = 44)
         
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
         
         params = op.GAParameters(
-        sol_per_pop = 20,
+        sol_per_pop = 30,
         n_parents_mating=20,
         keep_parents= 10,
         parent_selection_type= "sss",
@@ -138,8 +138,8 @@ if __name__ == "__main__":
         )
         
         n_procs = 50
-        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
         # #opt.ga_instance.plot_fitness()
