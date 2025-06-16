@@ -3,6 +3,86 @@ import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
 import larq
 
+from tensorflow.keras import layers, Model
+
+def ResBlock(x, filters, kernel_size=(3, 3), strides=(1, 1)):
+    # First convolution in residual block
+    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(x)
+    y = layers.BatchNormalization()(y)
+    y = layers.ReLU()(y)
+    # Second convolution in residual block
+    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(y)
+    y = layers.BatchNormalization()(y)
+    # Skip connection
+    if x.shape[-1] != filters:
+        x = layers.Conv2D(filters, kernel_size=(1, 1), strides=strides, padding='same')(x)
+    out = layers.Add()([x, y])
+    out = layers.ReLU()(out)
+    return out
+
+def Resnet9s(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    inputs = layers.Input(shape=input_shape)
+    # Conv1
+    x = layers.Conv2D(28, kernel_size=(3, 3), padding='same')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # Conv2
+    x = layers.Conv2D(28, kernel_size=(3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # MaxPool
+    x = layers.MaxPooling2D((2, 2))(x)
+    # ResBlock3
+    x = ResBlock(x, filters=28)
+    # Conv4
+    x = layers.Conv2D(28, kernel_size=(3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # MaxPool
+    x = layers.MaxPooling2D((2, 2))(x)
+    # Conv5
+    x = layers.Conv2D(56, kernel_size=(3, 3), padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # MaxPool
+    x = layers.MaxPooling2D((2, 2))(x)
+    # ResBlock6
+    x = ResBlock(x, filters=56)
+    # Global Average Pooling (replaces the 4x4 MaxPool in the table)
+    x = layers.GlobalAveragePooling2D()(x)
+    # FC Layer (Output layer)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+    model = Model(inputs=inputs, outputs=outputs)
+    if verbose:
+        model.summary()
+    
+    return model
+
+def LeNet4(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    inputs = layers.Input(shape=input_shape)
+    
+    # Layer 1: Conv + BN + ReLU + MaxPool
+    x = layers.Conv2D(4, kernel_size=(5, 5), padding='same', use_bias=False)(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2))(x)
+    # Layer 2: Conv + BN + ReLU + MaxPool
+    x = layers.Conv2D(12, kernel_size=(5, 5), padding='valid', use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2))(x)
+    # Flatten
+    x = layers.Flatten()(x)
+    # Layer 3: FC + BN + ReLU
+    x = layers.Dense(100, use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # Output Layer
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+    model = Model(inputs=inputs, outputs=outputs)
+    if verbose:
+        model.summary()
+    return model
 
 def test_model(input_shape, verbose = False):
     

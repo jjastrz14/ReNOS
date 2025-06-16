@@ -61,7 +61,9 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    model = test_model((28, 28, 1), verbose= True)
+    model = LeNet4((28, 28, 1), verbose=True)
+    # model = Resnet9s((32, 32, 3), verbose=True)
+    # model = test_model((28, 28, 1), verbose= True)
     # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
@@ -71,9 +73,9 @@ if __name__ == "__main__":
     # # # analyze_ops(model, True)
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
-    size_of_grid = 6
+    size_of_grid = 4
     source = 0
-    drain = 35
+    drain = 16
     
     assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     
@@ -98,7 +100,7 @@ if __name__ == "__main__":
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 10
+        n_procs = 1
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
