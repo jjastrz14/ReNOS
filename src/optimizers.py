@@ -264,7 +264,8 @@ class AntColony(BaseOpt):
             moving_average = np.mean([path[2] for path in all_paths])
             moving_std = np.std([path[2] for path in all_paths])
             if once_every is not None and i%once_every == 0:
-                print("Iteration #", i, ", chosen path is:", shortest_path)
+                number, path_list, value = shortest_path
+                print(f"Iteration # {i} chosen path is: {number}, {path_list[0:5]}, ..., {path_list[-5:]}, latency: {value}")
                 print("Moving average for the path lenght is:", moving_average)
             
             self.evaporate_pheromones(rho_step)
@@ -310,10 +311,14 @@ class AntColony(BaseOpt):
                     #save the dump of the best solution in data
                     os.system(f"mv {self.ACO_DIR}/dump{ant_int}.json {self.ACO_DIR}/best_solution.json")
                     #os.system("mv " + ACO_DIR + "/dump" + ant_int + ".json " + ACO_DIR + "/best_solution.json")
+                np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
+                print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
+                print("-" * 50 + "\n")
                     
             # Finalize the simulation: save the data
             np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
-            print("Saving results in: " + self.ACO_DIR)
+            print("Saving Final Results in: " + self.ACO_DIR)
+            print(" ")
         
         return all_time_shortest_path
 
@@ -590,7 +595,8 @@ class ParallelAntColony(AntColony):
             moving_average = np.mean([path[2] for path in all_paths])
             moving_std = np.std([path[2] for path in all_paths])
             if once_every is not None and i%once_every == 0:
-                print("Iteration #", i, ", chosen path is:", shortest_path)
+                number, path_list, value = shortest_path
+                print(f"Iteration # {i} chosen path is: {number}, {path_list[0:5]}, ..., {path_list[-5:]}, latency: {value}")
                 print("Moving average for the path lenght is:", moving_average)
             
             self.evaporate_pheromones(rho_step)
@@ -635,10 +641,14 @@ class ParallelAntColony(AntColony):
                     os.system(f"cp {dump_file} {self.ACO_DIR}")
                     #save the dump of the best solution in data
                     os.system(f"mv {self.ACO_DIR}/dump{ant_id}.json {self.ACO_DIR}/best_solution.json")
-
+                np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
+                print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
+                print("-" * 50 + "\n")
+                    
             # Finalize the simulation: save the data
             np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
-            print("Saving results in: " + self.ACO_DIR)
+            print("Saving Final Results in: " + self.ACO_DIR)
+            print(" ")
             
 
         return all_time_shortest_path

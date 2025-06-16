@@ -27,7 +27,7 @@ from utils.plotting_utils import *
 from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
-import visualizer
+from visualizer import plot_timeline
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
@@ -91,10 +91,10 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
 
         params = op.ACOParameters(
-            n_ants = 10,
+            n_ants = 50,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 150,
+            n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
         )
@@ -106,12 +106,16 @@ if __name__ == "__main__":
         print("The best path found is: ")
         print(shortest)
         
+        print("Visualizing the best path...\n")
+        # Visualize the best path
+        plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/ACO_" + get_timestamp() + ".png", verbose = False)
+            
         end = time.time()
         elapsed_time = end - start
         hours, remainder = divmod(elapsed_time, 3600)
         minutes, seconds = divmod(remainder, 60)
-        print("\n ... End Ant Colony Optimization")
         print(f"Time elapsed: {int(hours):02d}:{int(minutes):02d}:{seconds:.2f}")
+        print("\n ... End Ant Colony Optimization")
         print("Done!")
 
     if GA: 
