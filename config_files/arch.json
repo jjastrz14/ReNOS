@@ -10,7 +10,7 @@
             "flit_size" : 64,
             "user_defined_traffic" : 1,
             "watch_out" : "-",
-            "internal_speedup": 2.0,
+            "internal_speedup": 1.0,
             "speculative": 1,
             "input_speedup": 1,
             "output_speedup": 1,

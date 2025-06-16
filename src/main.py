@@ -100,7 +100,7 @@ if __name__ == "__main__":
         )
         n_procs = 10
         #opt = op.AntColony( params, grid, task_graph, seed = None)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = 44)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
@@ -128,21 +128,23 @@ if __name__ == "__main__":
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
         
         params = op.GAParameters(
-        sol_per_pop = 30,
-        n_parents_mating=20,
-        keep_parents= 10,
+        sol_per_pop = 30, #30,
+        n_parents_mating= 20, #20,
+        keep_parents= 5,#10,
         parent_selection_type= "sss",
         n_generations = 2, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
-        n_procs = 50
-        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best olution given by  print(shortest[0], 1/shortest[1])it is not the best one
+        
+        n_procs = 30
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
-        # #opt.ga_instance.plot_fitness()
+        #opt.ga_instance.plot_fitness()
         print("The best path found is: ")
         print(shortest[0], 1/shortest[1])
         
