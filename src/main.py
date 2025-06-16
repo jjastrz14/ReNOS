@@ -75,7 +75,7 @@ if __name__ == "__main__":
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
     size_of_grid = 4
     source = 0
-    drain = 16
+    drain = 15
     
     assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
     

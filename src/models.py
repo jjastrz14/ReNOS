@@ -55,6 +55,8 @@ def Resnet9s(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     model = Model(inputs=inputs, outputs=outputs)
     if verbose:
         model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
     
     return model
 
@@ -81,7 +83,9 @@ def LeNet4(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     outputs = layers.Dense(num_classes, activation='softmax')(x)
     model = Model(inputs=inputs, outputs=outputs)
     if verbose:
-        model.summary()
+        model.summary()        
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
     return model
 
 def test_model(input_shape, verbose = False):
