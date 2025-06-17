@@ -27,6 +27,7 @@ from utils.plotting_utils import *
 from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
+from graph import TaskGraph
 from visualizer import plot_timeline
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
@@ -68,40 +69,51 @@ if __name__ == "__main__":
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
-
-    # # # plot_model(model, to_file="visual/model.png", show_shapes=True)
-    # # # analyze_ops(model, True)
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
     size_of_grid = 4
     source = 0
     drain = 15
+
+    grid = dm.Grid()
+    grid.init(size_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
+
+    print("")
+    print("Analysis of the model...")
+    analyze_ops(model, incl_info = True)
+        
+    dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
+    parts, deps = build_partitions(model, grid, grouping = False, verbose = True)
+        
+    #print partitions and dependencies in a table format
+    print("")
+    print("Analysis of the partitions...")
+    print_partitions_table_adaptive(parts, deps, mode="auto")
+            
+    #print("Plotting the partitions and dependencies of the model...")
+    #plot_partitions(parts, deps)
+    #print("Done!")
+        
+    task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
     
-    assert drain < size_of_grid * size_of_grid, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
-    
+    #plot_graph(task_graph)
+    #print_dependencies(task_graph)
+        
     if ACO:
         print("Running Ant Colony Optimization...")
         # Redirect stdout to the Logger
         log_path = get_aco_log_path()
         sys.stdout = Logger(log_path)
-        #drain point cannot exceed size_of_grid x size_of_grid - 1
-        task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
-        #plot_graph(task_graph)
-        #print_dependencies(task_graph)
-        breakpoint()
-        
-        grid = dm.Grid()
-        grid.init(size_of_grid, 2, dm.Topology.TORUS)
 
         params = op.ACOParameters(
-            n_ants = 50,
+            n_ants = 32,
             rho = 0.05,
             n_best = 10,
-            n_iterations = 10,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 1
+        n_procs = 8
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
@@ -126,13 +138,6 @@ if __name__ == "__main__":
         # Redirect stdout to the Logger
         log_path = get_ga_log_path()
         sys.stdout = Logger(log_path)
-        
-        #drain point cannot exceed size_of_grid x size_of_grid - 1
-        task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
-        #plot_graph(task_graph)
-
-        grid = dm.Grid()
-        grid.init(size_of_grid, 2, dm.Topology.TORUS)
         
         params = op.GAParameters(
         sol_per_pop = 30, #30,

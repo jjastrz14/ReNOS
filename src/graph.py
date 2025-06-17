@@ -23,8 +23,6 @@ import math
 import tensorflow as tf
 import tensorflow.keras as keras
 import keras.layers as layers
-from utils.partitioner_utils import build_partitions, print_partitions_table_adaptive, analyze_ops
-from utils.plotting_utils import plot_partitions
 
 
 class TaskGraph:
@@ -588,7 +586,7 @@ class TaskGraph:
         elif isinstance(dep, list):
             node["dep"].extend(dep)
 
-def model_to_graph(model, source = 0, drain = 1, verbose = False):
+def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
         """
         A function to create the depencency graph of the model that will be used for the simulation on the NoC.
 
@@ -598,17 +596,6 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
         Returns:
         - a dependency graph of the model
         """
-        analyze_ops(model, incl_info = True)
-        
-        dep_graph = TaskGraph(source = source, drain = drain)
-        parts, deps = build_partitions(model, grouping = False, verbose = True)
-        #print partitions and dependencies in a table format
-        print_partitions_table_adaptive(parts, deps, mode="auto")
-            
-        if verbose:
-            print("Plotting the partitions and dependencies of the model...")
-            plot_partitions(parts, deps)
-            print("Done!")
 
         task_id = 0
         # dep_id starts from the closest power of 10 that is greater than the number of tasks

@@ -25,7 +25,7 @@ class Grid:
     The class is used for a simplified representation of a k-dimensional NoC grid. Two different topologies are supported: mesh and torus.
     """
 
-    def init(self, k, n, topology):
+    def init(self, k, n, topology, source, drain):
         """
         Initializes the grid with the given parameters.
 
@@ -45,6 +45,11 @@ class Grid:
         self.K = k
         self.N = n
         self.topology = topology
+        self.source = source
+        self.drain = drain
+        
+        assert drain < k * k, "Drain point cannot exceed size_of_grid x size_of_grid - 1"
+
         self.grid = self.create_grid()
     
 

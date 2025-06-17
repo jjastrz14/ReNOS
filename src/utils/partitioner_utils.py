@@ -25,6 +25,8 @@ Args:
 Return:
     - the number of FLOPs for the layer
     - the number of MACS for the layer
+    
+Note: we assume that hook output is a tuple of the form (FLOPs, MACs), where: MACs is the number of Multiply-Accumulate operations, and FLOPs is the number of floating point operations for the layer, but hooks are constructed in such way that MACs and FLOPs can be used interchangeably. MACs = 2 * FLOPs, since each MAC operation is a multiply followed by an add.
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = 
 """
 
@@ -399,10 +401,6 @@ class PartitionInfo:
     FLOPs: int = 0
     # Total size of the partition
     tot_size: int = 0
-
-   
-    
-
 
 
 def _split_spatial_dims(layer, split_factor, partitions: Union[None, List[PartitionInfo]] = None):
@@ -822,7 +820,7 @@ def _build_partitions_from_layer(layer, spat = 0, out_ch = 1, in_ch = 1):
     partitions = _split_output_dims(layer, out_ch, partitions)
     partitions = _split_input_dims(layer, in_ch, partitions)
     for p in partitions:
-        p.MACs, p.FLOPs, p.tot_size = analyze_partition(p)
+        p.FLOPs, p.MACs, p.tot_size = analyze_partition(p)
     return partitions
 
 def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, chosen_splitting = "output" ,FLOP_threshold = 30000):
@@ -1518,7 +1516,7 @@ def _build_straight_through_deps(partitions: Dict[str, List[PartitionInfo]], par
     
     return partitions, partitions_deps
 
-def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
+def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
     """
     The function creates the partitions for each layer in the model, based on the partitioning strategies defined above.
 
@@ -1533,24 +1531,24 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
     partitions = {}
     partitions_deps = {}
     pe = PE()
-    print("PE memory size: ", pe.mem_size)
+    nPEs = grid.K * grid.K # number of PEs in the grid
+    print(f"PE memory size: {pe.mem_size} and number of PEs: {nPEs}", )
     layer_deps = _build_layer_deps(model)
     
-    # set FLOPS threshold per layer according to number of PEs
-    Flops_theshold = 30000
-    chosen_splitting = "spatial"  # Default splitting strategy
-    
-    breakpoint()
+    chosen_splitting = "input"  # Default splitting strategy
     
     # Track the most recent computational layer's partitioning
     last_computational_partitioning = None
-    computational_layers = (layers.Conv2D, layers.Dense, layers.DepthwiseConv2D, layers.SeparableConv2D)
+    computational_layers = (layers.Conv1D, layers.Conv2D, layers.Conv3D, layers.Dense, layers.DepthwiseConv2D, layers.DepthwiseConv1D, layers.SeparableConv2D)
     
     layers_skip = (layers.Flatten, layers.Reshape, layers.Add, layers.Identity)
     
     # first run for the input layer
     input_layer = model.layers[0]
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
+    
+    # for input layer use defalut splitting stategy and Flops threshold
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, prev_computational_partitioning=last_computational_partitioning)
+    
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
         print("Layer {} partitioned succesfully with partition parameters: {} ".format(input_layer.name, (spat, out_ch, in_ch)))
@@ -1565,6 +1563,15 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
             print("Warning: Layer {} is skipped, might be a problem with dependencies.".format(layer.name))
             continue
         
+        FLOPs, MACs = _analyze_layer(layer)
+        
+        # set FLOPS threshold per layer according to number of PEs and MACs per layer!
+        Flops_theshold = FLOPs / nPEs if isinstance(layer, computational_layers) else 1
+        
+        if verbose:
+            print("")
+            print(f"Analyzing layer {layer.name} with FLOPs: {FLOPs}, MACs: {MACs}, FLOP threshold: {Flops_theshold}")
+    
         spat, out_ch, in_ch = _adaptive_parsel(layer, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
         partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
         
@@ -1601,6 +1608,7 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
 """
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 3. MODEL ANALYSIS FUNCTIONS: used to analyze the model and compute the FLOPs and MACs.
+Remember each hook has form of return: FLOPs, MACs! 
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
@@ -1648,7 +1656,7 @@ def analyze_partition(partition):
     for weight in partition.weights_shape:
         tot_par_size += np.prod(weight)
 
-    return MACs, FLOPs, tot_par_size
+    return FLOPs, MACs, tot_par_size
 
 def _analyze_layer(layer,activation = None):
     '''
@@ -1676,9 +1684,9 @@ def _analyze_layer(layer,activation = None):
         inputs_shape = layer.input_shape
         outputs_shape = layer.output_shape
         # Compute the FLOPs (and MACs) using the hook
-        MACs, FLOPs = hook(layer, inputs_shape, outputs_shape)
+        FLOPs, MACs = hook(layer, inputs_shape, outputs_shape)
 
-    return MACs, FLOPs
+    return FLOPs, MACs 
 
 
 def analyze_ops(model: keras.Model, incl_info = False):
@@ -1733,19 +1741,19 @@ def analyze_ops(model: keras.Model, incl_info = False):
             # Add the number of weights to the total number of parameters
             total_parameters += weights + output_params + input_params
 
-            table.add_row([layer.name, i, input_params, input_dim, weights, weights_dim, output_params, output_dim, MACs, FLOPs], divider = False if hasattr(layer, "activation") and type(layer) != layers.Activation else True)
+            table.add_row([layer.name, i, input_params, input_dim, weights, weights_dim, output_params, output_dim, FLOPs, MACs], divider = False if hasattr(layer, "activation") and type(layer) != layers.Activation else True)
 
             if hasattr(layer, "activation") and type(layer) != layers.Activation:
                 activation = layer.activation.__name__
                 FLOPs_act, MACs_act = _analyze_layer(layer, activation)
                 total_MACs += MACs_act
                 total_FLOPs += FLOPs_act
-                table.add_row([activation, i,output_params, output_dim, 0, [], output_params, output_dim, MACs_act, FLOPs_act], divider = True)
+                table.add_row([activation, i,output_params, output_dim, 0, [], output_params, output_dim, FLOPs_act, MACs_act], divider = True)
             
             
         else: 
             # Add a row to the table for this layer
-            table.add_row([layer.name, i, MACs, FLOPs], divider = False if hasattr(layer, "activation") and type(layer) != layers.Activation else True)
+            table.add_row([layer.name, i, FLOPs, MACs], divider = False if hasattr(layer, "activation") and type(layer) != layers.Activation else True)
 
             # For each layer, also get the activation function if available and add it to the table
             if hasattr(layer, "activation") and type(layer) != layers.Activation:
@@ -1753,7 +1761,7 @@ def analyze_ops(model: keras.Model, incl_info = False):
                 FLOPs_act, MACs_act = _analyze_layer(layer, activation)
                 total_MACs += MACs_act
                 total_FLOPs += FLOPs_act
-                table.add_row([activation, i, MACs_act, FLOPs_act], divider = True)
+                table.add_row([activation, i, FLOPs_act, MACs_act], divider = True)
 
             
 
