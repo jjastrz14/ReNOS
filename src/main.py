@@ -77,6 +77,8 @@ if __name__ == "__main__":
 
     grid = dm.Grid()
     grid.init(size_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
+    
+    #### Model analysis and partitioning ####
 
     print("")
     print("Analysis of the model...")
@@ -98,6 +100,8 @@ if __name__ == "__main__":
     
     #plot_graph(task_graph)
     #print_dependencies(task_graph)
+    
+    ##### Optimization algorithms #####
         
     if ACO:
         print("Running Ant Colony Optimization...")
