@@ -32,6 +32,9 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 import keras.layers as layers
+import prettytable as pt
+import os
+from typing import Dict, List
 
 
 
@@ -515,24 +518,24 @@ def _split_spatial_dims(layer, split_factor, partitions: Union[None, List[Partit
 
             # check the validity of the partition
             if (out_bounds[1][0] - out_bounds[0][0] < 1) or (in_bounds[1][0] - in_bounds[0][0] < 1):
-                print(f" The boudaries of the partition are invalid: {in_bounds} {out_bounds}")
-                raise ValueError(f"Invalid partition for spatial dimensions, please increase the split factor for layer: {layer.name}")
+                print(f" The boundaries of the partition are invalid: {in_bounds} {out_bounds}")
+                raise ValueError(f"Invalid partition for spatial dimensions, please decrease the split factor for layer: {layer.name}")
                 
             if len(output_dims) > 2:
                 out_y_0 = int(np.sum([output_dimensions[_%s_x, i][1] for i in range(0, _//s_x)])) 
                 out_bounds = [(max(out_x_0, 0), max(out_y_0, 0)), (min(out_x_0 + output_dims[0], original_output_dims[0]), min(out_y_0 + output_dims[1], original_output_dims[1]))]
                 #check the validity of the partition
                 if out_bounds[1][1] - out_bounds[0][1] < 1:
-                    print(f" The boudaries of the partition are invalid: {in_bounds} {out_bounds}")
-                    raise ValueError(f"Invalid partition for spatial dimensions, please increase the split factor for layer: {layer.name}")
+                    print(f" The boundaries of the partition are invalid: {in_bounds} {out_bounds}")
+                    raise ValueError(f"Invalid partition for spatial dimensions, please decrease the split factor for layer: {layer.name}")
                 
             if len(input_dims) > 2 :
                 receptive_region = compute_receptive_field(out_bounds, layer)
                 in_bounds = [(max(receptive_region[0][0], 0), max(receptive_region[0][1], 0)), (min(receptive_region[1][0], original_input_dims[0]), min(receptive_region[1][1], original_input_dims[1]))]
                 #check the validity of the partition
                 if in_bounds[1][1] - in_bounds[0][1] < 1:
-                    print(f" The boudaries of the partition are invalid: {in_bounds} {out_bounds}")
-                    raise ValueError(f"Invalid partition for spatial dimensions, please increase the split factor for layer: {layer.name}")
+                    print(f" The boundaries of the partition are invalid: {in_bounds} {out_bounds}")
+                    raise ValueError(f"Invalid partition for spatial dimensions, please decrease the split factor for layer: {layer.name}")
 
             output_dimensions[_%s_x, _//s_x] = output_dims
 
@@ -642,15 +645,12 @@ def _split_output_dims(layer, split_factor, partitions: Union[None, List[Partiti
             ch_end = (partition_index + 1) * basic_step + min(partition_index + 1, additions)
             #check partition validity
             if ch_end - ch_start < 1 or ch_end > num_output_ch:
-                raise ValueError("Invalid partition for output channels, please increase the split factor")
+                raise ValueError("Invalid partition for output channels, please decrease the split factor")
             weights_temp = []
             for i,weight in enumerate(weights_dims):
                 index = -1
                 weight[index] = ch_end - ch_start
                 weights_temp.append(tuple(weight))
-
-            
-            
 
             cur = PartitionInfo(layer = layer,
                                 in_bounds = in_bounds,
@@ -753,7 +753,7 @@ def _split_input_dims(layer, split_factor, partitions: Union[None, List[Partitio
             ch_end = (partition_index + 1) * basic_step + min(partition_index + 1, additions)
             #check partition validity
             if ch_end - ch_start < 1 or ch_end > num_input_ch:
-                raise ValueError("Invalid partition for input channels, please increase the split factor")
+                raise ValueError("Invalid partition for input channels, please decrease the split factor")
             weights_temp = []
             for i,weight in enumerate(weights_dims):
                 index = -2 if len(weight) > 2 else 0
@@ -825,7 +825,7 @@ def _build_partitions_from_layer(layer, spat = 0, out_ch = 1, in_ch = 1):
         p.MACs, p.FLOPs, p.tot_size = analyze_partition(p)
     return partitions
 
-def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 10000):
+def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, chosen_splitting = "output" ,FLOP_threshold = 30000):
     """
     The functions selects the best partitioning strategy for a layer, based on the layer's characteristics.
     The main objective is to create the partitions for a layer with the lowest values for the splitting factors that, at the same time,
@@ -839,80 +839,240 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 10000
     The decision on whether to stop with the partitioning is taken based on the estimated current space needed to host the values necessary for the partition
     to be computed. If the space needed is greater than the available space on a single PE, the partitioning is stopped and the partition is not created.
 
+    Enhanced function that selects the best partitioning strategy for a layer based on:
+    1. For computational layers (Conv2D, Dense): FLOP-based balanced partitioning
+    2. For auxiliary layers (BN, Activation, Pooling): Inherit from previous computational layer
+    
     Args:
-    - layer : the layer to be partitioned
-
+    - layer: the layer to be partitioned
+    - prev_computational_partitioning: tuple (spatial, output, input) from the most recent computational layer
+    - chosen_splitting: preferred splitting strategy for computational layers
+    - FLOP_threshold: target FLOP count per partition for computational layers
+    
+    Notice: minimal splitting factor set is (0, 1, 1) for spatial, output, and input respectively.
+    
     Returns:
-    - a tuple, representing the parameters to be used for the partitionin of the layer
-    - an integer, representing the space that will be needed for the partitions of the layer
+    - tuple (spatial, output, input): partitioning parameters for the layer
     """
     print("")
     print(f"====================================================")
     print(f"Adaptive partitioning for layer {layer.name} with FLOP threshold {FLOP_threshold}")
     
-    #spatial:
-    max_splitting_factor = 4
-    
+    # Configuration
+    max_splitting_factor = factor # Maximum splitting factor for any dimension
     available_splitting = ['spatial', 'output', 'input']
-    splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
+    splitting_factors = {"spatial": 1, "output": 1, "input": 1}
 
-
+    # Special case: InputLayer
     if isinstance(layer, layers.InputLayer):
-        return 0,1,1
-    # first check the output shape of the layer
+        print("InputLayer detected - no partitioning needed")
+        return 0, 1, 1
+    
+    # Classify layer type
+    computational_layers = (layers.Conv2D, layers.Dense, layers.DepthwiseConv2D, layers.SeparableConv2D)
+    auxiliary_layers = (
+        layers.BatchNormalization, 
+        layers.MaxPooling2D, 
+        layers.AveragePooling2D,
+        layers.GlobalMaxPooling2D,
+        layers.GlobalAveragePooling2D,
+        layers.Dropout,
+        layers.Activation,
+        layers.ReLU,
+        layers.LeakyReLU
+    )
+    
+    #in funtion build taks graph we ommit Flatten and Add
+    
+    is_computational = isinstance(layer, computational_layers)
+    is_auxiliary = isinstance(layer, auxiliary_layers)
+    
+    assert not (is_computational and is_auxiliary), "Layer cannot be both computational and auxiliary"
+    #assert is_computational or is_auxiliary, "Layer must be either computational or auxiliary. Problem with the layer type classification"
+    print(f"Layer classification - Computational: {is_computational}, Auxiliary: {is_auxiliary}")
 
-    if layer.name == "conv2d":
-        # return 5,1,1
-        splitting_factors['input'] = 1
-        splitting_factors['spatial'] = 1
-        splitting_factors['output'] = 1
-        return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
-
-
-    if isinstance(layer, layers.MaxPooling2D) or isinstance(layer, layers.AveragePooling2D):
-        # divide using the same splitting factor as its previous layer
-
-        if layer.name == "max_pooling2d":
-            #return 5,splitting_factors['output'], splitting_factors['input']
-            #input splitting and output
-            return 1, splitting_factors['output'], splitting_factors['input']
-        else:
-            #return 3,splitting_factors['output'], splitting_factors['input']
-            #input splitting and output
-            return 1, splitting_factors['output'], splitting_factors['input']
+    # Handle auxiliary layers - inherit from previous computational layer
+    if is_auxiliary and prev_computational_partitioning is not None:
         
-    print("====================================================")
-    print(f"Adaptive partitioning for layer {layer.name}")
-    print(f"Available splitting strategies: {available_splitting}")
-    print(f"Initial splitting factors: {splitting_factors}")
-
-    # if the layer is a dense layer type or the layer before 
-    if len(layer.output.shape) < 3:
-        available_splitting.remove('output')
-        available_splitting.remove('input')
-
-    if isinstance(layer, layers.Dense):
-        chosen_splitting = 'spatial'
-
-    # until the MACs for every single partition of the layer are under the threshold, keep on incrementing the
-    # slitting factor for the chosen splitting strategy: if the splitting strategy is not available (only spatial splitting is available)
-    # then split by spatial dimensions
-    while True:
-        partitions = _build_partitions_from_layer(layer, splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input'])
-        if all([p.FLOPs < FLOP_threshold for p in partitions]):
-            break
-        splitting_factors[chosen_splitting] += 1
+        spatial, output, input_split = prev_computational_partitioning
+        print(f"Auxiliary layer inheriting partitioning from previous computational layer: ({spatial}, {output}, {input_split})")
+        # Try to apply the inherited partitioning, with fallback mechanism
+        max_attempts = 10
+        attempt = 0
         
-        if splitting_factors[chosen_splitting] > max_splitting_factor:
-            print(f"Splitting factor for {chosen_splitting} reached maximum value")
-            splitting_factors[chosen_splitting] = max_splitting_factor
-            break
-        else:
-            print(f"Splitting factor for {chosen_splitting} increased to {splitting_factors[chosen_splitting]}")
+        while attempt < max_attempts:
+            try:
+                # Test if the current partitioning works
+                test_partitions = _build_partitions_from_layer(layer, spatial, output, input_split)
+                print(f"Successfully inherited partitioning: ({spatial}, {output}, {input_split})")
+                return spatial, output, input_split
+                    
+            except Exception as e:
+                print(f"Attempt {attempt + 1}: ValueError with partitioning ({spatial}, {output}, {input_split}): {e}")
+                        
+                # Step back strategy: reduce the largest splitting factor
+                factors = [spatial, output, input_split]
+                max_factor_idx = factors.index(max(factors))
+                
+                if max_factor_idx == 0 and spatial > 1:
+                    spatial -= 1
+                    print(f"Reduced spatial factor to {spatial}")
+                elif max_factor_idx == 1 and output > 1:
+                    output -= 1
+                    print(f"Reduced output factor to {output}")
+                elif max_factor_idx == 2 and input_split > 1:
+                    input_split -= 1
+                    print(f"Reduced input factor to {input_split}")
+                else:
+                    # If we can't reduce further, try reducing any factor > 1
+                    if spatial > 1:
+                        spatial -= 1
+                        print(f"Fallback: reduced spatial factor to {spatial}")
+                    elif output > 1:
+                        output -= 1
+                        print(f"Fallback: reduced output factor to {output}")
+                    elif input_split > 1:
+                        input_split -= 1
+                        print(f"Fallback: reduced input factor to {input_split}")
+                    else:
+                        # All factors are 1, can't reduce further
+                        print("Cannot reduce factors further, using (0, 1, 1)")
+                        return 0, 1, 1
+                
+                attempt += 1
             
+        # If we've exhausted all attempts, use minimal partitioning
+        print(f"Warning: Could not find valid partitioning for auxiliary layer {layer.name} after {max_attempts} attempts")
+        print("Using minimal partitioning (0, 1, 1)")
+        return 0, 1, 1
+        
+    # Handle computational layers - FLOP-based partitioning
+    if is_computational:
+        print(f"Computational layer - applying FLOP-based partitioning")
+        print(f"FLOP threshold: {FLOP_threshold}")
+        
+        # Determine available splitting strategies based on layer characteristics
+        if isinstance(layer, layers.Dense):
+            # Dense layers: primarily spatial splitting (batch dimension)
+            available_splitting = ['spatial']
+            chosen_splitting = 'spatial'
+            print("Dense layer detected - using spatial splitting only")
+        
+        elif isinstance(layer, (layers.Conv2D, layers.DepthwiseConv2D, layers.SeparableConv2D)):
+            # Conv layers: all splitting strategies available
+            if len(layer.output.shape) < 4:  # If flattened conv output
+                available_splitting = ['spatial']
+                chosen_splitting = 'spatial'
+            print(f"Convolutional layer detected - available splitting: {available_splitting}")
+        
+        # Remove unavailable splitting strategies
+        if len(layer.output.shape) < 3:
+            if 'output' in available_splitting:
+                available_splitting.remove('output')
+            if 'input' in available_splitting:
+                available_splitting.remove('input')
+        
+        # Ensure chosen splitting is available
+        if chosen_splitting not in available_splitting:
+            chosen_splitting = available_splitting[0]
+        
+        print(f"Using splitting strategy: {chosen_splitting}")
+        print(f"Available strategies: {available_splitting}")
+        
+        # Iteratively increase splitting factor until FLOP threshold is met
+        iteration = 0
+        max_iterations = 20  # Prevent infinite loops
+        
+        # Track which strategies have been tried and maxed out
+        maxed_out_strategies = set()
+        
+        while iteration < max_iterations:
+            try: 
+                # Build partitions with current splitting factors
+                partitions = _build_partitions_from_layer(
+                    layer, 
+                    splitting_factors['spatial'], 
+                    splitting_factors['output'], 
+                    splitting_factors['input']
+                )
+                
+                # If successful, update last valid configuration
+                last_valid_factors = splitting_factors.copy()
+                
+                # Check if all partitions meet FLOP threshold
+                max_flops = max([p.FLOPs for p in partitions]) if partitions else 0
+                avg_flops = sum([p.FLOPs for p in partitions]) / len(partitions) if partitions else 0
+                
+                print(f"Iteration {iteration}: Max FLOPs per partition: {max_flops}, Average: {avg_flops:.0f}")
+                
+                if max_flops <= FLOP_threshold:
+                    print(f"FLOP threshold satisfied!")
+                    break
+                
+            except ValueError as e:
+                print(f"ValueError encountered: {e}")
+                print(f"Reverting {chosen_splitting} splitting factor from {splitting_factors[chosen_splitting]} to {last_valid_factors[chosen_splitting]}")
+                
+                # Revert to last valid configuration
+                splitting_factors = last_valid_factors.copy()
+                
+                # Mark current strategy as maxed out and find next available one
+                maxed_out_strategies.add(chosen_splitting)
+                
+                # Find next available strategy that hasn't been maxed out
+                remaining_strategies = [s for s in available_splitting if s not in maxed_out_strategies]
+                
+                if remaining_strategies:
+                    chosen_splitting = remaining_strategies[0]
+                    print(f"Switching to splitting strategy: {chosen_splitting}")
+                    iteration += 1
+                    continue
+                else:
+                    print("All splitting strategies exhausted due to errors")
+                    break
+                
+            # Increase splitting factor for chosen strategy
+            if splitting_factors[chosen_splitting] >= max_splitting_factor:
+                print(f"Maximum splitting factor reached for {chosen_splitting}")
+                
+                # Mark this strategy as maxed out
+                maxed_out_strategies.add(chosen_splitting)
+                
+                # Find next available strategy that hasn't been maxed out
+                remaining_strategies = [s for s in available_splitting if s not in maxed_out_strategies]
+                
+                # Try switching to next available strategy
+                if remaining_strategies:
+                    chosen_splitting = remaining_strategies[0]
+                    print(f"Switching to splitting strategy: {chosen_splitting}")
+                else:
+                    print("All splitting strategies exhausted")
+                    break
+            else:
+                splitting_factors[chosen_splitting] += 1
+                print(f"Increased {chosen_splitting} splitting factor to {splitting_factors[chosen_splitting]}")
+            
+            iteration += 1
+            
+        if iteration >= max_iterations:
+            print(f"Warning: Maximum iterations reached for layer {layer.name}")
+    
+    # Handle unknown layer types - use conservative defaults or inherit
+    else:
+        print(f"Unknown layer type : {layer.name} - using conservative approach")
+        if prev_computational_partitioning is not None:
+            spatial, output, input_split = prev_computational_partitioning
+            print(f"Inheriting from previous computational layer: ({spatial}, {output}, {input_split})")
+            return spatial, output, input_split
+        else:
+            print("No previous computational layer - using minimal partitioning")
+            return 1, 1, 1
+    
+    result = (splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input'])
+    print(f"Final partitioning for {layer.name}: {result}")
     print("====================================================")
-    print("")
-    return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
+    
+    return result
 
 
 def _build_spatial_deps(partitions_layer1 : List[PartitionInfo], partitions_layer2: List[PartitionInfo], deps: Dict = None):
@@ -934,7 +1094,7 @@ def _build_spatial_deps(partitions_layer1 : List[PartitionInfo], partitions_laye
     partitions_1 = partitions_layer1
     partitions_2 = partitions_layer2
 
-     # we then build the dependencies between the partitions: to do so, we must look at the spatial input and ouput dimensions of the partitions
+    # we then build the dependencies between the partitions: to do so, we must look at the spatial input and ouput dimensions of the partitions
     # of the two layers and check if they 'overlap'
     deps = {} if deps is None else deps
     for p1 in partitions_1:
@@ -1310,8 +1470,6 @@ def _build_straight_through_deps(partitions: Dict[str, List[PartitionInfo]], par
                 new_key = (new_id.split('-')[0], key[1])
                 break
 
-        
-
         # stitch back together the dependencies
         if new_key is not None:
             partitions_deps[new_key] = {} if partitions_deps.get(new_key) is None else partitions_deps[new_key]
@@ -1360,7 +1518,7 @@ def _build_straight_through_deps(partitions: Dict[str, List[PartitionInfo]], par
     
     return partitions, partitions_deps
 
-def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool = False)-> Tuple[dict, dict]:
+def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
     """
     The function creates the partitions for each layer in the model, based on the partitioning strategies defined above.
 
@@ -1368,7 +1526,7 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
     - model : the model to partition
 
     Returns:
-    - a dict of partitions: the key is the layer name and the value is a list of PartitionInfo objects, each representing a partition of the layer
+    - a dict of partitions: the key is the layer name and the svalue is a list of PartitionInfo objects, each representing a partition of the layer
     - a dict of dependencies between the partitions of the layers
     """
 
@@ -1377,31 +1535,59 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
     pe = PE()
     print("PE memory size: ", pe.mem_size)
     layer_deps = _build_layer_deps(model)
-
+    
+    # set FLOPS threshold per layer according to number of PEs
+    Flops_theshold = 30000
+    chosen_splitting = "spatial"  # Default splitting strategy
+    
+    breakpoint()
+    
+    # Track the most recent computational layer's partitioning
+    last_computational_partitioning = None
+    computational_layers = (layers.Conv2D, layers.Dense, layers.DepthwiseConv2D, layers.SeparableConv2D)
+    
+    layers_skip = (layers.Flatten, layers.Reshape, layers.Add, layers.Identity)
+    
     # first run for the input layer
     input_layer = model.layers[0]
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer)
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
         print("Layer {} partitioned succesfully with partition parameters: {} ".format(input_layer.name, (spat, out_ch, in_ch)))
 
+    actual_prev_layer = None  # Track the actual previous non-skipped layer
     # then proceed with the other layers
     for _, prev_layer, layer in sorted(layer_deps, key = lambda x: x[0]):
-        # if the layer is a Flatten type, we can direclty skip it
-        if isinstance(layer, layers.Flatten):
-            if verbose:
-                print("Skipping layer {}".format(layer.name))
+        
+        # if the layer is in a skipped layers list we can direclty skip it
+        if isinstance(layer, layers_skip):
+            print("Skipping layer {}".format(layer.name))
+            print("Warning: Layer {} is skipped, might be a problem with dependencies.".format(layer.name))
             continue
-        spat, out_ch, in_ch = _adaptive_parsel(layer)
+        
+        spat, out_ch, in_ch = _adaptive_parsel(layer, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
         partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
         
+        # Update tracking of computational layers
+        if isinstance(layer, computational_layers):
+            last_computational_partitioning = (spat, out_ch, in_ch)
+            if verbose:
+                print(f"Updated computational layer tracking: {last_computational_partitioning}")
+        
         # group the partitions that are interdependent
-        partitions1 = partitions[prev_layer.name]
+        # Use actual_prev_layer if available, otherwise fall back to prev_layer
+        if actual_prev_layer is not None:
+            partitions1 = partitions[actual_prev_layer.name]
+        else:
+            partitions1 = partitions[prev_layer.name]
+        
         partitions2 = partitions[layer.name]
         # dependencies are delt directly in _group_partitions
         _group_partitions(partitions1, partitions2, layer_deps, partitions_deps)
         
-
+        # Update the actual previous layer to current layer (since it wasn't skipped)
+        actual_prev_layer = layer
+        
         if verbose:
             print("Layer {} partitioned succesfully with partition parameters: {} ".format(layer.name, (spat, out_ch, in_ch)))
 
@@ -1417,8 +1603,6 @@ def build_partitions(model: keras.Model, grouping: bool = True, verbose : bool =
 3. MODEL ANALYSIS FUNCTIONS: used to analyze the model and compute the FLOPs and MACs.
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
-
-import prettytable as pt
 
 def analyze_partition(partition):
     """
@@ -1580,20 +1764,214 @@ def analyze_ops(model: keras.Model, incl_info = False):
     
 def print_partitions_table(partitions: Dict[str, List[PartitionInfo]], partitions_deps: Dict[Tuple[str, str], int]) -> None:
     """
-    The function prints out a table with the partitions of the model, including the layer name, partition id, input and output bounds, input and output channels, weights shape, FLOPs, MACs and total size.
+    Enhanced function that prints a readable table with partitions, optimized for terminal width.
+    Uses multiple compact tables or vertical layout for better readability.
     
     Args:
-    - partitions : a dictionary of partitions of the model
-    - partitions_deps : a dictionary of dependencies between the partitions of the model
+    - partitions: a dictionary of partitions of the model
+    - partitions_deps: a dictionary of dependencies between the partitions of the model
     """
+    
+    # Get terminal width, default to 80 if not available
+    try:
+        terminal_width = os.get_terminal_size().columns
+    except:
+        terminal_width = 80
+    
+    # Target width slightly less than terminal to avoid wrapping
+    target_width = min(terminal_width - 5, 120)
+    
+    print("=" * target_width)
+    print(f"{'* PARTITIONS SUMMARY *':^{target_width}}")
+    print("=" * target_width)
+    
+    # Option 1: Compact horizontal table
+    if target_width >= 100:
+        _print_compact_horizontal_table(partitions, target_width)
+    else:
+        # Option 2: Vertical layout for narrow terminals
+        _print_vertical_layout(partitions, target_width)
+    
+    print("=" * target_width)
+    
+    # Summary statistics
+    _print_partition_summary(partitions, target_width)
 
-    print("--------------------------------------------* Partitions *--------------------------------------------")
+
+def _print_compact_horizontal_table(partitions: Dict[str, List[PartitionInfo]], max_width: int) -> None:
+    """Print a compact horizontal table that fits within the specified width."""
+    
     table = pt.PrettyTable()
-    table.field_names = ["Layer", "Partition ID", "Input Bounds", "Output Bounds", "Input Channels", "Output Channels", "Weights Shape", "FLOPs", "MACs", "Total Size (bytes)"]
+    table.field_names = ["Layer", "ID", "In Bounds", "Out Bounds", "Ch", "FLOPs", "Size(B)"]
+    
+    # Set column alignment and width
+    table.align["Layer"] = "l"
+    table.align["ID"] = "c"
+    table.align["In Bounds"] = "c"
+    table.align["Out Bounds"] = "c"
+    table.align["Ch"] = "c"
+    table.align["FLOPs"] = "r"
+    table.align["Size(B)"] = "r"
+    
+    # Limit column widths
+    table.max_width["Layer"] = 12
+    table.max_width["ID"] = 8
+    table.max_width["In Bounds"] = 15
+    table.max_width["Out Bounds"] = 15
+    table.max_width["Ch"] = 8
     
     for layer_name, partitions_list in partitions.items():
-        for partition in partitions_list:
-            table.add_row([layer_name, partition.id, partition.in_bounds, partition.out_bounds, partition.in_ch, partition.out_ch, partition.weights_shape, partition.FLOPs, partition.MACs, partition.tot_size])
+        for i, partition in enumerate(partitions_list):
+            # Truncate layer name if too long
+            short_layer = layer_name[:12] if len(layer_name) > 12 else layer_name
+            
+            # Simplified partition ID
+            partition_id = f"{i}"
+            
+            # Compact bounds representation
+            in_bounds_str = _format_bounds_compact(partition.in_bounds)
+            out_bounds_str = _format_bounds_compact(partition.out_bounds)
+            
+            # Channel info (input->output) - Handle None cases
+            def format_channel_info(ch_range):
+                if ch_range is None or len(ch_range) < 2:
+                    return "N/A"
+                return str(ch_range[1] - ch_range[0])
+            
+            in_ch_str = format_channel_info(partition.in_ch)
+            out_ch_str = format_channel_info(partition.out_ch)
+            ch_info = f"{in_ch_str}→{out_ch_str}"
+            
+            # Format large numbers
+            flops_str = _format_number(partition.FLOPs)
+            size_str = _format_number(partition.tot_size)
+            
+            table.add_row([short_layer, partition_id, in_bounds_str, out_bounds_str, 
+                        ch_info, flops_str, size_str])
     
     print(table)
-    print("------------------------------------------------------------------------------------------------------------------------")
+
+
+def _print_vertical_layout(partitions: Dict[str, List[PartitionInfo]], max_width: int) -> None:
+    """Print partitions in vertical layout for narrow terminals."""
+    
+    for layer_name, partitions_list in partitions.items():
+        print(f"\n📋 Layer: {layer_name}")
+        print("-" * min(max_width, 50))
+        
+        for i, partition in enumerate(partitions_list):
+            print(f"  Partition {i}:")
+            print(f"    Input:  {_format_bounds_compact(partition.in_bounds)}")
+            print(f"    Output: {_format_bounds_compact(partition.out_bounds)}")
+            print(f"    Channels: {partition.in_ch[1]-partition.in_ch[0]} → {partition.out_ch[1]-partition.out_ch[0]}")
+            print(f"    FLOPs: {_format_number(partition.FLOPs)}")
+            print(f"    Size: {_format_number(partition.tot_size)} bytes")
+            if i < len(partitions_list) - 1:
+                print()
+
+
+def _format_bounds_compact(bounds) -> str:
+    """Format bounds in a compact way."""
+    if not bounds or len(bounds) == 0:
+        return "N/A"
+    
+    # Handle case where inner tuples have only 1 element
+    def format_single_bound(bound):
+        if len(bound) >= 2:
+            return f"{bound[0]}:{bound[1]}"
+        else:  # Only 1 element (e.g., (0,) or [300])
+            return f"{bound[0]}:{bound[0]}"  # Repeat the same value
+    
+    if len(bounds) == 1:
+        return f"({format_single_bound(bounds[0])})"
+    elif len(bounds) == 2:
+        return f"({format_single_bound(bounds[0])},{format_single_bound(bounds[1])})"
+    else:
+        # For higher dimensions, show only first two
+        return f"({format_single_bound(bounds[0])},{format_single_bound(bounds[1])}...)"
+
+
+def _format_number(num) -> str:
+    """Format numbers in a compact, readable way."""
+    if num == 0:
+        return "0"
+    elif num < 1000:
+        return str(num)
+    elif num < 1000000:
+        return f"{num/1000:.1f}K"
+    elif num < 1000000000:
+        return f"{num/1000000:.1f}M"
+    else:
+        return f"{num/1000000000:.1f}G"
+
+
+def _print_partition_summary(partitions: Dict[str, List[PartitionInfo]], max_width: int) -> None:
+    """Print summary statistics about the partitions."""
+    
+    total_partitions = sum(len(partitions_list) for partitions_list in partitions.values())
+    total_flops = sum(partition.FLOPs for partitions_list in partitions.values() 
+                    for partition in partitions_list)
+    total_size = sum(partition.tot_size for partitions_list in partitions.values() 
+                    for partition in partitions_list)
+    
+    print(f"\n📊 Summary:")
+    print(f"  Total Partitions: {total_partitions}")
+    print(f"  Total FLOPs: {_format_number(total_flops)}")
+    print(f"  Total Size: {_format_number(total_size)} bytes")
+    
+    # Per-layer breakdown
+    print(f"\n📈 Per-layer breakdown:")
+    for layer_name, partitions_list in partitions.items():
+        layer_partitions = len(partitions_list)
+        layer_flops = sum(p.FLOPs for p in partitions_list)
+        layer_size = sum(p.tot_size for p in partitions_list)
+        
+        print(f"  {layer_name[:15]:<15}: {layer_partitions:2d} parts, "
+            f"{_format_number(layer_flops):>8} FLOPs, {_format_number(layer_size):>8}B")
+
+
+# Alternative: Super compact single-line per partition
+def print_partitions_compact(partitions: Dict[str, List[PartitionInfo]]) -> None:
+    """Ultra-compact version - one line per partition."""
+    
+    print("🔧 Compact Partition View:")
+    print("-" * 60)
+    
+    for layer_name, partitions_list in partitions.items():
+        short_name = layer_name[:10]
+        for i, p in enumerate(partitions_list):
+            bounds = _format_bounds_compact(p.in_bounds)
+            flops = _format_number(p.FLOPs)
+            size = _format_number(p.tot_size)
+            print(f"{short_name}[{i}]: {bounds} → {flops} FLOPs, {size}B")
+
+
+# Example usage with different display modes
+def print_partitions_table_adaptive(partitions: Dict[str, List[PartitionInfo]], partitions_deps: Dict[Tuple[str, str], int], mode: str = "auto") -> None:
+    """
+    Adaptive partition printing with multiple display modes.
+    
+    Args:
+    - partitions: partition dictionary
+    - partitions_deps: dependencies dictionary  
+    - mode: "auto", "compact", "vertical", or "minimal"
+    """
+    
+    if mode == "auto":
+        print_partitions_table(partitions, partitions_deps)
+    elif mode == "compact":
+        print_partitions_compact(partitions)
+    elif mode == "vertical":
+        try:
+            terminal_width = os.get_terminal_size().columns
+        except:
+            terminal_width = 80
+        _print_vertical_layout(partitions, terminal_width)
+    elif mode == "minimal":
+        # Just show counts and totals
+        total_parts = sum(len(p_list) for p_list in partitions.values())
+        total_flops = sum(p.FLOPs for p_list in partitions.values() for p in p_list)
+        print(f"📊 {len(partitions)} layers, {total_parts} partitions, {_format_number(total_flops)} total FLOPs")
+    else:
+        print(f"Unknown mode: {mode}. Using auto mode.")
+        print_partitions_table(partitions, partitions_deps)

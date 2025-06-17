@@ -88,7 +88,8 @@ if __name__ == "__main__":
         task_graph = model_to_graph(model, source = source, drain = drain, verbose=False)
         #plot_graph(task_graph)
         #print_dependencies(task_graph)
-
+        breakpoint()
+        
         grid = dm.Grid()
         grid.init(size_of_grid, 2, dm.Topology.TORUS)
 
