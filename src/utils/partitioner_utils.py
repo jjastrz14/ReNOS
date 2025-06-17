@@ -825,7 +825,7 @@ def _build_partitions_from_layer(layer, spat = 0, out_ch = 1, in_ch = 1):
         p.MACs, p.FLOPs, p.tot_size = analyze_partition(p)
     return partitions
 
-def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000):
+def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 10000):
     """
     The functions selects the best partitioning strategy for a layer, based on the layer's characteristics.
     The main objective is to create the partitions for a layer with the lowest values for the splitting factors that, at the same time,
@@ -846,11 +846,15 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
     - a tuple, representing the parameters to be used for the partitionin of the layer
     - an integer, representing the space that will be needed for the partitions of the layer
     """
+    print("")
+    print(f"====================================================")
+    print(f"Adaptive partitioning for layer {layer.name} with FLOP threshold {FLOP_threshold}")
+    
     #spatial:
-    max_splitting_factor = 6
+    max_splitting_factor = 4
     
     available_splitting = ['spatial', 'output', 'input']
-    splitting_factors = {"spatial" : 0, "output": 1, "input": 4}
+    splitting_factors = {"spatial" : 0, "output": 1, "input": 1}
 
 
     if isinstance(layer, layers.InputLayer):
@@ -860,8 +864,8 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
     if layer.name == "conv2d":
         # return 5,1,1
         splitting_factors['input'] = 1
-        splitting_factors['spatial'] = 6
-        #splitting_factors['output'] = 2
+        splitting_factors['spatial'] = 1
+        splitting_factors['output'] = 1
         return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
 
 
@@ -871,11 +875,11 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
         if layer.name == "max_pooling2d":
             #return 5,splitting_factors['output'], splitting_factors['input']
             #input splitting and output
-            return 4, splitting_factors['output'], splitting_factors['input']
+            return 1, splitting_factors['output'], splitting_factors['input']
         else:
             #return 3,splitting_factors['output'], splitting_factors['input']
             #input splitting and output
-            return 2, splitting_factors['output'], splitting_factors['input']
+            return 1, splitting_factors['output'], splitting_factors['input']
         
     print("====================================================")
     print(f"Adaptive partitioning for layer {layer.name}")
@@ -907,6 +911,7 @@ def _adaptive_parsel(layer, chosen_splitting = "spatial" ,FLOP_threshold = 30000
             print(f"Splitting factor for {chosen_splitting} increased to {splitting_factors[chosen_splitting]}")
             
     print("====================================================")
+    print("")
     return splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input']
 
 
@@ -972,7 +977,6 @@ def _build_spatial_deps(partitions_layer1 : List[PartitionInfo], partitions_laye
                 raise Exception("Spatial dependencies for 1D -> 2D layers not implemented")
 
     return deps
-     
 
 def _build_outin_deps(partitions_layer1: List[PartitionInfo], partitions_layer2: List[PartitionInfo], deps: Dict = None):
     """
@@ -1059,7 +1063,7 @@ def _build_layer_deps(model: keras.Model)->Set:
             for node in layer._inbound_nodes:
                 add_to_deps(node, layer, dependencies, dep_id)
                 dep_id += 1
-             
+        
 
     return dependencies
 
@@ -1572,4 +1576,24 @@ def analyze_ops(model: keras.Model, incl_info = False):
     print(table)
     print(f"Total parameters: {total_parameters}")
     print(f"Total: MACs={total_MACs}, FLOPs={total_FLOPs}")
+    print("------------------------------------------------------------------------------------------------------------------------")
+    
+def print_partitions_table(partitions: Dict[str, List[PartitionInfo]], partitions_deps: Dict[Tuple[str, str], int]) -> None:
+    """
+    The function prints out a table with the partitions of the model, including the layer name, partition id, input and output bounds, input and output channels, weights shape, FLOPs, MACs and total size.
+    
+    Args:
+    - partitions : a dictionary of partitions of the model
+    - partitions_deps : a dictionary of dependencies between the partitions of the model
+    """
+
+    print("--------------------------------------------* Partitions *--------------------------------------------")
+    table = pt.PrettyTable()
+    table.field_names = ["Layer", "Partition ID", "Input Bounds", "Output Bounds", "Input Channels", "Output Channels", "Weights Shape", "FLOPs", "MACs", "Total Size (bytes)"]
+    
+    for layer_name, partitions_list in partitions.items():
+        for partition in partitions_list:
+            table.add_row([layer_name, partition.id, partition.in_bounds, partition.out_bounds, partition.in_ch, partition.out_ch, partition.weights_shape, partition.FLOPs, partition.MACs, partition.tot_size])
+    
+    print(table)
     print("------------------------------------------------------------------------------------------------------------------------")

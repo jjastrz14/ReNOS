@@ -23,7 +23,7 @@ import math
 import tensorflow as tf
 import tensorflow.keras as keras
 import keras.layers as layers
-from utils.partitioner_utils import build_partitions
+from utils.partitioner_utils import build_partitions, print_partitions_table
 from utils.plotting_utils import plot_partitions
 
 
@@ -601,6 +601,11 @@ def model_to_graph(model, source = 0, drain = 1, verbose = False):
 
         dep_graph = TaskGraph(source = source, drain = drain)
         parts, deps = build_partitions(model, verbose = True)
+
+        #print partitions and dependencies in a table format
+        print_partitions_table(parts, deps)
+        breakpoint()
+            
 
         if verbose:
             print("Plotting the partitions and dependencies of the model...")
