@@ -39,8 +39,9 @@ from models import *
 if __name__ == "__main__":
     
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="Select optimization algorithm.")
+    parser = argparse.ArgumentParser(description="Select optimization algorithm and name of the resulting directory.")
     parser.add_argument("-algo", choices=["ACO", "GA"], required=True, help="Choose 'ACO' for Ant Colony Optimization or 'GA' for Genetic Algorithm.")
+    parser.add_argument("-name", type=str, default="_run_", required=True, help="Choose name of the resulting directory (default: '_run_').")
     args = parser.parse_args()
 
     # Set flags based on the argument
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     print(f"Selected algorithm: {args.algo}")
         
     # Initialize global directories
-    initialize_globals(args.algo)
+    initialize_globals(args.algo, args.name)
     # Get the shared timestamp
     # Debug - Print the global variables to check they're set correctly
     print(f"After initialization:")
@@ -62,8 +63,9 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    model = LeNet4((28, 28, 1), verbose=True)
-    # model = Resnet9s((32, 32, 3), verbose=True)
+    #model = LeNet4((28, 28, 1), verbose=True)
+    #model = Resnet9s((32, 32, 3), verbose=True)
+    model = test_conv((28, 28, 1), num_classes = 100, verbose=True)
     # model = test_model((28, 28, 1), verbose= True)
     # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
@@ -102,7 +104,6 @@ if __name__ == "__main__":
     #print_dependencies(task_graph)
     
     ##### Optimization algorithms #####
-        
     if ACO:
         print("Running Ant Colony Optimization...")
         # Redirect stdout to the Logger
@@ -110,15 +111,17 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 32,
-            rho = 0.05,
+            n_ants = 120,
+            rho = 0.05, #evaporation rate
             n_best = 10,
-            n_iterations = 1,
+            n_iterations = 500,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 8
+        n_procs = 12
         #opt = op.AntColony( params, grid, task_graph, seed = None)
+        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+        
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         shortest = opt.run(once_every=1, show_traces= False)

@@ -3,8 +3,6 @@ import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
 import larq
 
-from tensorflow.keras import layers, Model
-
 def ResBlock(x, filters, kernel_size=(3, 3), strides=(1, 1)):
     # First convolution in residual block
     y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(x)
@@ -52,7 +50,7 @@ def Resnet9s(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     x = layers.GlobalAveragePooling2D()(x)
     # FC Layer (Output layer)
     outputs = layers.Dense(num_classes, activation='softmax')(x)
-    model = Model(inputs=inputs, outputs=outputs)
+    model = keras.Model(inputs=inputs, outputs=outputs)
     if verbose:
         model.summary()
         print(f'shape of model: {x.shape}')
@@ -81,7 +79,7 @@ def LeNet4(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     x = layers.ReLU()(x)
     # Output Layer
     outputs = layers.Dense(num_classes, activation='softmax')(x)
-    model = Model(inputs=inputs, outputs=outputs)
+    model = keras.Model(inputs=inputs, outputs=outputs)
     if verbose:
         model.summary()        
         print(f'shape of model: {x.shape}')
@@ -125,13 +123,17 @@ def small_test_model(input_shape, verbose = False):
     return model
 
 
-def test_conv(input_shape, verbose = False):
+def test_conv(input_shape, num_classes, verbose = False):
     
     inputs = layers.Input(shape=input_shape)
-    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
-    #x = layers.Dense(3, activation='softmax')(x)
-    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
-    model = keras.Model(inputs=inputs, outputs=x)
+    x = layers.Conv2D(28, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.MaxPooling2D((2, 2))(x)
+    x = layers.Conv2D(56, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
+    x = layers.ReLU()(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=outputs)
     
     
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])

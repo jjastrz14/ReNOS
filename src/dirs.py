@@ -84,10 +84,12 @@ class DirectoryManager:
         
         return factors.get(comp_cycles)
     
-    def initialize(self, input_algo):
+    def initialize(self, input_algo, name_dir):
         """Initialize all dynamic paths and timestamps"""
         if self._initialized:
             return
+        
+        use_speedup_factor = False  # Set to False if you want to disable speedup factor calculation
         
         print("Starting directory initialization...")
         
@@ -98,18 +100,25 @@ class DirectoryManager:
             with open(DEFAULT_ARCH_FILE, 'w') as f:
                 json.dump({"arch": {"ANY_comp_cycles": 0.25}}, f)
         
-        # Calculate factor
-        comp_cycles = self.get_json_field(DEFAULT_ARCH_FILE, "ANY_comp_cycles", 0.25)
-        factor = self._calculate_factor(comp_cycles)
-        print(f"Calculated factor: {factor} from comp_cycles: {comp_cycles}")
+        if use_speedup_factor:
+            # Calculate factor
+            comp_cycles = self.get_json_field(DEFAULT_ARCH_FILE, "ANY_comp_cycles", 0.25)
+            factor = self._calculate_factor(comp_cycles)
+            print(f"Calculated factor: {factor} from comp_cycles: {comp_cycles}")
+            name_dir_to_use = name_dir + f"_{factor}"
+            print(f"Updated name_dir with factor: {name_dir}")
+        else:
+            name_dir_to_use = name_dir
+            print(f"Using name_dir: {name_dir}")
         
+            
         # Generate timestamp
         cet = pytz.timezone('CET')
         self._shared_timestamp = datetime.now(cet).strftime("%Y-%m-%d_%H-%M-%S")
         print(f"Generated timestamp: {self._shared_timestamp}")
         
         # Create arch file copy
-        arch_filename = f"arch_{factor}_.json"
+        arch_filename = f"arch_{name_dir_to_use}_.json"
         self.arch_file = os.path.join(CONFIG_FILES_DIR, arch_filename)
         try:
             shutil.copy(DEFAULT_ARCH_FILE, self.arch_file)
@@ -118,20 +127,20 @@ class DirectoryManager:
             print(f"Error copying arch file: {e}")
         
         # Create both directories
-        self.aco_dir = os.path.join(DATA_DIR, f"ACO_{factor}_{self._shared_timestamp}")
-        self.ga_dir = os.path.join(DATA_DIR, f"GA_{factor}_{self._shared_timestamp}")
+        self.aco_dir = os.path.join(DATA_DIR, f"ACO_{name_dir_to_use}_{self._shared_timestamp}")
+        self.ga_dir = os.path.join(DATA_DIR, f"GA_{name_dir_to_use}_{self._shared_timestamp}")
         
         # Set CONFIG_DUMP_DIR and ACO_DIR based on algorithm
         if input_algo == "ACO":
             os.makedirs(self.aco_dir, exist_ok=True)
             print(f"Created ACO_DIR: {self.aco_dir}")
-            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_ACO_{factor}_{self._shared_timestamp}")
+            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_ACO_{name_dir_to_use}_{self._shared_timestamp}")
             self.log_file_path_aco = os.path.join(self.aco_dir, f"log_ACO_{self._shared_timestamp}.out")
             print(f"Log paths set - ACO: {self.log_file_path_aco}")
         elif input_algo == "GA":
             os.makedirs(self.ga_dir, exist_ok=True)
             print(f"Created GA_DIR: {self.ga_dir}")
-            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_GA_{factor}_{self._shared_timestamp}")
+            self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_GA_{name_dir_to_use}_{self._shared_timestamp}")
             self.log_file_path_ga = os.path.join(self.ga_dir, f"log_GA_{self._shared_timestamp}.out")
             print(f"Log paths set - GA: {self.log_file_path_ga}")
         else:
@@ -180,8 +189,8 @@ _dir_manager = DirectoryManager()
 # -----------------------------------------------------------------------------
 
 # Functions
-def initialize_globals(input_algo):
-    _dir_manager.initialize(input_algo)
+def initialize_globals(input_algo, name_dir):
+    _dir_manager.initialize(input_algo, name_dir)
 
 def get_timestamp():
     return _dir_manager.get_timestamp()

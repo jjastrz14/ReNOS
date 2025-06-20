@@ -1527,6 +1527,8 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     - a dict of partitions: the key is the layer name and the svalue is a list of PartitionInfo objects, each representing a partition of the layer
     - a dict of dependencies between the partitions of the layers
     """
+    
+    splitting_factor = 3
 
     partitions = {}
     partitions_deps = {}
@@ -1547,7 +1549,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     input_layer = model.layers[0]
     
     # for input layer use defalut splitting stategy and Flops threshold
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer, prev_computational_partitioning=last_computational_partitioning)
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = splitting_factor,prev_computational_partitioning=last_computational_partitioning)
     
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
@@ -1572,7 +1574,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
             print("")
             print(f"Analyzing layer {layer.name} with FLOPs: {FLOPs}, MACs: {MACs}, FLOP threshold: {Flops_theshold}")
     
-        spat, out_ch, in_ch = _adaptive_parsel(layer, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
+        spat, out_ch, in_ch = _adaptive_parsel(layer, factor = splitting_factor, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
         partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
         
         # Update tracking of computational layers
