@@ -102,7 +102,7 @@ if __name__ == "__main__":
     
     #plot_graph(task_graph)
     #print_dependencies(task_graph)
-    breakpoint()
+    
     ##### Optimization algorithms #####
     if ACO:
         print("Running Ant Colony Optimization...")
