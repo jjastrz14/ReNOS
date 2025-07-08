@@ -11,20 +11,14 @@
 #SBATCH --mail-type=ALL
 
 source ~/renos/bin/activate
-ml Python/3.11.3-GCCcore-12.3.0
-ml pybind11/2.11.1-GCCcore-12.3.0
+module load Python/3.11.3-GCCcore-12.3.0
+module load pybind11/2.11.1-GCCcore-12.3.0
 
 RESULT_DIR="test_lem"
 WORK_DIR="$TMPDIR_LUSTRE/$RESULT_DIR"
 
 # Create output directory in home (permanent storage)
-mkdir -p ~/$RESULT_DIR || { echo "Result dir not created in home"; exit 1; }
-# Create working directory in temporary storage
-mkdir -p $TMPDIR_LUSTRE/$RESULT_DIR || { echo "Temp working dir not created"; exit 1; }
-# Change to working directory
-cd $WORK_DIR || { echo "Failed to change directory to $WORK_DIR"; exit 1; }
-
-echo "Setting up job in $WORK_DIR ended"
+mkdir -p $RESULT_DIR || { echo "Result dir not created in home"; exit 1; }
 
 # Run the simulation
 echo "Starting simulation at $(date)"
