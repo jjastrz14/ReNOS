@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
-#SBATCH --job-name=renos_test_lem
-#SBATCH --time=00:05:00         #time limit
+#SBATCH --job-name=renos_lem
+#SBATCH --time=05:05:00         #time limit
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128   #number of threads per task
-#SBATCH --mem=50gb               #memory per node
+#SBATCH --mem=25gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL

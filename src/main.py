@@ -114,7 +114,7 @@ if __name__ == "__main__":
             n_ants = 512,
             rho = 0.05, #evaporation rate
             n_best = 100,
-            n_iterations = 1,
+            n_iterations = 250,
             alpha = 1.,
             beta = 1.2,
         )
