@@ -92,7 +92,7 @@ if __name__ == "__main__":
     #print partitions and dependencies in a table format
     print("")
     print("Analysis of the partitions...")
-    print_partitions_table_adaptive(parts, deps, mode="auto")
+    #print_partitions_table_adaptive(parts, deps, mode="auto")
             
     #print("Plotting the partitions and dependencies of the model...")
     #plot_partitions(parts, deps)
