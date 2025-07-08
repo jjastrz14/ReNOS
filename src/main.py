@@ -63,9 +63,9 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    #model = LeNet4((28, 28, 1), verbose=True)
-    #model = Resnet9s((32, 32, 3), verbose=True)
-    model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
+    model = LeNet4((28, 28, 1), verbose=True)
+    # model = Resnet9s((32, 32, 3), verbose=True)
+    # model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
     # model = test_model((28, 28, 1), verbose= True)
     # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
@@ -111,14 +111,14 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 12,
+            n_ants = 512,
             rho = 0.05, #evaporation rate
-            n_best = 10,
-            n_iterations = 10,
+            n_best = 100,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 12
+        n_procs = 128
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         
