@@ -111,7 +111,7 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 120,
+            n_ants = 12,
             rho = 0.05, #evaporation rate
             n_best = 10,
             n_iterations = 10,
