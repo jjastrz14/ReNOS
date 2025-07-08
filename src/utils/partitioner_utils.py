@@ -1549,7 +1549,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     input_layer = model.layers[0]
     
     # for input layer use defalut splitting stategy and Flops threshold
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = splitting_factor,prev_computational_partitioning=last_computational_partitioning)
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = splitting_factor, prev_computational_partitioning=last_computational_partitioning)
     
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
