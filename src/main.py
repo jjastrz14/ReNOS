@@ -113,7 +113,7 @@ if __name__ == "__main__":
         params = op.ACOParameters(
             n_ants = 512,
             rho = 0.05, #evaporation rate
-            n_best = 100,
+            n_best = 50,
             n_iterations = 250,
             alpha = 1.,
             beta = 1.2,
