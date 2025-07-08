@@ -1528,7 +1528,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     - a dict of dependencies between the partitions of the layers
     """
     
-    splitting_factor = 3
+    splitting_factor = 5
 
     partitions = {}
     partitions_deps = {}

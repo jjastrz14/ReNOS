@@ -65,7 +65,7 @@ if __name__ == "__main__":
     start = time.time()
     #model = LeNet4((28, 28, 1), verbose=True)
     #model = Resnet9s((32, 32, 3), verbose=True)
-    model = test_conv((28, 28, 1), num_classes = 100, verbose=True)
+    model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
     # model = test_model((28, 28, 1), verbose= True)
     # model = small_test_model((28, 28, 1))
     # model = load_model("ResNet50")
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     
     #plot_graph(task_graph)
     #print_dependencies(task_graph)
-    
+    breakpoint()
     ##### Optimization algorithms #####
     if ACO:
         print("Running Ant Colony Optimization...")
@@ -114,7 +114,7 @@ if __name__ == "__main__":
             n_ants = 120,
             rho = 0.05, #evaporation rate
             n_best = 10,
-            n_iterations = 500,
+            n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
         )

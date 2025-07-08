@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 #timeline_path = "visual/seed_ACO_x2_refactored_from_test.png", verbose = False)
     #plot_timeline_factor_back(path_to_json = "data/ACO_onecyclerouter_x1_2025-04-28_14-10-49/best_solution.json",
     #                          timeline_path = "visual/ACO_router_oncecycle_x1.png", verbose = False)
-    plot_timeline(path_to_json = "data/GA_x1_2025-06-05_17-25-56/best_solution.json", timeline_path = "visual/test_ga_11.png", verbose = False)
+    plot_timeline(path_to_json = "data/ACO_test_conv_1k_2025-06-20_21-13-40/best_solution.json", timeline_path = "visual/test_small_conv.png", verbose = False)
     #for i in range(0,29):
     #    plot_timeline(path_to_json = f"data/dump_GA_{i}.json", #timeline_path = "visual/test_ga_6.png", verbose = False)
     #plot_timeline(path_to_json = f"data/dump_GA_27.json", timeline_path = "visual/test_ga_6.png", verbose = False)

@@ -126,14 +126,14 @@ def small_test_model(input_shape, verbose = False):
 def test_conv(input_shape, num_classes, verbose = False):
     
     inputs = layers.Input(shape=input_shape)
-    x = layers.Conv2D(28, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
-    x = layers.BatchNormalization()(x)
-    x = layers.ReLU()(x)
-    x = layers.MaxPooling2D((2, 2))(x)
-    x = layers.Conv2D(56, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
-    x = layers.ReLU()(x)
-    outputs = layers.Dense(num_classes, activation='softmax')(x)
-    model = keras.Model(inputs=inputs, outputs=outputs)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    #x = layers.BatchNormalization()(x)
+    #x = layers.ReLU()(x)
+    #x = layers.MaxPooling2D((2, 2))(x)
+    #x = layers.Conv2D(56, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
+    #x = layers.ReLU()(x)
+    #outputs = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
     
     
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
