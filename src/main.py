@@ -92,7 +92,7 @@ if __name__ == "__main__":
     #print partitions and dependencies in a table format
     print("")
     print("Analysis of the partitions...")
-    #print_partitions_table_adaptive(parts, deps, mode="auto")
+    print_partitions_table_adaptive(parts, deps, mode="auto")
             
     #print("Plotting the partitions and dependencies of the model...")
     #plot_partitions(parts, deps)
@@ -111,14 +111,14 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 512,
+            n_ants = 12,
             rho = 0.05, #evaporation rate
-            n_best = 50,
-            n_iterations = 250,
+            n_best = 10,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 128
+        n_procs = 6
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         

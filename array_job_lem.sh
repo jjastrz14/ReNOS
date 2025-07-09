@@ -8,7 +8,7 @@
 #SBATCH --mem=30gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
-#SBATCH --mail-type=ALL
+#SBATCH --mail-type=ALL, ARRAY_TASKS
 #SBATCH --array=1-100  #Array job specification - run jobs with indices 1-100
 
 source ~/renos/bin/activate

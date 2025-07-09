@@ -1804,6 +1804,8 @@ def print_partitions_table(partitions: Dict[str, List[PartitionInfo]], partition
     
     print("=" * target_width)
     
+    breakpoint()
+    
     # Summary statistics
     _print_partition_summary(partitions, target_width)
 
