@@ -37,7 +37,7 @@ import keras.layers as layers
 import prettytable as pt
 import os
 from typing import Dict, List
-
+import pandas as pd
 
 
 # Tranformation layers
@@ -823,7 +823,7 @@ def _build_partitions_from_layer(layer, spat = 0, out_ch = 1, in_ch = 1):
         p.FLOPs, p.MACs, p.tot_size = analyze_partition(p)
     return partitions
 
-def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, chosen_splitting = "output" ,FLOP_threshold = 30000):
+def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, chosen_splitting = "output", FLOP_threshold = 30000):
     """
     The functions selects the best partitioning strategy for a layer, based on the layer's characteristics.
     The main objective is to create the partitions for a layer with the lowest values for the splitting factors that, at the same time,
@@ -848,6 +848,9 @@ def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, c
     - FLOP_threshold: target FLOP count per partition for computational layers
     
     Notice: minimal splitting factor set is (0, 1, 1) for spatial, output, and input respectively.
+    Max splitting factor to be achived is passed as factor parameter.
+    
+    Flop threshold here is also passed as a parameter! 
     
     Returns:
     - tuple (spatial, output, input): partitioning parameters for the layer
@@ -980,7 +983,7 @@ def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, c
         # Iteratively increase splitting factor until FLOP threshold is met
         iteration = 0
         max_iterations = 20  # Prevent infinite loops
-        
+                
         # Track which strategies have been tried and maxed out
         maxed_out_strategies = set()
         
@@ -1001,7 +1004,9 @@ def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, c
                 max_flops = max([p.FLOPs for p in partitions]) if partitions else 0
                 avg_flops = sum([p.FLOPs for p in partitions]) / len(partitions) if partitions else 0
                 
-                print(f"Iteration {iteration}: Max FLOPs per partition: {max_flops}, Average: {avg_flops:.0f}")
+                #Edit here for 3 (or 4) different figures of merit
+                
+                print(f"Iteration {iteration}: Max FLOPs per partition: {max_flops}, Average: {avg_flops:.0f} with factors {splitting_factors}")
                 
                 if max_flops <= FLOP_threshold:
                     print(f"FLOP threshold satisfied!")
@@ -1069,7 +1074,7 @@ def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, c
     result = (splitting_factors['spatial'], splitting_factors['output'], splitting_factors['input'])
     print(f"Final partitioning for {layer.name}: {result}")
     print("====================================================")
-    
+        
     return result
 
 
@@ -1528,7 +1533,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     - a dict of dependencies between the partitions of the layers
     """
     
-    splitting_factor = 5
+    max_splitting_factor = 50
 
     partitions = {}
     partitions_deps = {}
@@ -1537,7 +1542,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     print(f"PE memory size: {pe.mem_size} and number of PEs: {nPEs}", )
     layer_deps = _build_layer_deps(model)
     
-    chosen_splitting = "input"  # Default splitting strategy
+    chosen_splitting = "spatial"  # Default splitting strategy
     
     # Track the most recent computational layer's partitioning
     last_computational_partitioning = None
@@ -1549,7 +1554,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     input_layer = model.layers[0]
     
     # for input layer use defalut splitting stategy and Flops threshold
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = splitting_factor, prev_computational_partitioning=last_computational_partitioning)
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = max_splitting_factor, prev_computational_partitioning = last_computational_partitioning)
     
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
@@ -1567,14 +1572,23 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
         
         FLOPs, MACs = _analyze_layer(layer)
         
+        # 1. strategy: Equal FLOPs per partitions across layer 
         # set FLOPS threshold per layer according to number of PEs and MACs per layer!
-        Flops_theshold = FLOPs / nPEs if isinstance(layer, computational_layers) else 1
+        Flops_theshold = 10 #FLOPs / nPEs if isinstance(layer, computational_layers) else 1
+        
+        #2. strategy: equal FLOPs per each partition across network
+        
+        #3. Data IN same per each partition
+        
+        #4. Data OUT same per each partition
+        
+        #5. Max utilization of the PEs Memory (equally distributed across partitions) (later to check with the mapping)
         
         if verbose:
             print("")
             print(f"Analyzing layer {layer.name} with FLOPs: {FLOPs}, MACs: {MACs}, FLOP threshold: {Flops_theshold}")
     
-        spat, out_ch, in_ch = _adaptive_parsel(layer, factor = splitting_factor, prev_computational_partitioning=last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
+        spat, out_ch, in_ch = _adaptive_parsel(layer, factor = max_splitting_factor, prev_computational_partitioning = last_computational_partitioning, chosen_splitting = chosen_splitting, FLOP_threshold = Flops_theshold)
         partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
         
         # Update tracking of computational layers
@@ -1609,8 +1623,153 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
 
 """
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
-3. MODEL ANALYSIS FUNCTIONS: used to analyze the model and compute the FLOPs and MACs.
-Remember each hook has form of return: FLOPs, MACs! 
+3. Search space exploration for partitioning functions
+* = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
+"""
+
+def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best_valid=True, path = "data" + "/partitioner_data"):
+    """
+    Explores ALL possible partitioning combinations (up to factor x factor x factor)
+    and collects FLOPs data for valid configurations.
+    """
+    print("\n====================================================")
+    print(f"Exploring ALL partitioning combinations for layer {layer.name}")
+    print(f"Maximum splitting factors: {factor}x{factor}x{factor}")
+    
+    # Configuration
+    max_splitting_factor = factor
+    computational_layers = (layers.Conv2D, layers.Dense, layers.DepthwiseConv2D, layers.SeparableConv2D)
+    auxiliary_layers = (
+        layers.BatchNormalization, 
+        layers.MaxPooling2D, 
+        layers.AveragePooling2D,
+        layers.GlobalMaxPooling2D,
+        layers.GlobalAveragePooling2D,
+        layers.Dropout,
+        layers.Activation,
+        layers.ReLU,
+        layers.LeakyReLU
+    )
+    
+    # Special case: InputLayer
+    if isinstance(layer, layers.InputLayer):
+        print("InputLayer detected - no partitioning needed")
+        return 0, 1, 1
+    
+    # Classify layer type
+    is_computational = isinstance(layer, computational_layers)
+    is_auxiliary = isinstance(layer, auxiliary_layers)
+    
+    print(f"Layer classification - Computational: {is_computational}, Auxiliary: {is_auxiliary}")
+    
+    if not is_computational and not is_auxiliary:
+        print("WARNING: Layer is neither computational nor auxiliary")
+        return 0, 1, 1
+
+    # Data collection structure
+    results = []
+    iteration = 0
+    
+    # For computational layers, explore all combinations
+    # Iterate through all possible combinations
+    for spatial in range(1, max_splitting_factor + 1):
+        for output in range(1, max_splitting_factor + 1):
+            for input_split in range(1, max_splitting_factor + 1):
+                try:
+                    # Build partitions with current splitting factors
+                    partitions = _build_partitions_from_layer(layer, spatial, output, input_split)
+                    
+                    # Calculate FLOP metrics
+                    max_flops = max([p.FLOPs for p in partitions]) if partitions else 0
+                    avg_flops = sum([p.FLOPs for p in partitions]) / len(partitions) if partitions else 0
+                    
+                    # Store results
+                    results.append({
+                        'iteration': iteration,
+                        'max_flops': max_flops,
+                        'avg_flops': avg_flops,
+                        'spatial': spatial,
+                        'output': output,
+                        'input': input_split,
+                        'valid': True,
+                        'partitions': len(partitions)
+                    })
+                    
+                    print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | "
+                        f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f}")
+                    
+                    iteration += 1
+                    
+                except ValueError as e:
+                    # Store invalid combinations
+                    results.append({
+                        'iteration': iteration,
+                        'max_flops': 0,
+                        'avg_flops': 0,
+                        'spatial': spatial,
+                        'output': output,
+                        'input': input_split,
+                        'valid': False,
+                        'error': str(e),
+                        'partitions': len(partitions)
+                    })
+                    print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | INVALID: {str(e)}")
+                    iteration += 1
+    
+    # Save results to CSV
+    if results:
+        df = pd.DataFrame(results)
+        
+        # Create CSV string
+        csv_data = "Iteration,Max_FLOPs,Avg_FLOPs,Spatial,Output,Kernel,Valid,Partitions\n"
+        for row in results:
+            csv_data += f"{row['iteration']},{row['max_flops']},{row['avg_flops']}," \
+                        f"{row['spatial']},{row['output']},{row['input']}," \
+                        f"{row['valid']},{row['partitions']}\n"
+        
+        # Save to file
+        with open(path + f"/parts_explo_{layer.name}.csv", "w") as f:
+            f.write(csv_data)
+        
+        print(f"path + /parts_explo_{layer.name}.csv")
+    
+    # Return the best valid partitioning (lowest max FLOPs that meets threshold)
+    if len(results) > 0:
+        if return_best_valid == True:
+            
+            valid_results = [r for r in results if r['valid']]
+            if valid_results:
+                
+                # Sort by max FLOPs (ascending) and total partitions (descending)
+                valid_results.sort(key=lambda x: (x['max_flops'], -(x['spatial'] * x['output'] * x['input'])))
+                
+                # Find the first result that meets the threshold
+                for result in valid_results:
+                    if result['max_flops'] <= FLOP_threshold:
+                        best_result = result
+                        break
+                else:
+                    # If none meet threshold, use the one with lowest max FLOPs
+                    best_result = valid_results[0]
+                
+                print("\nBest valid partitioning found:")
+                print(f"Spatial: {best_result['spatial']}, Output: {best_result['output']}, Input: {best_result['input']}")
+                print(f"Max FLOPs: {best_result['max_flops']:.0f}, Avg FLOPs: {best_result['avg_flops']:.0f}")
+                print(f"Partitions: {best_result['partitions']}")
+                
+                return best_result['spatial'], best_result['output'], best_result['input']
+        else:
+            print(f"\nReturning last valid partitioning found: Spatial: {results[-1]['spatial']}, Output: {results[-1]['output']}, Input: {results[-1]['input']}")
+            return results[-1]['spatial'], results[-1]['output'], results[-1]['input']
+    else:
+        print("No valid partitioning found, using minimal partitioning (1, 1, 1)")
+        return 1, 1, 1
+
+
+"""
+* = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
+4. MODEL ANALYSIS FUNCTIONS: used to analyze the model and compute the FLOPs and MACs.
+Remember each hook has order of return: FLOPs, MACs! 
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
@@ -1803,9 +1962,7 @@ def print_partitions_table(partitions: Dict[str, List[PartitionInfo]], partition
         _print_vertical_layout(partitions, target_width)
     
     print("=" * target_width)
-    
-    breakpoint()
-    
+        
     # Summary statistics
     _print_partition_summary(partitions, target_width)
 
