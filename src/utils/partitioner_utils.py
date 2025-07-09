@@ -1678,16 +1678,21 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                 try:
                     # Build partitions with current splitting factors
                     partitions = _build_partitions_from_layer(layer, spatial, output, input_split)
-                    
+
                     # Calculate FLOP metrics
                     max_flops = max([p.FLOPs for p in partitions]) if partitions else 0
                     avg_flops = sum([p.FLOPs for p in partitions]) / len(partitions) if partitions else 0
-                    
+                    #inputs + output + kernels size of the partitions
+                    max_size_partition = max([p.tot_size for p in partitions]) if partitions else 0
+                    avg_size_partition = sum([p.tot_size for p in partitions]) / len(partitions) if partitions else 0
+                    breakpoint()
                     # Store results
                     results.append({
                         'iteration': iteration,
                         'max_flops': max_flops,
                         'avg_flops': avg_flops,
+                        'max_size': max_size_partition,
+                        'avg_size': avg_size_partition,
                         'spatial': spatial,
                         'output': output,
                         'input': input_split,
@@ -1706,12 +1711,14 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                         'iteration': iteration,
                         'max_flops': 0,
                         'avg_flops': 0,
+                        'max_size': 0,
+                        'avg_size': 0,
                         'spatial': spatial,
                         'output': output,
                         'input': input_split,
                         'valid': False,
                         'error': str(e),
-                        'partitions': len(partitions)
+                        'partitions': 0
                     })
                     print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | INVALID: {str(e)}")
                     iteration += 1
@@ -1721,11 +1728,9 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
         df = pd.DataFrame(results)
         
         # Create CSV string
-        csv_data = "Iteration,Max_FLOPs,Avg_FLOPs,Spatial,Output,Kernel,Valid,Partitions\n"
+        csv_data = "Iteration,Max_FLOPs,Avg_FLOPs,Max_Size,Avg_Size,Spatial,Output,Kernel,Valid,Partitions\n"
         for row in results:
-            csv_data += f"{row['iteration']},{row['max_flops']},{row['avg_flops']}," \
-                        f"{row['spatial']},{row['output']},{row['input']}," \
-                        f"{row['valid']},{row['partitions']}\n"
+            csv_data += f"{row['iteration']},{row['max_flops']},{row['avg_flops']},{row['max_size']},{row['avg_size']},{row['spatial']},{row['output']},{row['input']},{row['valid']},{row['partitions']}\n"
         
         # Save to file
         with open(path + f"/parts_explo_{layer.name}.csv", "w") as f:
@@ -1755,6 +1760,7 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                 print("\nBest valid partitioning found:")
                 print(f"Spatial: {best_result['spatial']}, Output: {best_result['output']}, Input: {best_result['input']}")
                 print(f"Max FLOPs: {best_result['max_flops']:.0f}, Avg FLOPs: {best_result['avg_flops']:.0f}")
+                print(f"Max Size: {best_result['max_size']:.0f}, Avg Size: {best_result['avg_size']:.0f}")
                 print(f"Partitions: {best_result['partitions']}")
                 
                 return best_result['spatial'], best_result['output'], best_result['input']
