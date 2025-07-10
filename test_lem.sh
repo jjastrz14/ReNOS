@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_lem
-#SBATCH --time=00:05:00         #time limit
+#SBATCH --time=00:25:00         #time limit
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
-#SBATCH --cpus-per-task=1   #number of threads per task
-#SBATCH --mem=1gb               #memory per node
+#SBATCH --cpus-per-task=128  #number of threads per task
+#SBATCH --mem=15gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL
@@ -18,7 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="ACO"
-RESULT_DIR="LeNet4_run"
+RESULT_DIR="LeNet4_test_lem"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
@@ -45,8 +45,8 @@ echo "Setting up job in $TMPDIR_LUSTRE ended"
 # Run the simulation
 echo "Starting simulation at $(date)"
 
-#python3 src/main.py -algo $ALGO -name $RESULT_DIR
-python3 src/partitioner.py
+python3 src/main.py -algo $ALGO -name $RESULT_DIR
+#python3 src/partitioner.py
 
 echo "Simulation completed at $(date)"
 
