@@ -10,9 +10,12 @@
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL
 
-source ~/renos/bin/activate
+source /usr/local/sbin/modules.sh
 module load Python/3.11.3-GCCcore-12.3.0
 module load pybind11/2.11.1-GCCcore-12.3.0
+
+source ~/renos/bin/activate
+
 
 ALGO="ACO"
 RESULT_DIR="LeNet4_run"
@@ -52,13 +55,11 @@ echo "Copying results to $RESULT_DIR_HOME"
 
 if ls ./"${ALGO}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
     cp -r "./${ALGO}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
-    echo "Results copied successfully"
+    echo "Results copied successfully at $(date)"
 else
     echo "WARNING: No result files found to copy"
     echo "Files in current directory:"
     ls -la
 fi
-
-echo "Results copied at $(date)"
 
 echo "Job completed: $(date)"

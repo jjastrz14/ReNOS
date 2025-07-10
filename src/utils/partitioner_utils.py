@@ -1685,7 +1685,7 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                     #inputs + output + kernels size of the partitions
                     max_size_partition = max([p.tot_size for p in partitions]) if partitions else 0
                     avg_size_partition = sum([p.tot_size for p in partitions]) / len(partitions) if partitions else 0
-                    breakpoint()
+
                     # Store results
                     results.append({
                         'iteration': iteration,

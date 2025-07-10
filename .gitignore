@@ -220,3 +220,5 @@ config_files/
 data/
 # visual directory
 visual/
+
+slurm-*
