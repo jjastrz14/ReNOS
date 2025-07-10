@@ -3,7 +3,7 @@
 File: main.py
 Project: simopty
 File Created: Sunday, 8th December 2024
-Author: Edoardo Cabiati (edoardo.cabiati@mail.polimi.it)
+Authors: Jakub Jastrzebski and Edoardo Cabiati (jakubandrzej.jastrzebski@polimi.it, edoardo.cabiati@mail.polimi.it)
 Under the supervision of: Politecnico di Milano
 ==================================================
 '''
