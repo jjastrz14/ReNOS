@@ -1,15 +1,15 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_array
-#SBATCH --time=05:05:00         #time limit
+#SBATCH --time=00:02:00         #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128   #number of threads per task
-#SBATCH --mem=30gb               #memory per node
+#SBATCH --mem=20gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
-#SBATCH --mail-type=ALL, ARRAY_TASKS
-#SBATCH --array=1-100  #Array job specification - run jobs with indices 1-100
+#SBATCH --mail-type=ALL, ARRAY_TASKS    #ARRAY_TASKS to receive emails for each array task
+#SBATCH --array=1-2         #Array job specification - run jobs with indices 1-100
 
 source /usr/local/sbin/modules.sh
 module load Python/3.11.3-GCCcore-12.3.0
@@ -18,13 +18,14 @@ source ~/renos/bin/activate
 
 ALGO="ACO"
 RESULT_DIR="LeNet4_run_aray_${SLURM_ARRAY_TASK_ID}"
-RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
+RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data/${ALGO}_run_array"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
 export TMPDIR_LUSTRE
 
 # Create output directory
 mkdir -p $TMPDIR_LUSTRE || { echo "tmpdir lustre not created"; exit 1; }
+mkdir -p "$RESULT_DIR_HOME" || { echo "Result directory not created"; exit 1; }
 
 echo "Coping data to scratch"
 
