@@ -11,21 +11,60 @@
 #SBATCH --mail-type=ALL, ARRAY_TASKS
 #SBATCH --array=1-100  #Array job specification - run jobs with indices 1-100
 
-source ~/renos/bin/activate
+source /usr/local/sbin/modules.sh
 module load Python/3.11.3-GCCcore-12.3.0
 module load pybind11/2.11.1-GCCcore-12.3.0
+source ~/renos/bin/activate
+
+ALGO="ACO"
+RESULT_DIR="LeNet4_run_aray_${SLURM_ARRAY_TASK_ID}"
+RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
+
+TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
+export TMPDIR_LUSTRE
+
+# Create output directory
+mkdir -p $TMPDIR_LUSTRE || { echo "tmpdir lustre not created"; exit 1; }
+
+echo "Coping data to scratch"
+
+for pattern in \
+  build\ \
+  config_files\ \
+  src\ 
+do
+  cp -r  $pattern "$TMPDIR_LUSTRE/" || echo "Warning: failed to copy $pattern"
+done
+
+cd $TMPDIR_LUSTRE || { echo "Failed to change directory"; exit 1; }
+mkdir -p data || { echo "Data dir in lustre not created"; exit 1; }
+
+echo "Setting up job in $TMPDIR_LUSTRE ended"
 
 # Add array task ID to result directory name
-RESULT_DIR="LeNet4_run_aray_${SLURM_ARRAY_TASK_ID}"
 
 echo "Starting array job ${SLURM_ARRAY_TASK_ID} at $(date)"
-echo "Result directory: $RESULT_DIR"
 
 # Run the simulation
 echo "Starting simulation at $(date)"
 
-python3 src/main.py -algo ACO -name $RESULT_DIR
+python3 src/main.py -algo $ALGO -name $RESULT_DIR
+#python3 src/partitioner.py
 
 echo "Simulation completed at $(date)"
 
 echo "Array job ${SLURM_ARRAY_TASK_ID} completed: $(date)"
+
+# Copy results back
+echo "Copying results to $RESULT_DIR_HOME"
+
+if ls ./data/"${ALGO}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
+    cp -r "./data/${ALGO}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
+    echo "Results copied successfully at $(date)"
+else
+    echo "WARNING: No result files found to copy"
+    echo "Files in current directory:"
+    ls -la
+fi
+
+echo "Job completed: $(date)"
