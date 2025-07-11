@@ -87,13 +87,14 @@ if __name__ == "__main__":
     analyze_ops(model, incl_info = True)
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
-    parts, deps = build_partitions(model, grid, grouping = False, verbose = True)
-        
+    #spatial, output, input
+    parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
+    
     #print partitions and dependencies in a table format
     print("")
-    print("Analysis of the partitions...")
-    print_partitions_table_adaptive(parts, deps, mode="auto")
-            
+    print("Analysis of the partitions...") 
+    print_partitions_table_adaptive(parts, deps, mode="minimal") #possible modes: "auto", "compact", "vertical", "minimal"
+    
     #print("Plotting the partitions and dependencies of the model...")
     #plot_partitions(parts, deps)
     #print("Done!")
@@ -111,14 +112,14 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 512,
+            n_ants = 2,
             rho = 0.05, #evaporation rate
             n_best = 10,
-            n_iterations = 10,
+            n_iterations = 2,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 128
+        n_procs = 1
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         

@@ -1521,7 +1521,7 @@ def _build_straight_through_deps(partitions: Dict[str, List[PartitionInfo]], par
     
     return partitions, partitions_deps
 
-def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
+def build_partitions(model: keras.Model, grid, chosen_splitting_strategy: str = "spatial", grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
     """
     The function creates the partitions for each layer in the model, based on the partitioning strategies defined above.
 
@@ -1533,7 +1533,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     - a dict of dependencies between the partitions of the layers
     """
     
-    max_splitting_factor = 50
+    max_splitting_factor = 5
 
     partitions = {}
     partitions_deps = {}
@@ -1542,7 +1542,11 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     print(f"PE memory size: {pe.mem_size} and number of PEs: {nPEs}", )
     layer_deps = _build_layer_deps(model)
     
-    chosen_splitting = "spatial"  # Default splitting strategy
+    #avilable splitting strategies spatial, output, input:: 
+    assert chosen_splitting_strategy in ('spatial', 'output', 'input'), \
+        f"Invalid chosen_splitting_strategy: {chosen_splitting_strategy}. Must be 'spatial', 'output', or 'input'."
+        
+    chosen_splitting = chosen_splitting_strategy
     
     # Track the most recent computational layer's partitioning
     last_computational_partitioning = None
@@ -1554,7 +1558,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
     input_layer = model.layers[0]
     
     # for input layer use defalut splitting stategy and Flops threshold
-    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = max_splitting_factor, prev_computational_partitioning = last_computational_partitioning)
+    spat, out_ch, in_ch = _adaptive_parsel(input_layer, factor = max_splitting_factor, chosen_splitting = chosen_splitting, prev_computational_partitioning = last_computational_partitioning)
     
     partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
     if verbose:
@@ -1574,7 +1578,7 @@ def build_partitions(model: keras.Model, grid, grouping: bool = True, verbose : 
         
         # 1. strategy: Equal FLOPs per partitions across layer 
         # set FLOPS threshold per layer according to number of PEs and MACs per layer!
-        Flops_theshold = 10 #FLOPs / nPEs if isinstance(layer, computational_layers) else 1
+        Flops_theshold = FLOPs / nPEs if isinstance(layer, computational_layers) else 1
         
         #2. strategy: equal FLOPs per each partition across network
         
@@ -2038,7 +2042,7 @@ def _print_vertical_layout(partitions: Dict[str, List[PartitionInfo]], max_width
             print(f"  Partition {i}:")
             print(f"    Input:  {_format_bounds_compact(partition.in_bounds)}")
             print(f"    Output: {_format_bounds_compact(partition.out_bounds)}")
-            print(f"    Channels: {partition.in_ch[1]-partition.in_ch[0]} → {partition.out_ch[1]-partition.out_ch[0]}")
+            print(f"    Channels: {partition.in_ch[1]-partition.in_ch[0] if partition.in_ch else 'N/A'} → {partition.out_ch[1]-partition.out_ch[0] if partition.out_ch else 'N/A'}") 
             print(f"    FLOPs: {_format_number(partition.FLOPs)}")
             print(f"    Size: {_format_number(partition.tot_size)} bytes")
             if i < len(partitions_list) - 1:
