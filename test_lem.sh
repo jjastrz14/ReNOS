@@ -53,8 +53,8 @@ echo "Simulation completed at $(date)"
 # Copy results back
 echo "Copying results to $RESULT_DIR_HOME"
 
-if ls ./"${ALGO}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
-    cp -r "./${ALGO}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
+if ls ./data/"${ALGO}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
+    cp -r "./data/${ALGO}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
     echo "Results copied successfully at $(date)"
 else
     echo "WARNING: No result files found to copy"
