@@ -106,7 +106,7 @@ if __name__ == "__main__":
     
     ##### Optimization algorithms #####
     if ACO:
-        print("Running Ant Colony Optimization...")
+        print("\n ...Running Ant Colony Optimization...")
         # Redirect stdout to the Logger
         log_path = get_aco_log_path()
         sys.stdout = Logger(log_path)
