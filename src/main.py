@@ -129,6 +129,12 @@ if __name__ == "__main__":
         print("The best path found is: ")
         print(shortest)
         
+        #imshow occupancy of the grid -> memory usage 
+        
+        
+        #imshow occupancy of the gird -> resources usage over time
+        #this guy probably using logger
+        
         print("Visualizing the best path...\n")
         # Visualize the best path
         plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/ACO_" + get_timestamp() + ".png", verbose = False)

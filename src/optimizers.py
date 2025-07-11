@@ -672,7 +672,7 @@ class ParallelAntColony(AntColony):
                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)),
                                 )) as pool:
-            # generate the paths in parallel: each process is assigned to a subsed of the ants
+            # generate the paths in parallel: each process is assigned to a subset of the ants
             # evenly distributed
             # seed below allows for setting same seed for each ants (set it by passing seed to the constructor)
             colony_paths = pool.map_async(walk_batch,[(self.ants[start:end], self.seed)for start, end in self.intervals])
