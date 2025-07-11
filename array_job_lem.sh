@@ -8,7 +8,7 @@
 #SBATCH --mem=20gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
-#SBATCH --mail-type=ALL, ARRAY_TASKS    #ARRAY_TASKS to receive emails for each array task
+#SBATCH --mail-type=ALL,ARRAY_TASKS    #ARRAY_TASKS to receive emails for each array task
 #SBATCH --array=1-2         #Array job specification - run jobs with indices 1-100
 
 source /usr/local/sbin/modules.sh
