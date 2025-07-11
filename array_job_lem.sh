@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_array
-#SBATCH --time=00:02:00         #time limit HH:MM:SS
+#SBATCH --time=00:12:00         #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128   #number of threads per task
@@ -9,7 +9,7 @@
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL,ARRAY_TASKS    #ARRAY_TASKS to receive emails for each array task
-#SBATCH --array=1-2         #Array job specification - run jobs with indices 1-100
+#SBATCH --array=1-50         #Array job specification - run jobs with indices 1-100
 
 source /usr/local/sbin/modules.sh
 module load Python/3.11.3-GCCcore-12.3.0
