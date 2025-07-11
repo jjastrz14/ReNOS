@@ -112,14 +112,14 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 2,
+            n_ants = 512,
             rho = 0.05, #evaporation rate
-            n_best = 10,
-            n_iterations = 2,
+            n_best = 50,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 1
+        n_procs = 128
         #opt = op.AntColony( params, grid, task_graph, seed = None)
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         
