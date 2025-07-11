@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_array
-#SBATCH --time=00:12:00         #time limit HH:MM:SS
+#SBATCH --time=12:00:00         #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128   #number of threads per task
