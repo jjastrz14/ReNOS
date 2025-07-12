@@ -302,6 +302,20 @@ class PE:
         self.mem_size = mem_size
         self.mem_used = 0
 
+    def get_memory_occupation(self, as_percent: bool = False):
+        """
+        Returns the current memory occupation.
+        Args:
+            as_percent (bool): If True, returns occupation as a percentage of total memory.
+        Returns:
+            int or float: Memory used (bytes) or percentage.
+        """
+        if as_percent:
+            return 100.0 * self.mem_used / self.mem_size if self.mem_size else 0.0
+        return self.mem_used
+
+
+
 # A function to construct the id to assign to each partition. The general rule for construction of the ID of 
 # a partition is the following:
 # for each type of partitioning, a unique number is assigned to the partition: since multiple partitions may be applied sequentially to the same layer, and since the order of

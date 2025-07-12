@@ -250,6 +250,7 @@ def walk_batch(args):
     # pick a random number
     # print("Random number: ", random.randint(0, 100))
 
+    #any paralelsation?
     paths = []
     for ant in ants:
         paths.append(ant.walk())
