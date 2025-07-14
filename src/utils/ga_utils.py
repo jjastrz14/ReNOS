@@ -648,14 +648,14 @@ class OperatorPool:
         Returns:
             Modified offspring with source/drain constraints enforced
         """
-        if len(offspring) > 0:
-            # Check if first task is "start" and enforce source node mapping
-            if len(self.optimizer.tasks) > 0 and self.optimizer.tasks[0] == "start":
-                offspring[0] = self.optimizer.task_graph.SOURCE_POINT
-                
-            # Check if last task is "end" and enforce drain node mapping  
-            if len(self.optimizer.tasks) > 1 and self.optimizer.tasks[-1] == "end":
-                offspring[-1] = self.optimizer.task_graph.DRAIN_POINT
+        #if len(offspring) > 0:
+        # Check if first task is "start" and enforce source node mapping
+        if len(self.optimizer.tasks) > 0 and self.optimizer.tasks[0] == "start":
+            offspring[0] = self.optimizer.task_graph.SOURCE_POINT
+            
+        # Check if last task is "end" and enforce drain node mapping  
+        if len(self.optimizer.tasks) > 1 and self.optimizer.tasks[-1] == "end":
+            offspring[-1] = self.optimizer.task_graph.DRAIN_POINT
                 
         return offspring
 

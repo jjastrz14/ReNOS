@@ -131,7 +131,6 @@ if __name__ == "__main__":
         
         #imshow occupancy of the grid -> memory usage 
         
-        
         #imshow occupancy of the gird -> resources usage over time
         #this guy probably using logger
         
@@ -154,11 +153,11 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
         
         params = op.GAParameters(
-        sol_per_pop = 512, #30,
+        sol_per_pop = 512, #512, #30,
         n_parents_mating= 50, #20, #Number of solutions to be selected as parents.
         keep_parents= -1, #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss",
-        n_generations = 1, #800,
+        n_generations = 100, #800,
         mutation_probability = .6,
         crossover_probability = .75,
         )
