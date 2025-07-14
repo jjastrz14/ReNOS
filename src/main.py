@@ -156,16 +156,16 @@ if __name__ == "__main__":
         params = op.GAParameters(
         sol_per_pop = 30, #30,
         n_parents_mating= 20, #20,
-        keep_parents= 5,#10,
+        keep_parents= 10,#10,
         parent_selection_type= "sss",
-        n_generations = 2, #800,
+        n_generations = 50, #800,
         mutation_probability = .7,
         crossover_probability = .7,
         )
         
-        #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best olution given by  print(shortest[0], 1/shortest[1])it is not the best one
+        #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best solution given by  print(shortest[0], 1/shortest[1])it is not the best one
         
-        n_procs = 30
+        n_procs = 10
         #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
         opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
@@ -173,6 +173,10 @@ if __name__ == "__main__":
         #opt.ga_instance.plot_fitness()
         print("The best path found is: ")
         print(shortest[0], 1/shortest[1])
+        
+        print("Visualizing the best path...\n")
+        # Visualize the best path
+        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/GA_" + get_timestamp() + ".png", verbose = False)
         
         end = time.time()
         elapsed_time = end - start
