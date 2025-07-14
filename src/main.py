@@ -154,18 +154,18 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
         
         params = op.GAParameters(
-        sol_per_pop = 30, #30,
-        n_parents_mating= 20, #20,
-        keep_parents= 10,#10,
+        sol_per_pop = 512, #30,
+        n_parents_mating= 50, #20, #Number of solutions to be selected as parents.
+        keep_parents= -1, #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss",
-        n_generations = 50, #800,
-        mutation_probability = .7,
-        crossover_probability = .7,
+        n_generations = 1, #800,
+        mutation_probability = .6,
+        crossover_probability = .75,
         )
         
         #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best solution given by  print(shortest[0], 1/shortest[1])it is not the best one
         
-        n_procs = 10
+        n_procs = 128
         #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
         opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
