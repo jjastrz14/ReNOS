@@ -529,6 +529,8 @@ class OperatorPool:
             os.system(f"mv {self.GA_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}/best_solution.json")
             #os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
             print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + self.GA_DIR + "/best_solution.json")
+        else:
+            self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
             
         print("=" * 60)
         print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, 1/max(pop_fit), np.argmax(pop_fit)))

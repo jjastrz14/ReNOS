@@ -112,18 +112,19 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
-            n_ants = 512,
+            n_ants = 10,
             rho = 0.05, #evaporation rate
-            n_best = 50,
-            n_iterations = 1000,
+            n_best = 3,
+            n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 128
-        #opt = op.AntColony( params, grid, task_graph, seed = None)
-        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+        n_procs = 2
         
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+        opt = op.AntColony( params, grid, task_graph, seed = None)
+
+        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
@@ -154,12 +155,12 @@ if __name__ == "__main__":
         
         params = op.GAParameters(
         sol_per_pop = 512, #512, #30,
-        n_parents_mating= 50, #20, #Number of solutions to be selected as parents.
+        n_parents_mating= 64, #20, #Number of solutions to be selected as parents.
         keep_parents= -1, #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
-        parent_selection_type= "sss",
-        n_generations = 100, #800,
-        mutation_probability = .6,
-        crossover_probability = .75,
+        parent_selection_type= "tournament", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). 
+        n_generations = 1000, #800,
+        mutation_probability = .4, #some exploration, so don’t kill mutation completely.
+        crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         )
         
         #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best solution given by  print(shortest[0], 1/shortest[1])it is not the best one
