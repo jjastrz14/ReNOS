@@ -897,7 +897,7 @@ def _adaptive_parsel(layer, factor = 10, prev_computational_partitioning=None, c
         layers.LeakyReLU
     )
     
-    #in funtion build taks graph we ommit Flatten and Add
+    #in funtion build tasks graph we ommit Flatten and Add
     
     is_computational = isinstance(layer, computational_layers)
     is_auxiliary = isinstance(layer, auxiliary_layers)
