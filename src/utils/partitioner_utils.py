@@ -1721,7 +1721,7 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                     })
                     
                     print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | "
-                        f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f}")
+                        f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f} | Partitions: {len(partitions)}")
                     
                     iteration += 1
                     
