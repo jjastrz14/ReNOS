@@ -3,7 +3,7 @@
 File: ga_utils.py
 Project: utils
 File Created: Saturday, 28th December 2024
-Author: Edoardo Cabiati (edoardo.cabiati@mail.polimi.it)
+Author: Jakub Jastrzebski, Edoardo Cabiati (jakubandrzej.jastrzebski@polimi.it)
 Under the supervision of: Politecnico di Milano
 ==================================================
 '''
@@ -19,306 +19,6 @@ from utils.partitioner_utils import PE
 from dirs import get_CONFIG_DUMP_DIR, get_GA_DIR
 
 
-    
-"""
-# 1-POINT CROSSOVER
-def cross_1point(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        random_split_point = np.random.choice(range(offspring_size[1]))
-
-        parent1[random_split_point:] = parent2[random_split_point:]
-
-        offspring.append(parent1)
-
-        idx += 1
-
-    return np.array(offspring)
-
-# 2-POINT CROSSOVER
-def cross_2point(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        random_split_points = np.random.choice(range(offspring_size[1]), 2)
-
-        if random_split_points[0] > random_split_points[1]:
-            random_split_points = random_split_points[::-1]
-        parent1[random_split_points[0]:random_split_points[1]] = parent2[random_split_points[0]:random_split_points[1]]
-
-        offspring.append(parent1)
-
-        idx += 1
-
-    return np.array(offspring)
-
-
-# UNIFORM CROSSOVER
-def cross_uniform(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        random_mask = np.random.choice([0, 1], size=offspring_size[1])
-
-        offspring1 = parent1.copy()
-        offspring2 = parent2.copy()
-        offspring1[random_mask == 1] = parents[idx % parents.shape[0], random_mask == 1]
-        offspring2[random_mask == 1] = parents[(idx + 1) % parents.shape[0], random_mask == 1]
-
-        offspring.append(offspring1)
-        offspring.append(offspring2)
-
-        idx += 2
-
-    return np.array(offspring)
-
-"""
-
-# IRC (ISOMORPHIC REPLACEMENT CROSSOVER)
-# will be added to the pool if the optimal solution is not updated after a certain threshold
-def create_isomorophic_chromosomes(parent):
-    """
-    Create an isomorphic chromosome: those are obtained using 
-    a permutation of the genes of the parents, using the dimensions of the reference NoC.
-    Available transformations are:
-    - center symmetry
-    - mirror (vertical and horizontal flip) symmetry
-    - center rotation
-
-    Args:
-        parent (np.array): the parent chromosome.
-        It represents a mapping of the task graph onto the NoC: the chromosome is a list of 
-        indexes, each one representing the PE of the NoC where the corresponding task in th task
-        list is mapped.
-
-    Example:
-        NoC size: 3x3
-        parent = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-        isomorphic_chromosomes :
-            vertical flip: [6, 7, 8, 3, 4, 5, 0, 1, 2, 9]
-            horizontal flip: [2, 1, 0, 5, 4, 3, 8, 7, 6, 9]
-            center symmetry: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
-    """
-    pass
-
-
-
-# REDUCED SURROGATE CROSSOVER 
-def cross_rsc(parents, offspring_size, ga_instance):
-    
-    similarity_threshold = 1. # if the similarity is equal or greater than 1. (in percentage), the parents are considered similar
-
-    offspring = []
-    idx = 0
-
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        similarity = np.sum(parent1 == parent2) / len(parent1)
-
-        if similarity >= similarity_threshold:
-            continue
-        else:
-            # perform 1-point crossover
-            random_split_point = np.random.choice(range(offspring_size[1]))
-            parent1[random_split_point:] = parent2[random_split_point:]
-
-            offspring.append(parent1)
-        
-
-        idx += 1
-
-    return np.array(offspring)
-
-
-
-# DISCRETE CROSSOVER
-def cross_discrete(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        random_mask = np.random.choice([0, 1], size=offspring_size[1])
-
-        parent1[random_mask == 1] = parent2[random_mask == 1]
-
-        offspring.append(parent1)
-
-        idx += 1
-
-    return np.array(offspring)
-
-# AVERAGE CROSSOVER
-def cross_average(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        offspring.append((parent1 + parent2) // 2) # integer division
-
-        idx += 1
-
-    return np.array(offspring)
-
-# MULTIPARENT CROSSOVER
-def cross_multiparent(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        
-        # parents subset
-        parents_subset = [(idx + i) % parents.shape[0] for i in range(offspring_size[1])]
-        offspring.append(np.array([parents[parents_subset[i], i] for i in range(offspring_size[1])]))
-
-        idx += 1
-
-    return np.array(offspring)
-
-# FLAT CROSSOVER
-def cross_flat(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        # pick a random number between min(parent1, parent2) and max(parent1, parent2) for each gene
-        offspring.append(np.array([np.random.choice([parent1[i], parent2[i]]) for i in range(offspring_size[1])]))
-
-        idx += 1
-
-    return np.array(offspring)
-
-# MULTIVARIATE CROSSOVER
-def cross_multivariate(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    k = int(0.3 * offspring_size[1]) # number of subsegments
-    # for each one, we draw a random number: if this number is higher than the
-    # crossover probability, we swap the genes of the parents in the subsegment
-
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        
-        random_split_points = np.sort(np.random.choice(range(1, offspring_size[1]), k-1))
-        print(random_split_points)
-        # for each subsegment, we draw a random number: if this number is higher than the
-        # crossover probability, we swap the genes of the parents in the subsegment
-
-        for i in range(k):
-            if i == 0:
-                start = 0
-            else:
-                start = random_split_points[i-1]
-            if i == k-1:
-                end = offspring_size[1]
-            else:
-                end = random_split_points[i]
-
-            roulette = np.random.rand()
-            if roulette < ga_instance.crossover_probability:
-                parent1[start:end], parent2[start:end] = parent2[start:end], parent1[start:end]
-
-        offspring.append(parent1)
-        offspring.append(parent2)
-
-        idx += 2
-
-    return np.array(offspring)
-
-def cross_shuffle(parents, offspring_size, ga_instance):
-    offspring = []
-    idx = 0
-    k = int(0.25 * offspring_size[1]) # number of genes to shuffle
-    while len(offspring) != offspring_size[0]:
-        parent1 = parents[idx % parents.shape[0], :].copy()
-        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
-
-        shuffle_genes = np.zeros(parent1.shape[0])
-        
-        # find k points in the parents that are the same and shuffle them
-        # if there are less than k points, we simply shuffle all the ones
-        # we can find
-        for i in range(offspring_size[1]):
-            if parent1[i] == parent2[i]:
-                shuffle_genes[i] = 1
-            if sum(shuffle_genes) == k:
-                break
-        print(shuffle_genes)
-        
-        # shuffle the genes in the marked positions
-        np.random.shuffle(parent1[shuffle_genes == 1])
-        np.random.shuffle(parent2[shuffle_genes == 1])
-
-        # perform 1-point crossover
-        random_split_point = np.random.choice(range(offspring_size[1]))
-        parent1[random_split_point:] = parent2[random_split_point:]
-
-        offspring.append(parent1)
-
-        idx += 1
-
-    return np.array(offspring)
-
-
-# def mutate_random(offspring, ga_instance):
-#     for chromosome_idx in range(offspring.shape[0]):
-#         random_gene_idx = np.random.choice(range(offspring.shape[1]))
-
-#         offspring[chromosome_idx, random_gene_idx] = np.random.choice(range(ga_instance.domain.size))
-
-#     return offspring
-
-# def mutate_swap(offspring, ga_instance):
-
-#     for chromosome_idx in range(offspring.shape[0]):
-#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
-#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
-
-#         offspring[chromosome_idx, random_gene_idx1], offspring[chromosome_idx, random_gene_idx2] = offspring[chromosome_idx, random_gene_idx2], offspring[chromosome_idx, random_gene_idx1]
-
-#     return offspring
-
-# def mutate_inversion(offspring, ga_instance):
-#     for chromosome_idx in range(offspring.shape[0]):
-#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
-#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
-
-#         if random_gene_idx1 > random_gene_idx2:
-#             random_gene_idx1, random_gene_idx2 = random_gene_idx2, random_gene_idx1
-
-#         offspring[chromosome_idx, random_gene_idx1:random_gene_idx2] = offspring[chromosome_idx, random_gene_idx1:random_gene_idx2][::-1]
-
-#     return offspring
-
-# def mutate_scramble(offspring, ga_instance):
-#     for chromosome_idx in range(offspring.shape[0]):
-#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
-#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
-
-#         if random_gene_idx1 > random_gene_idx2:
-#             random_gene_idx1, random_gene_idx2 = random_gene_idx2, random_gene_idx1
-
-#         offspring[chromosome_idx, random_gene_idx1:random_gene_idx2] = np.random.permutation(offspring[chromosome_idx, random_gene_idx1:random_gene_idx2])
-
-#     return offspring
 
 MUTATION_OPERATORS = [
     "random",
@@ -666,3 +366,309 @@ class OperatorPool:
 
     def __len__(self):
         return (len(self.crossover_pool), len(self.mutation_pool))
+    
+    
+    
+    
+'''
+Below some legacy code of Edoardo
+"""
+# 1-POINT CROSSOVER
+def cross_1point(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        random_split_point = np.random.choice(range(offspring_size[1]))
+
+        parent1[random_split_point:] = parent2[random_split_point:]
+
+        offspring.append(parent1)
+
+        idx += 1
+
+    return np.array(offspring)
+
+# 2-POINT CROSSOVER
+def cross_2point(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        random_split_points = np.random.choice(range(offspring_size[1]), 2)
+
+        if random_split_points[0] > random_split_points[1]:
+            random_split_points = random_split_points[::-1]
+        parent1[random_split_points[0]:random_split_points[1]] = parent2[random_split_points[0]:random_split_points[1]]
+
+        offspring.append(parent1)
+
+        idx += 1
+
+    return np.array(offspring)
+
+
+# UNIFORM CROSSOVER
+def cross_uniform(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        random_mask = np.random.choice([0, 1], size=offspring_size[1])
+
+        offspring1 = parent1.copy()
+        offspring2 = parent2.copy()
+        offspring1[random_mask == 1] = parents[idx % parents.shape[0], random_mask == 1]
+        offspring2[random_mask == 1] = parents[(idx + 1) % parents.shape[0], random_mask == 1]
+
+        offspring.append(offspring1)
+        offspring.append(offspring2)
+
+        idx += 2
+
+    return np.array(offspring)
+
+"""
+
+# IRC (ISOMORPHIC REPLACEMENT CROSSOVER)
+# will be added to the pool if the optimal solution is not updated after a certain threshold
+def create_isomorophic_chromosomes(parent):
+    """
+    Create an isomorphic chromosome: those are obtained using 
+    a permutation of the genes of the parents, using the dimensions of the reference NoC.
+    Available transformations are:
+    - center symmetry
+    - mirror (vertical and horizontal flip) symmetry
+    - center rotation
+
+    Args:
+        parent (np.array): the parent chromosome.
+        It represents a mapping of the task graph onto the NoC: the chromosome is a list of 
+        indexes, each one representing the PE of the NoC where the corresponding task in th task
+        list is mapped.
+
+    Example:
+        NoC size: 3x3
+        parent = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        isomorphic_chromosomes :
+            vertical flip: [6, 7, 8, 3, 4, 5, 0, 1, 2, 9]
+            horizontal flip: [2, 1, 0, 5, 4, 3, 8, 7, 6, 9]
+            center symmetry: [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+    """
+    pass
+
+
+
+# REDUCED SURROGATE CROSSOVER 
+def cross_rsc(parents, offspring_size, ga_instance):
+    
+    similarity_threshold = 1. # if the similarity is equal or greater than 1. (in percentage), the parents are considered similar
+
+    offspring = []
+    idx = 0
+
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        similarity = np.sum(parent1 == parent2) / len(parent1)
+
+        if similarity >= similarity_threshold:
+            continue
+        else:
+            # perform 1-point crossover
+            random_split_point = np.random.choice(range(offspring_size[1]))
+            parent1[random_split_point:] = parent2[random_split_point:]
+
+            offspring.append(parent1)
+        
+
+        idx += 1
+
+    return np.array(offspring)
+
+
+
+# DISCRETE CROSSOVER
+def cross_discrete(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        random_mask = np.random.choice([0, 1], size=offspring_size[1])
+
+        parent1[random_mask == 1] = parent2[random_mask == 1]
+
+        offspring.append(parent1)
+
+        idx += 1
+
+    return np.array(offspring)
+
+# AVERAGE CROSSOVER
+def cross_average(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        offspring.append((parent1 + parent2) // 2) # integer division
+
+        idx += 1
+
+    return np.array(offspring)
+
+# MULTIPARENT CROSSOVER
+def cross_multiparent(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        
+        # parents subset
+        parents_subset = [(idx + i) % parents.shape[0] for i in range(offspring_size[1])]
+        offspring.append(np.array([parents[parents_subset[i], i] for i in range(offspring_size[1])]))
+
+        idx += 1
+
+    return np.array(offspring)
+
+# FLAT CROSSOVER
+def cross_flat(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        # pick a random number between min(parent1, parent2) and max(parent1, parent2) for each gene
+        offspring.append(np.array([np.random.choice([parent1[i], parent2[i]]) for i in range(offspring_size[1])]))
+
+        idx += 1
+
+    return np.array(offspring)
+
+# MULTIVARIATE CROSSOVER
+def cross_multivariate(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    k = int(0.3 * offspring_size[1]) # number of subsegments
+    # for each one, we draw a random number: if this number is higher than the
+    # crossover probability, we swap the genes of the parents in the subsegment
+
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        
+        random_split_points = np.sort(np.random.choice(range(1, offspring_size[1]), k-1))
+        print(random_split_points)
+        # for each subsegment, we draw a random number: if this number is higher than the
+        # crossover probability, we swap the genes of the parents in the subsegment
+
+        for i in range(k):
+            if i == 0:
+                start = 0
+            else:
+                start = random_split_points[i-1]
+            if i == k-1:
+                end = offspring_size[1]
+            else:
+                end = random_split_points[i]
+
+            roulette = np.random.rand()
+            if roulette < ga_instance.crossover_probability:
+                parent1[start:end], parent2[start:end] = parent2[start:end], parent1[start:end]
+
+        offspring.append(parent1)
+        offspring.append(parent2)
+
+        idx += 2
+
+    return np.array(offspring)
+
+def cross_shuffle(parents, offspring_size, ga_instance):
+    offspring = []
+    idx = 0
+    k = int(0.25 * offspring_size[1]) # number of genes to shuffle
+    while len(offspring) != offspring_size[0]:
+        parent1 = parents[idx % parents.shape[0], :].copy()
+        parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+        shuffle_genes = np.zeros(parent1.shape[0])
+        
+        # find k points in the parents that are the same and shuffle them
+        # if there are less than k points, we simply shuffle all the ones
+        # we can find
+        for i in range(offspring_size[1]):
+            if parent1[i] == parent2[i]:
+                shuffle_genes[i] = 1
+            if sum(shuffle_genes) == k:
+                break
+        print(shuffle_genes)
+        
+        # shuffle the genes in the marked positions
+        np.random.shuffle(parent1[shuffle_genes == 1])
+        np.random.shuffle(parent2[shuffle_genes == 1])
+
+        # perform 1-point crossover
+        random_split_point = np.random.choice(range(offspring_size[1]))
+        parent1[random_split_point:] = parent2[random_split_point:]
+
+        offspring.append(parent1)
+
+        idx += 1
+
+    return np.array(offspring)
+
+
+# def mutate_random(offspring, ga_instance):
+#     for chromosome_idx in range(offspring.shape[0]):
+#         random_gene_idx = np.random.choice(range(offspring.shape[1]))
+
+#         offspring[chromosome_idx, random_gene_idx] = np.random.choice(range(ga_instance.domain.size))
+
+#     return offspring
+
+# def mutate_swap(offspring, ga_instance):
+
+#     for chromosome_idx in range(offspring.shape[0]):
+#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
+#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
+
+#         offspring[chromosome_idx, random_gene_idx1], offspring[chromosome_idx, random_gene_idx2] = offspring[chromosome_idx, random_gene_idx2], offspring[chromosome_idx, random_gene_idx1]
+
+#     return offspring
+
+# def mutate_inversion(offspring, ga_instance):
+#     for chromosome_idx in range(offspring.shape[0]):
+#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
+#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
+
+#         if random_gene_idx1 > random_gene_idx2:
+#             random_gene_idx1, random_gene_idx2 = random_gene_idx2, random_gene_idx1
+
+#         offspring[chromosome_idx, random_gene_idx1:random_gene_idx2] = offspring[chromosome_idx, random_gene_idx1:random_gene_idx2][::-1]
+
+#     return offspring
+
+# def mutate_scramble(offspring, ga_instance):
+#     for chromosome_idx in range(offspring.shape[0]):
+#         random_gene_idx1 = np.random.choice(range(offspring.shape[1]))
+#         random_gene_idx2 = np.random.choice(range(offspring.shape[1]))
+
+#         if random_gene_idx1 > random_gene_idx2:
+#             random_gene_idx1, random_gene_idx2 = random_gene_idx2, random_gene_idx1
+
+#         offspring[chromosome_idx, random_gene_idx1:random_gene_idx2] = np.random.permutation(offspring[chromosome_idx, random_gene_idx1:random_gene_idx2])
+
+#     return offspring
+    '''

@@ -157,7 +157,7 @@ if __name__ == "__main__":
         sol_per_pop = 10, #512, #30,
         n_parents_mating= 5, #20, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
-        parent_selection_type= "rws", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). 
+        parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). 
         n_generations = 2, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
@@ -166,7 +166,7 @@ if __name__ == "__main__":
         # Note: actually the there is no function implemented to deal with the fact when out of all solutions no is feasible what to do, so it happens that after 1 iterations it gives rong solutions but after 10 of them is okay - check it later!
         #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best solution given by  print(shortest[0], 1/shortest[1])it is not the best one
         
-        n_procs = 10
+        n_procs = 5
         opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
         #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 

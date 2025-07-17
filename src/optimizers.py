@@ -766,6 +766,7 @@ class GAParameters:
     gene_type : type = int
     mutation_probability : float = 0.2
     crossover_probability : float = 0.8
+    k_tournament : int = 3
 
 
 class GeneticAlgorithm(BaseOpt):
@@ -811,24 +812,43 @@ class GeneticAlgorithm(BaseOpt):
         # --- Seed ---
         self.seed = seed
         
-        # --- Initialize the GA object of pyGAD ---
+        # --- Gene space with source and drain nodes fixed ---
+        # The gene space is a list of None values, except for the first and last genes
+        self.source_node = self.task_graph.SOURCE_POINT
+        self.drain_node = self.task_graph.DRAIN_POINT
+        
+        self.gene_space = [None] * self.domain.size
+        self.gene_space[0] = self.source_node
+        self.gene_space[-1] = self.drain_node
 
-        self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
-                                    num_parents_mating = self.par.n_parents_mating,
-                                    sol_per_pop = self.par.sol_per_pop,
-                                    num_genes = self.par.num_genes,
-                                    init_range_low = self.par.init_range_low,
-                                    init_range_high = self.par.init_range_high,
-                                    parent_selection_type = self.par.parent_selection_type,
-                                    keep_parents = self.par.keep_parents,
-                                    gene_type = self.par.gene_type,
-                                    fitness_func = self.fitness_func,
-                                    crossover_type = self.pool.get_cross_func,
-                                    mutation_type = self.pool.get_mut_func,
-                                    mutation_probability = self.par.mutation_probability,
-                                    crossover_probability = self.par.crossover_probability,
-                                    on_generation = self.pool.on_generation,
-                                    on_stop = self.pool.on_stop,
+        # --- Initialize the GA object of pyGAD ---
+        self.ga_instance = pygad.GA(num_generations = self.par.n_generations,       #number of generations
+                                    num_parents_mating = self.par.n_parents_mating, #Number of solutions to be selected as parents
+                                    fitness_func = self.fitness_func,               #maximisation function, can be multiobjective
+                                    fitness_batch_size = None,                      #you can calculate the fitness in batches, but we do not use it here (maybe for GPU)
+                                    initial_population = None,                      #initial population, if None it will be generated randomly
+                                    sol_per_pop = self.par.sol_per_pop,             #number of solutions in the population (chromosomes)
+                                    num_genes = self.par.num_genes,                 #number of genes in the chromosome   
+                                    gene_type = self.par.gene_type,                 #int
+                                    init_range_low = self.par.init_range_low,       #from 0 node
+                                    init_range_high = self.par.init_range_high,     #to the size of the grid
+                                    parent_selection_type = self.par.parent_selection_type, #can be: Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection).
+                                    keep_parents = self.par.keep_parents,           # Number of parents to keep in the current population. -1 (default) means to keep all parents in the next population. 0 means keep no parents in the next population. A value greater than 0 means keeps the specified number of parents in the next population. 
+                                    keep_elitism = 0,                               # It can take the value 0 or a positive integer that satisfies (0 <= keep_elitism <= sol_per_pop). It defaults to 1 which means only the best solution in the current generation is kept in the next generation. If assigned 0, this means it has no effect. If assigned a positive integer K, then the best K solutions are kept in the next generation. It cannot be assigned a value greater than the value assigned to the sol_per_pop parameter. If this parameter has a value different than 0, then the keep_parents parameter will have no effect.      
+                                    K_tournament = self.par.k_tournament,           # In case that the parent selection type is tournament, the K_tournament specifies the number of parents participating in the tournament selection. It defaults to 3.
+                                    crossover_type = self.pool.get_cross_func,      # user-defined function: choose across possible crossovers 
+                                    mutation_type = self.pool.get_mut_func,         # user-defined function: choose across possible mutations
+                                    mutation_probability = self.par.mutation_probability, # probalbiity of mutation
+                                    crossover_probability = self.par.crossover_probability, # probability of crossover 
+                                    gene_space = self.gene_space,                   # create a space for each gene, source and drain node fixed here
+                                    gene_constraint = None,                         # A list of callables (i.e. functions) acting as constraints for the gene values. Before selecting a value for a gene, the callable is called to ensure the candidate value is valid.
+                                    sample_size = 500,                              # if gene_constraint used then sample_size defines number of tries to create a gene which fulfills the constraints
+                                    on_start = None,                                # functiion to be called at the start of the optimization
+                                    on_fitness = None,                              # function to be called after each fitness evaluation
+                                    on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
+                                    on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
+                                    stop_criteria=None,                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
+                                    
                                     random_seed = self.seed
         )
         
@@ -860,12 +880,22 @@ class GeneticAlgorithm(BaseOpt):
         # 3. run the simulation
         stub = ss.SimulatorStub()
         result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
+        
+        breakpoint()
 
-        return 1 / result
+        return 1.0 / result
     
     def run(self):
 
         self.ga_instance.run()
+        
+        #solution, solution_fitness, solution_idx = self.ga_instance.best_solution()
+        #print("Parameters of the best solution : {solution}".format(solution=solution))
+        #print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+
+        #prediction = np.sum(np.array(function_inputs)*solution)
+        #print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
+        
         return self.ga_instance.best_solution()
     
 
@@ -918,4 +948,4 @@ class ParallelGA(GeneticAlgorithm):
         stub = ss.SimulatorStub()
         result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
 
-        return 1 / result
+        return 1.0 / result
