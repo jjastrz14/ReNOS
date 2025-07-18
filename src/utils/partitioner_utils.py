@@ -1645,7 +1645,7 @@ def build_partitions(model: keras.Model, grid, chosen_splitting_strategy: str = 
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
-def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best_valid=True, path = "data" + "/partitioner_data"):
+def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, size_of_grid = 16, return_best_valid=True, path = "data" + "/partitioner_data"):
     """
     Explores ALL possible partitioning combinations (up to factor x factor x factor)
     and collects FLOPs data for valid configurations.
@@ -1704,7 +1704,8 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                     max_size_partition = max([p.tot_size for p in partitions]) if partitions else 0
                     avg_size_partition = sum([p.tot_size for p in partitions]) / len(partitions) if partitions else 0
                     
-                    
+                    # Check if number of partitions is valid
+                    is_valid = len(partitions) >= size_of_grid
 
                     # Store results
                     results.append({
@@ -1716,12 +1717,12 @@ def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, return_best
                         'spatial': spatial,
                         'output': output,
                         'input': input_split,
-                        'valid': True,
+                        'valid': is_valid,
                         'partitions': len(partitions)
                     })
                     
                     print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | "
-                        f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f} | Partitions: {len(partitions)}")
+                        f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f} | Partitions: {len(partitions)} | Valid: {is_valid}")
                     
                     iteration += 1
                     

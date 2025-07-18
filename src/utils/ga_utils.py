@@ -241,22 +241,36 @@ class OperatorPool:
         print("End of GA optimization process")
         np.save(self.GA_DIR + "/statistics.npy", self.statistics)
         print("Saving results in: " + self.GA_DIR)
-    
-    def get_cross_func(self, parents, offspring_size, ga_instance):
-        offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)
-        # check if the offspring is valid
-        # if not, rerun the crossover operator until a valid offspring is obtained
-        for i in range(len(offspring)):
-            #First enforce source/drain constraints
-            offspring[i] = self.enforce_source_drain_constraints(offspring[i])
-            
-            
-            while not self.check_mem_constraints(offspring[i]):
-                temp_offspring = crossover_selection(parents, (1, offspring_size[1]), ga_instance, self.cur_cross)[0]
-                offspring[i] = self.enforce_source_drain_constraints(temp_offspring)
-
-        return offspring
         
+        
+    def create_gene_space(self):
+        """
+        Create the gene space for the Genetic Algorithm.
+        The gene space is a list of lists, where each list represents the possible values for a gene.
+        The first and last genes are fixed to the source and drain nodes, respectively.
+        The other genes can take any value from 0 to the number of PEs in the NoC.
+        
+        Returns:
+            list: List of lists representing the gene space
+        """
+        
+        self.gene_space = []
+        
+        for i, task in enumerate(self.optimizer.tasks):
+            if task == "start":
+                # 'start' task must be mapped to source node
+                self.gene_space.append([self.optimizer.task_graph.SOURCE_POINT])
+            elif task == "end":
+                # 'end' task must be mapped to drain node  
+                self.gene_space.append([self.optimizer.task_graph.DRAIN_POINT])
+            else:
+                # Regular tasks can be mapped to any PE
+                self.gene_space.append(list(range(self.optimizer.domain.size))) #[None]
+                
+        assert len(self.gene_space) == len(self.optimizer.tasks) and self.gene_space[0] == [self.optimizer.task_graph.SOURCE_POINT] and self.gene_space[-1] == [self.optimizer.task_graph.DRAIN_POINT], "The gene space must have the same length as the number of tasks and source and drain nodes must be fixed."
+        
+        return self.gene_space
+    
     def get_mut_func(self, offspring, ga_instance):
         if self.cur_mut == "adaptive":
             ga_instance.mutation_probability = (0.35, 0.17)
@@ -266,14 +280,21 @@ class OperatorPool:
         # check if the offspring is valid
         # if not, rerun the mutation operator until a valid offspring is obtained
         for i in range(len(offspring)):
-            #first enforce source/drain constraints
-            offspring[i] = self.enforce_source_drain_constraints(offspring[i])
-            
             while not self.check_mem_constraints(offspring[i]):
-                temp_offspring = mutation_selection(offspring[i], ga_instance, self.cur_mut)[0]
-                offspring[i] = self.enforce_source_drain_constraints(temp_offspring)
+                offspring[i] = mutation_selection(offspring[i], ga_instance, self.cur_mut)
 
         return mutation_selection(offspring, ga_instance, self.cur_mut)
+    
+    def get_cross_func(self, parents, offspring_size, ga_instance):
+        offspring = crossover_selection(parents, offspring_size, ga_instance, self.cur_cross)
+        # check if the offspring is valid
+        # if not, rerun the crossover operator until a valid offspring is obtained
+        for i in range(len(offspring)):
+            while not self.check_mem_constraints(offspring[i]):
+                offspring[i] = crossover_selection(parents, (1, offspring_size[1]), ga_instance, self.cur_cross)[0]
+
+        return offspring
+    
     
     def check_mem_constraints(self, offspring):
         """
@@ -284,37 +305,10 @@ class OperatorPool:
         memory requirement. If total memory used by the tasks mapped on a certain PE is greater than the
         memory available, the solution is invalid.
         
-        Additionally, ensures that:
-        - The first task (start) is mapped to the source node
-        - The last task (end) is mapped to the drain node
-        
         Returns:
             bool: True if the offspring is valid, False otherwise.
         """
-
         resources = [PE() for _ in range(self.optimizer.domain.size)]
-        
-        source_node = self.optimizer.task_graph.SOURCE_POINT
-        drain_node = self.optimizer.task_graph.DRAIN_POINT
-        
-        
-        # Check source and drain node constraints
-        if len(offspring) > 0:
-            # Check if first task is mapped to source node
-            if len(self.optimizer.tasks) > 0 and self.optimizer.tasks[0] == "start" and offspring[0] != source_node:
-                return False
-                
-            # Check if last task is mapped to drain node
-            if len(self.optimizer.tasks) > 1 and self.optimizer.tasks[-1] == "end" and offspring[-1] != drain_node:
-                return False
-        
-        
-        """         
-            for gene in range(offspring.shape[0]):
-            if resources[offspring[gene]].mem_used + self.optimizer.task_graph.get_node(self.optimizer.tasks[gene])["size"] > resources[offspring[gene]].mem_size:
-                return False
-            resources[offspring[gene]].mem_used += self.optimizer.task_graph.get_node(self.optimizer.tasks[gene])["size"]
-        """
         
         # Check memory constraints for each task
         for gene in range(offspring.shape[0]):
@@ -336,39 +330,11 @@ class OperatorPool:
 
         return True
     
-    def enforce_source_drain_constraints(self, offspring):
-        """
-        Enforce source/drain constraints by modifying the chromosome.
-        
-        Ensures that:
-        - The first task ("start") is mapped to the source node
-        - The last task ("end") is mapped to the drain node
-        
-        Args:
-            offspring: Individual chromosome (numpy array)
-            
-        Returns:
-            Modified offspring with source/drain constraints enforced
-        """
-        #if len(offspring) > 0:
-        # Check if first task is "start" and enforce source node mapping
-        if len(self.optimizer.tasks) > 0 and self.optimizer.tasks[0] == "start":
-            offspring[0] = self.optimizer.task_graph.SOURCE_POINT
-            
-        # Check if last task is "end" and enforce drain node mapping  
-        if len(self.optimizer.tasks) > 1 and self.optimizer.tasks[-1] == "end":
-            offspring[-1] = self.optimizer.task_graph.DRAIN_POINT
-                
-        return offspring
-
     def get_pool(self):
         return (self.crossover_pool, self.mutation_pool)
 
     def __len__(self):
         return (len(self.crossover_pool), len(self.mutation_pool))
-    
-    
-    
     
 '''
 Below some legacy code of Edoardo

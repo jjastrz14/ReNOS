@@ -20,6 +20,7 @@ from visualizer import plot_timeline
 from models import *
 
 
+
 model = single_conv((10, 10, 3), num_classes=10, verbose=True)
 conv_layer = model.layers[1]  # Get the first conv layer
 
@@ -28,6 +29,7 @@ spatial, output, input_split = search_space_split_factors(
     conv_layer, 
     factor=3,  # Max splitting factor
     FLOP_threshold=3e6,
+    size_of_grid = 16,
     return_best_valid=True,
     path = "data/partitioner_data"
 )

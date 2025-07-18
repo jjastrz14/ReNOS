@@ -817,10 +817,9 @@ class GeneticAlgorithm(BaseOpt):
         self.source_node = self.task_graph.SOURCE_POINT
         self.drain_node = self.task_graph.DRAIN_POINT
         
-        self.gene_space = [None] * self.domain.size
-        self.gene_space[0] = self.source_node
-        self.gene_space[-1] = self.drain_node
-
+        # Create gene space with one entry per task
+        self.gene_space = self.pool.create_gene_space()
+        
         # --- Initialize the GA object of pyGAD ---
         self.ga_instance = pygad.GA(num_generations = self.par.n_generations,       #number of generations
                                     num_parents_mating = self.par.n_parents_mating, #Number of solutions to be selected as parents
@@ -841,14 +840,13 @@ class GeneticAlgorithm(BaseOpt):
                                     mutation_probability = self.par.mutation_probability, # probalbiity of mutation
                                     crossover_probability = self.par.crossover_probability, # probability of crossover 
                                     gene_space = self.gene_space,                   # create a space for each gene, source and drain node fixed here
-                                    gene_constraint = None,                         # A list of callables (i.e. functions) acting as constraints for the gene values. Before selecting a value for a gene, the callable is called to ensure the candidate value is valid.
+                                    gene_constraint = None, #self.pool.create_gene_constraints(),                         # WARNING: Works from PyGAD 3.5.0 A list of callables (i.e. functions) acting as constraints for the gene values. Before selecting a value for a gene, the callable is called to ensure the candidate value is valid. We check here memory constraint for PEs and source and drain nodes are fixed.
                                     sample_size = 500,                              # if gene_constraint used then sample_size defines number of tries to create a gene which fulfills the constraints
                                     on_start = None,                                # functiion to be called at the start of the optimization
                                     on_fitness = None,                              # function to be called after each fitness evaluation
                                     on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
                                     on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
-                                    stop_criteria=None,                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
-                                    
+                                    stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
                                     random_seed = self.seed
         )
         
@@ -881,8 +879,6 @@ class GeneticAlgorithm(BaseOpt):
         stub = ss.SimulatorStub()
         result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
         
-        breakpoint()
-
         return 1.0 / result
     
     def run(self):

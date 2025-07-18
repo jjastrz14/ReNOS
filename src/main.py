@@ -163,10 +163,10 @@ if __name__ == "__main__":
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         )
         
-        # Note: actually the there is no function implemented to deal with the fact when out of all solutions no is feasible what to do, so it happens that after 1 iterations it gives rong solutions but after 10 of them is okay - check it later!
-        #so there is a probablity that if you set n_parents_mating too big then is the problmer with final output, also sometimes the best solution given by  print(shortest[0], 1/shortest[1])it is not the best one
-        
         n_procs = 5
+        
+        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+        
         opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
         #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
