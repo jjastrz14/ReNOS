@@ -165,7 +165,7 @@ if __name__ == "__main__":
         
         n_procs = 5
         
-        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+        print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
         
         opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
         #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)

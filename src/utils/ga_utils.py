@@ -208,16 +208,19 @@ class OperatorPool:
         
         # udpate the fitness of the previous population
         self.prev_pop_fit = pop_fit
-
+        
+        latencies = np.array(self.optimizer.upper_latency_bound / (pop_fit + 1e-6), dtype=int)
+        
         # save the mean fitness, the standard deviation and the best fitness of the current population
-        self.statistics["mdn"].append(np.mean(1/pop_fit))
-        self.statistics["std"].append(np.std(1/pop_fit))
-        self.statistics["best"].append(1/max(pop_fit))
+        self.statistics["mdn"].append(np.mean(latencies))
+        self.statistics["std"].append(np.std(latencies))
+        self.statistics["best"].append(min(latencies))
         
-        print(f"Generation {ga_instance.generations_completed} detail: \n {1/pop_fit}")
+        print(f"Generation {ga_instance.generations_completed} detail: \n {pop_fit}")
+        print(f"Generation {ga_instance.generations_completed} detail: \n {latencies}")
         
-        if (1/max(pop_fit)) < self.statistics["absolute_best"][-1]:
-            self.statistics["absolute_best"].append(1/max(pop_fit))
+        if (max(pop_fit)) < self.statistics["absolute_best"][-1]:
+            self.statistics["absolute_best"].append(max(pop_fit))
             # save the dump file for the best solution
             if not self.GA_DIR or not self.CONFIG_DUMP_DIR:
                 raise ValueError("The GA_DIR or CONFIG_DUMP_DIR is not set.")
@@ -233,8 +236,8 @@ class OperatorPool:
             self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
             
         print("=" * 60)
-        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, 1/max(pop_fit), np.argmax(pop_fit)))
-        print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, 1/np.mean(pop_fit)))
+        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, min(latencies), np.argmax(pop_fit)))
+        print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, np.mean(latencies)))
         
     def on_stop(self, ga_instance, last_generation_fitness):
         # at the end of the optimization process, save the statistics

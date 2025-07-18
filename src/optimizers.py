@@ -817,6 +817,8 @@ class GeneticAlgorithm(BaseOpt):
         self.source_node = self.task_graph.SOURCE_POINT
         self.drain_node = self.task_graph.DRAIN_POINT
         
+        self.upper_latency_bound = 10000.0 #used to normalize the output of the fitness function, value is adjusted in on_start_fitness_norm() method
+        
         # Create gene space with one entry per task
         self.gene_space = self.pool.create_gene_space()
         
@@ -842,7 +844,7 @@ class GeneticAlgorithm(BaseOpt):
                                     gene_space = self.gene_space,                   # create a space for each gene, source and drain node fixed here
                                     gene_constraint = None, #self.pool.create_gene_constraints(),                         # WARNING: Works from PyGAD 3.5.0 A list of callables (i.e. functions) acting as constraints for the gene values. Before selecting a value for a gene, the callable is called to ensure the candidate value is valid. We check here memory constraint for PEs and source and drain nodes are fixed.
                                     sample_size = 500,                              # if gene_constraint used then sample_size defines number of tries to create a gene which fulfills the constraints
-                                    on_start = None,                                # functiion to be called at the start of the optimization
+                                    on_start = self.on_start_fitness_norm,                                # functiion to be called at the start of the optimization
                                     on_fitness = None,                              # function to be called after each fitness evaluation
                                     on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
                                     on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
@@ -853,6 +855,44 @@ class GeneticAlgorithm(BaseOpt):
         self.GA_DIR = get_GA_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
+        
+    def on_start_fitness_norm(self, ga_instance):
+        '''
+        Method to be called before starting the evolution process. It is used to dynamically estimate the parameters which scales the fitness fucntion.
+        '''
+        init_genes = []
+        norm = 0.0
+        # randomly assign the tasks to the PEs in the NoC
+        for task in self.tasks:
+            if task == 'start':
+                # 'start' task must be mapped to source node
+                init_genes.append(self.task_graph.SOURCE_POINT)
+            elif task == 'end':
+                # 'end' task must be mapped to drain node  
+                init_genes.append(self.task_graph.DRAIN_POINT)
+            else:
+                # Regular tasks can be mapped to any PE
+                init_genes.append(np.random.choice(range(self.domain.size)))
+        
+        mapping = {}
+        for task_idx, task in enumerate(self.tasks):
+            if task_idx != "start" and task_idx != "end":
+                mapping[task] = int(init_genes[task_idx])
+
+        # 2. apply the mapping to the task graph
+        mapper = ma.Mapper()
+        mapper.init(self.task_graph, self.domain)
+        mapper.set_mapping(mapping)
+        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", file_to_append=self.ARCH_FILE)
+
+        # 3. run the simulation
+        stub = ss.SimulatorStub()
+        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+        
+        #result rounded up to the nearest 1000
+        result = int(np.ceil(result / 1000.0)) * 1000
+        
+        self.upper_latency_bound = result        
 
 
     def fitness_func(self, ga_instance, solution, solution_idx):
@@ -879,20 +919,20 @@ class GeneticAlgorithm(BaseOpt):
         stub = ss.SimulatorStub()
         result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
         
-        return 1.0 / result
+        if not hasattr(self, 'upper_latency_bound'):
+            raise RuntimeError("upper_latency_bound not initialized. Call on_start_fitness_norm() first.")
+
+        norm_result = self.upper_latency_bound / (result + 1e-6)
+        
+        return norm_result
     
     def run(self):
 
         self.ga_instance.run()
-        
-        #solution, solution_fitness, solution_idx = self.ga_instance.best_solution()
-        #print("Parameters of the best solution : {solution}".format(solution=solution))
-        #print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-
-        #prediction = np.sum(np.array(function_inputs)*solution)
-        #print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
-        
         return self.ga_instance.best_solution()
+    
+    def summary(self):
+        return self.ga_instance.summary()
     
 
 class ParallelGA(GeneticAlgorithm):
