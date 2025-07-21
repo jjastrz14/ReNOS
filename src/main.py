@@ -151,16 +151,16 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
         
         params = op.GAParameters(
-        sol_per_pop = 12, #512, #30,
-        n_parents_mating= 6, #20, #Number of solutions to be selected as parents.
+        sol_per_pop = 1024, #30,
+        n_parents_mating= 100, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "tournament", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 10, #800,
+        n_generations = 100, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         )
         
-        n_procs = 5
+        n_procs = 128
         
         print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
         
