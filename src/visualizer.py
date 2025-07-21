@@ -127,6 +127,45 @@ def plot_timeline_factor_back(path_to_json = "/test.json", timeline_path = "visu
         plotter_timeline._print_node_events()
     print("Timeline plotting factor back done!")
     
+
+def plot_convergence(statistics_path, save_path=None):
+    stats = np.load(os.path.join(statistics_path, "statistics.npy"), allow_pickle=True).item()
+    mean_values = np.array(stats["mdn"])
+    std_values = np.array(stats["std"])
+    best_values = np.array(stats["best"])
+    ab_best_values = np.array(stats["absolute_best"])
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    line_mean, = ax.plot(mean_values, label="iteration mean", color="lightseagreen")
+    ax.fill_between(range(len(mean_values)), mean_values - std_values, mean_values + std_values, alpha=0.2, color="mediumturquoise", label="std deviation")
+    line_best, = ax.plot(best_values, label="iteration best", color="lightcoral", linewidth=3)
+    line_ab_best, = ax.plot(ab_best_values, label="absolute best", color="darkorange", linewidth=3, linestyle='--')
+
+    ax.tick_params(direction='in')
+    ax.spines['top'].set_linewidth(2)
+    ax.spines['right'].set_linewidth(2)
+    ax.spines['bottom'].set_linewidth(2)
+    ax.spines['left'].set_linewidth(2)
+    ax.xaxis.set_tick_params(width=2)
+    ax.yaxis.set_tick_params(width=2)
+    ax.tick_params(axis='both', which='major', labelsize=12)
+
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(fontsize=14)
+    
+    plt.xlabel("Iterations", fontdict={"size": 14})
+    plt.ylabel("Latency [cycles]", fontdict={"size": 14})
+    plt.tight_layout()
+
+    if save_path and isinstance(save_path, str):
+        fig.savefig(save_path, dpi=300)
+        print(f"Convergence graph saved to {save_path}")
+        plt.close(fig)
+    else:
+        plt.show()
+        print("Convergence graph displayed.")
+    
     
 if __name__ == "__main__":
     # Example usage

@@ -28,7 +28,7 @@ from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
 from graph import TaskGraph
-from visualizer import plot_timeline
+from visualizer import plot_timeline, plot_convergence
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
@@ -130,14 +130,11 @@ if __name__ == "__main__":
         print("The best path found is: ")
         print(shortest)
         
-        #imshow occupancy of the grid -> memory usage 
-        
-        #imshow occupancy of the gird -> resources usage over time
-        #this guy probably using logger
-        
         print("Visualizing the best path...\n")
         # Visualize the best path
         plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/ACO_" + get_timestamp() + ".png", verbose = False)
+        
+        plot_convergence(get_ACO_DIR(), save_path=True)
             
         end = time.time()
         elapsed_time = end - start
@@ -154,11 +151,11 @@ if __name__ == "__main__":
         sys.stdout = Logger(log_path)
         
         params = op.GAParameters(
-        sol_per_pop = 10, #512, #30,
-        n_parents_mating= 5, #20, #Number of solutions to be selected as parents.
+        sol_per_pop = 12, #512, #30,
+        n_parents_mating= 6, #20, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
-        parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). 
-        n_generations = 2, #800,
+        parent_selection_type= "tournament", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
+        n_generations = 10, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         )
@@ -167,17 +164,23 @@ if __name__ == "__main__":
         
         print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
         
-        opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        #opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
+        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
         #opt.ga_instance.plot_fitness()
         print("The best path found is: ")
-        print(shortest[0], 1/shortest[1])
+        print(shortest[0], shortest[1])
+        
+        #opt.summary()
         
         print("Visualizing the best path...\n")
         # Visualize the best path
-        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/GA_" + get_timestamp() + ".png", verbose = False)
+        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/time_line_GA_" + get_timestamp() + ".png", verbose = False)
+        
+        plot_convergence(str(get_GA_DIR()), save_path=get_GA_DIR() + "/convg_GA_" + get_timestamp() + ".png")
+        
+        #opt.plot_summary()
         
         end = time.time()
         elapsed_time = end - start

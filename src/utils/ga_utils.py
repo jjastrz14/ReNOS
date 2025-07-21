@@ -117,6 +117,7 @@ class OperatorPool:
         self.num_operators = sum(self.__len__())
         self.last_chosen = [0 for _ in range(self.num_operators)] # used to keep track of the last time the operator was selected
         self.prev_pop_fit = np.zeros(optimizer.par.sol_per_pop)
+        self.latencies = np.zeros(optimizer.par.sol_per_pop) # used to keep track of the latencies of the population
         self.F = [0 for _ in range(self.num_operators)] # first len(crossover_pool) elements are for the crossover operators, the others are for the mutation operators
         self.F1 = [0 for _ in range(self.num_operators)]
         self.F2 = [0 for _ in range(self.num_operators)]
@@ -192,6 +193,41 @@ class OperatorPool:
         self.last_chosen[self.mutation_pool.index(self.cur_mut) + len(self.crossover_pool)] = cur_it
 
         return (self.cur_cross, self.cur_mut)
+    
+    def update_stat_results(self, ga_instance, pop_fit):
+        '''
+        Method to update statistics and write best json to the result folder
+        '''
+        
+        latencies = np.ceil(self.optimizer.upper_latency_bound / (pop_fit + 1e-6)).astype(int)
+        
+        # save the mean fitness, the standard deviation and the best fitness of the current population
+        self.statistics["mdn"].append(np.mean(latencies))
+        self.statistics["std"].append(np.std(latencies))
+        self.statistics["best"].append(min(latencies))
+        
+        print(f"Generation {ga_instance.generations_completed} detail: \n {pop_fit}")
+        print(f"Generation {ga_instance.generations_completed} detail: \n {latencies}")
+        
+        if (min(latencies)) < self.statistics["absolute_best"][-1]:
+            self.statistics["absolute_best"].append(min(latencies))
+            # save the dump file for the best solution
+            if not self.GA_DIR or not self.CONFIG_DUMP_DIR:
+                raise ValueError("The GA_DIR or CONFIG_DUMP_DIR is not set.")
+            
+            # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
+            os.system(f"cp {self.CONFIG_DUMP_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}")
+            #os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
+            # rename the file to "best_solution.json"
+            os.system(f"mv {self.GA_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}/best_solution.json")
+            #os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
+            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + self.GA_DIR + "/best_solution.json")
+        else:
+            self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
+        
+        #save latencies to the class attribute
+        self.latencies = latencies
+        
 
     def on_generation(self, ga_instance):
 
@@ -209,39 +245,24 @@ class OperatorPool:
         # udpate the fitness of the previous population
         self.prev_pop_fit = pop_fit
         
-        latencies = np.array(self.optimizer.upper_latency_bound / (pop_fit + 1e-6), dtype=int)
-        
-        # save the mean fitness, the standard deviation and the best fitness of the current population
-        self.statistics["mdn"].append(np.mean(latencies))
-        self.statistics["std"].append(np.std(latencies))
-        self.statistics["best"].append(min(latencies))
-        
-        print(f"Generation {ga_instance.generations_completed} detail: \n {pop_fit}")
-        print(f"Generation {ga_instance.generations_completed} detail: \n {latencies}")
-        
-        if (max(pop_fit)) < self.statistics["absolute_best"][-1]:
-            self.statistics["absolute_best"].append(max(pop_fit))
-            # save the dump file for the best solution
-            if not self.GA_DIR or not self.CONFIG_DUMP_DIR:
-                raise ValueError("The GA_DIR or CONFIG_DUMP_DIR is not set.")
-            
-            # move "dump_GA"+str(np.argmax(pop_fit))" from "config_files/dumps" to "data/GA"
-            os.system(f"cp {self.CONFIG_DUMP_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}")
-            #os.system("cp " + CONFIG_DUMP_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR)
-            # rename the file to "best_solution.json"
-            os.system(f"mv {self.GA_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}/best_solution.json")
-            #os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
-            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + self.GA_DIR + "/best_solution.json")
-        else:
-            self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
+        # update the statistics and results
+        self.update_stat_results(ga_instance, pop_fit)
             
         print("=" * 60)
-        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, min(latencies), np.argmax(pop_fit)))
-        print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, np.mean(latencies)))
+        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, min(self.latencies), np.argmax(pop_fit)))
+        print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, np.mean(self.latencies)))
         
     def on_stop(self, ga_instance, last_generation_fitness):
+        
+        print("=" * 60)
+        print('\n Last generation summary:')
+        #update statisitc before end of GA: 
+        self.update_stat_results(ga_instance, last_generation_fitness)
+        
+        print("Completed generations:", ga_instance.generations_completed)
+        print("Expected generations:", ga_instance.num_generations)
         # at the end of the optimization process, save the statistics
-        print("End of GA optimization process")
+        print("End of GA optimization process\n")
         np.save(self.GA_DIR + "/statistics.npy", self.statistics)
         print("Saving results in: " + self.GA_DIR)
         
@@ -284,6 +305,7 @@ class OperatorPool:
         # if not, rerun the mutation operator until a valid offspring is obtained
         for i in range(len(offspring)):
             while not self.check_mem_constraints(offspring[i]):
+                print(f"Invalid offspring {offspring[i]}: reapplying mutation operator {self.cur_mut}")
                 offspring[i] = mutation_selection(offspring[i], ga_instance, self.cur_mut)
 
         return mutation_selection(offspring, ga_instance, self.cur_mut)
@@ -294,6 +316,7 @@ class OperatorPool:
         # if not, rerun the crossover operator until a valid offspring is obtained
         for i in range(len(offspring)):
             while not self.check_mem_constraints(offspring[i]):
+                print(f"Invalid offspring {offspring[i]}: reapplying crossover operator {self.cur_cross}")
                 offspring[i] = crossover_selection(parents, (1, offspring_size[1]), ga_instance, self.cur_cross)[0]
 
         return offspring
@@ -326,6 +349,9 @@ class OperatorPool:
             
             # Check if adding this task would exceed PE memory capacity
             if resources[pe_id].mem_used + task_size > resources[pe_id].mem_size:
+                print(f"\nMemory constraint violated for task {task_id} on PE {pe_id}: "
+                    f"used {resources[pe_id].mem_used}, required {task_size}, "
+                    f"available {resources[pe_id].mem_size}")
                 return False
                 
             # Update memory usage

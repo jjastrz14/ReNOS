@@ -28,10 +28,10 @@ from dataclasses import dataclass
 from typing import Union, ClassVar, Optional
 from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE, get_ACO_DIR
 from utils.plotting_utils import plot_mapping_gif
-
 import ctypes as c
 from contextlib import closing
 import multiprocessing as mp
+import concurrent.futures
 from utils.aco_utils import Ant, vardict, walk_batch, update_pheromones_batch, manhattan_distance, random_heuristic_update
 from utils.partitioner_utils import PE
 
@@ -861,7 +861,6 @@ class GeneticAlgorithm(BaseOpt):
         Method to be called before starting the evolution process. It is used to dynamically estimate the parameters which scales the fitness fucntion.
         '''
         init_genes = []
-        norm = 0.0
         # randomly assign the tasks to the PEs in the NoC
         for task in self.tasks:
             if task == 'start':
@@ -874,32 +873,39 @@ class GeneticAlgorithm(BaseOpt):
                 # Regular tasks can be mapped to any PE
                 init_genes.append(np.random.choice(range(self.domain.size)))
         
-        mapping = {}
+        mapping_norm = {}
         for task_idx, task in enumerate(self.tasks):
             if task_idx != "start" and task_idx != "end":
-                mapping[task] = int(init_genes[task_idx])
+                mapping_norm[task] = int(init_genes[task_idx])
 
         # 2. apply the mapping to the task graph
-        mapper = ma.Mapper()
-        mapper.init(self.task_graph, self.domain)
-        mapper.set_mapping(mapping)
-        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", file_to_append=self.ARCH_FILE)
+        mapper_norm = ma.Mapper()
+        mapper_norm.init(self.task_graph, self.domain)
+        mapper_norm.set_mapping(mapping_norm)
+        mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
         stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+        result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+        
+        print(f"Initial fitness norm result: {result_to_norm}")
         
         #result rounded up to the nearest 1000
-        result = int(np.ceil(result / 1000.0)) * 1000
+        result_norm = int(np.ceil(result_to_norm / 1000.0)) * 1000
         
-        self.upper_latency_bound = result        
-
+        print(f"Initial fitness norm result rounded: {result_norm}")
+        
+        self.upper_latency_bound = result_norm 
+        
+        print("\nFinished on_start_fitness_norm, upper_latency_bound set to:", self.upper_latency_bound)  
+        
 
     def fitness_func(self, ga_instance, solution, solution_idx):
 
         # fitness function is computed using the NoC simulator:
         # 1. construct the mapping from the solution
         # constuct the mapping form the path
+        verbose = False
         
         mapping = {}
         for task_idx, task in enumerate(self.tasks):
@@ -924,6 +930,9 @@ class GeneticAlgorithm(BaseOpt):
 
         norm_result = self.upper_latency_bound / (result + 1e-6)
         
+        if verbose:
+            print(f"Solution {solution_idx} fitness: {norm_result} (raw result: {result})")
+        
         return norm_result
     
     def run(self):
@@ -934,31 +943,109 @@ class GeneticAlgorithm(BaseOpt):
     def summary(self):
         return self.ga_instance.summary()
     
+    def plot_summary(self):
+        self.ga_instance.plot_fitness() #Shows how the fitness evolves by generation.
+        
+        #only if save solutions is set to True
+        #self.ga_instance.plot_genes() #Shows how the gene value changes for each generation.
+        #self.ga_instance.plot_new_solution_rate() #Shows the number of new solutions explored in each solution.
+    
 
 class ParallelGA(GeneticAlgorithm):
 
     def __init__(self, n_procs, optimization_parameters, domain, task_graph, seed):
         super().__init__(optimization_parameters, domain, task_graph, seed)
 
-        self.ga_instance = pygad.GA(num_generations = self.par.n_generations,
-                                    num_parents_mating = self.par.n_parents_mating,
-                                    sol_per_pop = self.par.sol_per_pop,
-                                    num_genes = self.par.num_genes,
-                                    init_range_low = self.par.init_range_low,
-                                    init_range_high = self.par.init_range_high,
-                                    parent_selection_type = self.par.parent_selection_type,
-                                    keep_parents = self.par.keep_parents,
-                                    gene_type = self.par.gene_type,
-                                    fitness_func = self.fitness_func,
-                                    crossover_type = self.pool.get_cross_func,
-                                    mutation_type = self.pool.get_mut_func,
-                                    mutation_probability = self.par.mutation_probability,
-                                    crossover_probability = self.par.crossover_probability,
-                                    on_generation = self.pool.on_generation,
-                                    on_stop = self.pool.on_stop,
-                                    random_seed= self.seed,
-                                    parallel_processing=["process", n_procs],
+        self.ga_instance = pygad.GA(num_generations = self.par.n_generations,       #number of generations
+                                    num_parents_mating = self.par.n_parents_mating, #Number of solutions to be selected as parents
+                                    fitness_func = self.fitness_func,               #maximisation function, can be multiobjective
+                                    fitness_batch_size = None,                      #you can calculate the fitness in batches, but we do not use it here (maybe for GPU)
+                                    initial_population = None,                      #initial population, if None it will be generated randomly
+                                    sol_per_pop = self.par.sol_per_pop,             #number of solutions in the population (chromosomes)
+                                    num_genes = self.par.num_genes,                 #number of genes in the chromosome   
+                                    gene_type = self.par.gene_type,                 #int
+                                    init_range_low = self.par.init_range_low,       #from 0 node
+                                    init_range_high = self.par.init_range_high,     #to the size of the grid
+                                    parent_selection_type = self.par.parent_selection_type, #can be: Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection).
+                                    keep_parents = self.par.keep_parents,           # Number of parents to keep in the current population. -1 (default) means to keep all parents in the next population. 0 means keep no parents in the next population. A value greater than 0 means keeps the specified number of parents in the next population. 
+                                    keep_elitism = 0,                               # It can take the value 0 or a positive integer that satisfies (0 <= keep_elitism <= sol_per_pop). It defaults to 1 which means only the best solution in the current generation is kept in the next generation. If assigned 0, this means it has no effect. If assigned a positive integer K, then the best K solutions are kept in the next generation. It cannot be assigned a value greater than the value assigned to the sol_per_pop parameter. If this parameter has a value different than 0, then the keep_parents parameter will have no effect.      
+                                    K_tournament = self.par.k_tournament,           # In case that the parent selection type is tournament, the K_tournament specifies the number of parents participating in the tournament selection. It defaults to 3.
+                                    crossover_type = self.pool.get_cross_func,      # user-defined function: choose across possible crossovers 
+                                    mutation_type = self.pool.get_mut_func,         # user-defined function: choose across possible mutations
+                                    mutation_probability = self.par.mutation_probability, # probalbiity of mutation
+                                    crossover_probability = self.par.crossover_probability, # probability of crossover 
+                                    gene_space = self.gene_space,                   # create a space for each gene, source and drain node fixed here
+                                    gene_constraint = None, #self.pool.create_gene_constraints(),                         # WARNING: Works from PyGAD 3.5.0 A list of callables (i.e. functions) acting as constraints for the gene values. Before selecting a value for a gene, the callable is called to ensure the candidate value is valid. We check here memory constraint for PEs and source and drain nodes are fixed.
+                                    sample_size = 500,                              # if gene_constraint used then sample_size defines number of tries to create a gene which fulfills the constraints
+                                    on_start = self.on_start_fitness_norm_parallel,                                # functiion to be called at the start of the optimization
+                                    on_fitness = None,                              # function to be called after each fitness evaluation
+                                    on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
+                                    on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
+                                    stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
+                                    random_seed = self.seed,
+                                    parallel_processing=["process", n_procs] # Use multiprocessing with n_procs processes
         )
+                
+    def run_norm_simulation(self, args):
+        seed, task_graph, domain, tasks, config_dir, arch_file = args
+
+        np.random.seed(seed)
+
+        init_genes = []
+        for task in tasks:
+            if task == 'start':
+                init_genes.append(task_graph.SOURCE_POINT)
+            elif task == 'end':
+                init_genes.append(task_graph.DRAIN_POINT)
+            else:
+                init_genes.append(np.random.choice(range(domain.size)))
+
+        mapping_norm = {}
+        for task_idx, task in enumerate(tasks):
+            if task != "start" and task != "end":
+                mapping_norm[task] = int(init_genes[task_idx])
+
+        mapper_norm = ma.Mapper()
+        mapper_norm.init(task_graph, domain)
+        mapper_norm.set_mapping(mapping_norm)
+
+        json_path = config_dir + f"/dump_GA_x_{seed}.json"
+        mapper_norm.mapping_to_json(json_path, file_to_append=arch_file)
+
+        stub = ss.SimulatorStub()
+        result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
+
+        return result_to_norm
+
+        
+    def on_start_fitness_norm_parallel(self, ga_instance):
+        """
+        Runs n_procs parallel simulations to estimate the normalization parameter for fitness.
+        """
+
+        num_jobs = ga_instance.parallel_processing[1]
+
+        # Prepare arguments for each process
+        arg_list = [
+            (i, self.task_graph, self.domain, self.tasks, self.CONFIG_DUMP_DIR, self.ARCH_FILE)
+            for i in range(num_jobs)
+        ]
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_jobs) as executor:
+            results = list(executor.map(self.run_norm_simulation, arg_list))
+
+        print(f"Initial fitness norm results: {results}")
+
+        # Use the median as the normalization value, rounded up to nearest 1000
+        result_norm_median = int(np.ceil(np.median(results) / 1000.0)) * 1000
+        print(f"Initial fitness norm result (median, rounded): {result_norm_median}")
+
+        #result_norm_mean = int(np.ceil(np.mean(results) / 1000.0)) * 1000
+        #print(f"Initial fitness norm result (mean, rounded): {result_norm_mean}")
+        
+        self.upper_latency_bound = result_norm_median
+        print("\nFinished on_start_fitness_norm_parallel, upper_latency_bound set to:", self.upper_latency_bound)
+        
 
     def fitness_func(self, ga_instance, solution, solution_idx):
 
@@ -983,5 +1070,7 @@ class ParallelGA(GeneticAlgorithm):
         # 3. run the simulation
         stub = ss.SimulatorStub()
         result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
+        
+        norm_result = self.upper_latency_bound / (result + 1e-6)
 
-        return 1.0 / result
+        return norm_result
