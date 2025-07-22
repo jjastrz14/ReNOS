@@ -227,6 +227,7 @@ class OperatorPool:
         
         #save latencies to the class attribute
         self.latencies = latencies
+        np.save(self.GA_DIR + "/statistics.npy", self.statistics)
         
 
     def on_generation(self, ga_instance):

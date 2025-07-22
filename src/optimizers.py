@@ -848,7 +848,7 @@ class GeneticAlgorithm(BaseOpt):
                                     on_fitness = None,                              # function to be called after each fitness evaluation
                                     on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
                                     on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
-                                    stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
+                                    #stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
                                     random_seed = self.seed
         )
         
@@ -949,7 +949,6 @@ class GeneticAlgorithm(BaseOpt):
         #only if save solutions is set to True
         #self.ga_instance.plot_genes() #Shows how the gene value changes for each generation.
         #self.ga_instance.plot_new_solution_rate() #Shows the number of new solutions explored in each solution.
-    
 
 class ParallelGA(GeneticAlgorithm):
 
@@ -981,7 +980,7 @@ class ParallelGA(GeneticAlgorithm):
                                     on_fitness = None,                              # function to be called after each fitness evaluation
                                     on_generation = self.pool.on_generation,        # on each generation reward is updated and different operator is picked
                                     on_stop = self.pool.on_stop,                    # save the data at the end of the optimization
-                                    stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
+                                    #stop_criteria="saturate_150",                             # stop criteria for the optimization: Some criteria to stop the evolution. Added in PyGAD 2.15.0. Each criterion is passed as str which has a stop word. The current 2 supported words are reach and saturate. reach stops the run() method if the fitness value is equal to or greater than a given fitness value. An example for reach is "reach_40" which stops the evolution if the fitness is >= 40. saturate means stop the evolution if the fitness saturates for a given number of consecutive generations. An example for saturate is "saturate_7" which means stop the run() method if the fitness does not change for 7 consecutive generations.
                                     random_seed = self.seed,
                                     parallel_processing=["process", n_procs] # Use multiprocessing with n_procs processes
         )
