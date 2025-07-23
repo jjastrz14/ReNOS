@@ -48,9 +48,16 @@ if __name__ == "__main__":
     if args.algo == "ACO":
         ACO = True
         GA = False
+        # Redirect stdout to the Logger
+        log_path = get_aco_log_path()
+        sys.stdout = Logger(log_path)
+        
     elif args.algo == "GA":
         ACO = False
         GA = True
+        # Redirect stdout to the Logger
+        log_path = get_ga_log_path()
+        sys.stdout = Logger(log_path)
         
     print(f"Selected algorithm: {args.algo}")
         
@@ -107,19 +114,16 @@ if __name__ == "__main__":
     ##### Optimization algorithms #####
     if ACO:
         print("\n ...Running Ant Colony Optimization...")
-        # Redirect stdout to the Logger
-        log_path = get_aco_log_path()
-        sys.stdout = Logger(log_path)
 
         params = op.ACOParameters(
             n_ants = 10,
             rho = 0.05, #evaporation rate
-            n_best = 3,
+            n_best = 5,
             n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
         )
-        n_procs = 2
+        n_procs = 10
         
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         opt = op.AntColony( params, grid, task_graph, seed = None)
@@ -132,9 +136,9 @@ if __name__ == "__main__":
         
         print("Visualizing the best path...\n")
         # Visualize the best path
-        plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/ACO_" + get_timestamp() + ".png", verbose = False)
+        plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/timeline_ACO_" + get_timestamp() + ".png", verbose = False)
         
-        plot_convergence(get_ACO_DIR(), save_path=True)
+        plot_convergence(get_ACO_DIR(), save_path=get_ACO_DIR() + "/convg_ACO_" + get_timestamp() + ".png")
             
         end = time.time()
         elapsed_time = end - start
@@ -145,22 +149,19 @@ if __name__ == "__main__":
         print("Done!")
 
     if GA: 
-        print("Running Genetic Algoriothm Optimization...")
-        # Redirect stdout to the Logger
-        log_path = get_ga_log_path()
-        sys.stdout = Logger(log_path)
+        print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 512, #30,
-        n_parents_mating= 100, #Number of solutions to be selected as parents.
+        sol_per_pop = 10, #30,
+        n_parents_mating= 5, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 1000, #800,
+        n_generations = 10, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         )
         
-        n_procs = 128
+        n_procs = 10
         
         print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
         
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         
         print("Visualizing the best path...\n")
         # Visualize the best path
-        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/time_line_GA_" + get_timestamp() + ".png", verbose = False)
+        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/timeline_GA_" + get_timestamp() + ".png", verbose = False)
         
         plot_convergence(str(get_GA_DIR()), save_path=get_GA_DIR() + "/convg_GA_" + get_timestamp() + ".png")
         

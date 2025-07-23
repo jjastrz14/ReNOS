@@ -269,6 +269,7 @@ class AntColony(BaseOpt):
                 print("Moving average for the path lenght is:", moving_average)
             
             self.evaporate_pheromones(rho_step)
+            #stats measures
             self.statistics["mdn"].append(moving_average)
             self.statistics["std"].append(moving_std)
             self.statistics["best"].append(shortest_path[2])
@@ -641,6 +642,7 @@ class ParallelAntColony(AntColony):
                     os.system(f"cp {dump_file} {self.ACO_DIR}")
                     #save the dump of the best solution in data
                     os.system(f"mv {self.ACO_DIR}/dump{ant_id}.json {self.ACO_DIR}/best_solution.json")
+                
                 np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
                 print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
                 print("-" * 50 + "\n")

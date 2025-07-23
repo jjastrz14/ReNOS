@@ -129,7 +129,8 @@ class OperatorPool:
         self.statistics["mdn"] = []
         self.statistics["std"] = []
         self.statistics["best"] = []
-        self.statistics["absolute_best"] = [np.inf] 
+        self.statistics["absolute_best"] = []
+        self.absolute_best_value = np.inf # used to keep track of the best solution found so far 
         
         self.GA_DIR = get_GA_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
@@ -208,9 +209,10 @@ class OperatorPool:
         
         print(f"Generation {ga_instance.generations_completed} detail: \n {pop_fit}")
         print(f"Generation {ga_instance.generations_completed} detail: \n {latencies}")
+        current_best_value = min(latencies)
         
-        if (min(latencies)) < self.statistics["absolute_best"][-1]:
-            self.statistics["absolute_best"].append(min(latencies))
+        if current_best_value < self.absolute_best_value:
+            self.absolute_best_value = current_best_value
             # save the dump file for the best solution
             if not self.GA_DIR or not self.CONFIG_DUMP_DIR:
                 raise ValueError("The GA_DIR or CONFIG_DUMP_DIR is not set.")
@@ -221,10 +223,9 @@ class OperatorPool:
             # rename the file to "best_solution.json"
             os.system(f"mv {self.GA_DIR}/dump_GA_{np.argmax(pop_fit)}.json {self.GA_DIR}/best_solution.json")
             #os.system("mv " + GA_DIR + "/dump_GA" + str(np.argmax(pop_fit)) + ".json " + GA_DIR + "/best_solution.json")
-            print("Saving the best solution found by this gen", str(np.argmax(pop_fit)), "in " + self.GA_DIR + "/best_solution.json")
-        else:
-            self.statistics["absolute_best"].append(self.statistics["absolute_best"][-1])
+            print(f"Saving the best solution found by this gen {str(np.argmax(pop_fit))} of value {current_best_value} in {self.GA_DIR}/best_solution.json")
         
+        self.statistics["absolute_best"].append(self.absolute_best_value)
         #save latencies to the class attribute
         self.latencies = latencies
         np.save(self.GA_DIR + "/statistics.npy", self.statistics)
@@ -258,7 +259,7 @@ class OperatorPool:
         print("=" * 60)
         print('\n Last generation summary:')
         #update statisitc before end of GA: 
-        self.update_stat_results(ga_instance, last_generation_fitness)
+        #self.update_stat_results(ga_instance, last_generation_fitness)
         
         print("Completed generations:", ga_instance.generations_completed)
         print("Expected generations:", ga_instance.num_generations)
