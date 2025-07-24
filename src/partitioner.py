@@ -28,7 +28,6 @@ import simulator_stub as ss
 from visualizer import plot_timeline
 
 
-
 model = single_conv((10, 10, 4), num_classes=1, verbose=True)
 conv_layer = model.layers[1]  # Get the first conv layer
 

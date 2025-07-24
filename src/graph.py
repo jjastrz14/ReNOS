@@ -278,7 +278,11 @@ class TaskGraph:
             # to the node's "node" attribute
             for dep in edge["dep"]:
                 if dep == -1:
-                    edge["src"] = self.SOURCE_POINT
+                    #This option couses SOURCE PE to be responsible for redistribution of the data across PEs in the grid
+                    #edge["src"] = self.SOURCE_POINT
+                    #This option sets input residing already at the PEs where is needed
+                    self.edges_mapping[edge_id]["src"] = self.edges_mapping[edge_id]["dst"]
+                    #Comment - Above should be solved via sending an input from the HOST
                 elif dep in self.nodes.keys():
                     self.edges_mapping[edge_id]["src"] = self.nodes_mapping[dep]
 
@@ -689,9 +693,16 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
             #results = int(np.prod(partition.out_bounds)) 
             #corrected version:
             # Calculate the spatial dimensions (height, width)
-            spatial_size = (partition.out_bounds[1][0] - partition.out_bounds[0][0]) *(partition.out_bounds[1][1] - partition.out_bounds[0][1])
-            # Calculate the channel dimensions
-            channel_size = (partition.out_ch[1] - partition.out_ch[0])
+            if len(partition.out_bounds[0]) == 1:
+                # Dense layer: 1D bounds
+                spatial_size = partition.out_bounds[1][0] - partition.out_bounds[0][0]
+                # For dense layers, if channel is None:
+                channel_size = 1 if partition.out_ch is None else (partition.out_ch[1] - partition.out_ch[0])
+            else:
+                # Conv layer: 2D bounds  
+                spatial_size = (partition.out_bounds[1][0] - partition.out_bounds[0][0]) *(partition.out_bounds[1][1] - partition.out_bounds[0][1])
+                # Calculate the channel dimensions if available
+                channel_size = 1 if partition.out_ch is None else (partition.out_ch[1] - partition.out_ch[0])
             # Total result size
             results = spatial_size * channel_size
             results = 1 if results == 0 else results
