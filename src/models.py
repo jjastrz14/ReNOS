@@ -133,7 +133,7 @@ def test_conv(input_shape, num_classes, verbose = False):
     x = layers.Conv2D(56, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
     x = layers.ReLU()(x)
     outputs = layers.Dense(num_classes, activation='softmax')(x)
-    model = keras.Model(inputs=inputs, outputs=x)
+    model = keras.Model(inputs=inputs, outputs=outputs)
     
     
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
@@ -147,6 +147,7 @@ def single_conv(input_shape, num_classes, verbose = False):
     
     inputs = layers.Input(shape=input_shape)
     x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    #x = layers.Dense(num_classes, activation='softmax')(x)
     model = keras.Model(inputs=inputs, outputs=x)
     
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])

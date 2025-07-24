@@ -293,7 +293,7 @@ class TaskGraph:
 
         return self.nodes_mapping, self.edges_mapping
 
-    def add_task_fully_qualified(self, id, type, layer_id, size, weight_size, input_range, output_range, ct_required, dep, color = "lightblue"):
+    def add_task_fully_qualified(self, id, type, layer_id, part_name, size, weight_size, input_range, output_range, ct_required, dep, color = "lightblue"):
         """
         Adds a task (node) to the graph. Differently from the add_task method, this method allows to 
         specify all the parameters of the task that will be used during the simulation as a dictionary,
@@ -327,7 +327,7 @@ class TaskGraph:
             id = self.id
             self.id += 1
         
-        elem = {"id": id, "type": type, "layer_id": layer_id, "size": size, "weight_size": weight_size, "input_range": input_range, "output_range": output_range , "ct_required": ct_required, "dep": dep}
+        elem = {"id": id, "type": type, "layer_id": layer_id, "partition_name": part_name, "size": size, "weight_size": weight_size, "input_range": input_range, "output_range": output_range , "ct_required": ct_required, "dep": dep}
         self.graph.add_node(id, layer = layer_id, color = color)
         self.nodes[id] = elem
 
@@ -604,7 +604,7 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
         layer_id = 0
         
         #create the start node (source point)
-        dep_graph.add_task_fully_qualified(id="start", type = "START", layer_id = -1, size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
+        dep_graph.add_task_fully_qualified(id="start", type = "START", layer_id = -1, part_name = "None", size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
         
         # assign task ids to the partitions
         for layer, partitions in parts.items():
@@ -635,12 +635,12 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
                                 "ch_bounds": [ch for ch in partition.out_ch] if partition.out_ch is not None else []}
 
                 if task_size > 0 and computing_time > 0:
-                    dep_graph.add_task_fully_qualified(id=partition.task_id, type = "COMP_OP", layer_id = partition.layer_id, size = task_size, weight_size= weight_size,input_range=input_range,output_range=output_range,ct_required= computing_time, dep = [])
+                    dep_graph.add_task_fully_qualified(id=partition.task_id, type = "COMP_OP", layer_id = partition.layer_id, part_name = partition.id ,size = task_size, weight_size= weight_size,input_range=input_range,output_range=output_range,ct_required= computing_time, dep = [])
                     task_id += 1
             layer_id += 1
 
         #create the end node (drain point)
-        dep_graph.add_task_fully_qualified(id="end", type = "END", layer_id = np.inf, size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
+        dep_graph.add_task_fully_qualified(id="end", type = "END", layer_id = np.inf, part_name = "None", size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
         
         for key, value in deps.items():
             partitions1 = parts[key[0]]
@@ -686,7 +686,14 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
         #print("Last partitions: ", last_partitions)
         # Finally, connect the last partitions to the end node
         for partition in last_partitions:
-            results = int(np.prod(partition.out_bounds))
+            #results = int(np.prod(partition.out_bounds)) 
+            #corrected version:
+            # Calculate the spatial dimensions (height, width)
+            spatial_size = (partition.out_bounds[1][0] - partition.out_bounds[0][0]) *(partition.out_bounds[1][1] - partition.out_bounds[0][1])
+            # Calculate the channel dimensions
+            channel_size = (partition.out_ch[1] - partition.out_ch[0])
+            # Total result size
+            results = spatial_size * channel_size
             results = 1 if results == 0 else results
             dep_graph.add_dependency_fully_qualified(partition.task_id, "end", id = dep_id, type = "WRITE", size = results, pt_required = processing_time, cl = 0, dep = [partition.task_id])
             dep_id += 1

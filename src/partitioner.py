@@ -29,7 +29,7 @@ from visualizer import plot_timeline
 
 
 
-model = single_conv((10, 10, 4), num_classes=10, verbose=True)
+model = single_conv((10, 10, 4), num_classes=1, verbose=True)
 conv_layer = model.layers[1]  # Get the first conv layer
 
 x_of_grid = 4
@@ -73,7 +73,6 @@ plot_partitions(parts, deps, namefile = 'data/partitioner_data/task_graph.png')
 print("Done!")
 
 task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-breakpoint()
 path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = True)
 
 # constuct the mapping form the path

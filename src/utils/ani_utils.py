@@ -779,7 +779,7 @@ class NoCTimelinePlotter(NoCPlotter):
         
         # set x-ticks to cycle numbers
         self.ax2d.set_xlim(0, self.max_cycle)
-        #self.ax2d.set_xlim(0, 11200)
+        #self.ax2d.set_xlim(0, 120)
         # Auto-adjust ticks
         self.ax2d.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
         self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
