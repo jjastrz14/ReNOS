@@ -1639,6 +1639,148 @@ def build_partitions(model: keras.Model, grid, chosen_splitting_strategy: str = 
     return partitions, partitions_deps
 
 
+def build_partitions_splitting_input(model: keras.Model, grid, partitioning_tuple = (int, int, int), grouping: bool = True, verbose : bool = True)-> Tuple[dict, dict]:
+    """
+    The function creates the partitions for each layer in the model, based on the partitioning strategies provided as input.
+
+    Args:
+    - model : the model to partition
+
+    Returns:
+    - a dict of partitions: the key is the layer name and the svalue is a list of PartitionInfo objects, each representing a partition of the layer
+    - a dict of dependencies between the partitions of the layers
+    """
+    
+    partitions = {}
+    partitions_deps = {}
+    pe = PE()
+    nPEs = grid.K * grid.K # number of PEs in the grid
+    print(f"PE memory size: {pe.mem_size} and number of PEs: {nPEs}", )
+    layer_deps = _build_layer_deps(model)
+    
+    spat, out_ch, in_ch = partitioning_tuple
+    
+    # Track the most recent computational layer's partitioning
+    last_computational_partitioning = None
+    computational_layers = (layers.Conv1D, layers.Conv2D, layers.Conv3D, layers.Dense, layers.DepthwiseConv2D, layers.DepthwiseConv1D, layers.SeparableConv2D)
+    
+    layers_skip = (layers.Flatten, layers.Reshape, layers.Add, layers.Identity)
+    
+    # first run for the input layer
+    input_layer = model.layers[0]
+    
+    partitions[input_layer.name] = _build_partitions_from_layer(input_layer, 0, 1, 1)
+    if verbose:
+        print("Layer {} partitioned succesfully with partition parameters: {} ".format(input_layer.name, (0, 1, 1)))
+
+    actual_prev_layer = None  # Track the actual previous non-skipped layer
+    # then proceed with the other layers
+    for _, prev_layer, layer in sorted(layer_deps, key = lambda x: x[0]):
+        
+        # if the layer is in a skipped layers list we can direclty skip it
+        if isinstance(layer, layers_skip):
+            print("Skipping layer {}".format(layer.name))
+            print("Warning: Layer {} is skipped, might be a problem with dependencies.".format(layer.name))
+            continue
+        
+        partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
+        
+        # Update tracking of computational layers
+        if isinstance(layer, computational_layers):
+            last_computational_partitioning = (spat, out_ch, in_ch)
+            if verbose:
+                print(f"Updated computational layer tracking: {last_computational_partitioning}")
+        
+        # group the partitions that are interdependent
+        # Use actual_prev_layer if available, otherwise fall back to prev_layer
+        if actual_prev_layer is not None:
+            partitions1 = partitions[actual_prev_layer.name]
+        else:
+            partitions1 = partitions[prev_layer.name]
+        
+        partitions2 = partitions[layer.name]
+        # dependencies are delt directly in _group_partitions
+        _group_partitions(partitions1, partitions2, layer_deps, partitions_deps)
+        
+        # Update the actual previous layer to current layer (since it wasn't skipped)
+        actual_prev_layer = layer
+        
+        if verbose:
+            print("Layer {} partitioned succesfully with partition parameters: {} ".format(layer.name, (spat, out_ch, in_ch)))
+
+    if grouping:
+        _section_partitions(partitions, partitions_deps, pe.mem_size)
+        partitions, partitions_deps = _build_straight_through_deps(partitions=partitions, partitions_deps=partitions_deps)
+
+    return partitions, partitions_deps
+
+
+def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
+        """
+        Generate a path in a simple way.
+        
+        The path consists of tuples (task_id, current_node, next_node) representing:
+        - The task being processed
+        - The node where the task starts
+        - The node where the task will be executed
+        
+        The ant starts from a source node and ends at a drain node defined in the task graph.
+        The first entry has current_node=-1 and next_node=source_node.
+        
+        Returns:
+            list: A path represented as a list of (task_id, current_node, next_node) tuples
+            
+        """
+        
+        tasks = [task["id"] for task in task_graph.get_nodes()] 
+        
+        #initilaize the path and resource tracking
+        # No need to specify the start node, all the ants start from the "start" node
+        path = []
+        # A list of the available resources for each PE
+        resources = [PE() for _ in range(domain.size)]
+        # the last node is decalred as drain point and the starting point is source point
+        source_node = task_graph.SOURCE_POINT
+        drain_node = task_graph.DRAIN_POINT
+        
+        #start with previous node as -1 (no previous node yet)
+        prev_node = -1
+    
+        for task_id in tasks:
+            current_node = prev_node
+            
+            #determine resources requirmnets for this task
+            if task_id not in ("start", "end"):
+                task_size = task_graph.get_node(task_id)["size"]
+            else:
+                task_size = 0
+            
+            #Handle special case for start and end tasks
+            if task_id == "start":
+                next_node = source_node
+            #case to map last on the drain node
+            
+            elif task_id == "end": #case to connect last to "end"
+                next_node = drain_node 
+            else:
+                next_node = task_id % ass_factor
+                print(f"Task id: {task_id} and next node {next_node}")
+                #np.random.choice(range(domain.size), 1)[0]
+            
+            # udpate the resources
+            if task_id != "start" and task_id != "end":
+                resources[next_node].mem_used += task_size
+            
+            #normal case
+            path.append((task_id, current_node, next_node))
+            prev_node = next_node
+
+        if verbose:
+            print("proposed path is:", path)
+        return path
+
+
+
 """
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 3. Search space exploration for partitioning functions

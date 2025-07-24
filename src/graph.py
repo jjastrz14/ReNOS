@@ -600,6 +600,7 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
         task_id = 0
         # dep_id starts from the closest power of 10 that is greater than the number of tasks
         dep_id = 10**math.ceil(math.log10(len(parts) + 1)) 
+        processing_factor = 0.1 #estimation for the required time to process the data arrving to an PEs. Should be modelled somewhat better in the future.
         layer_id = 0
         
         #create the start node (source point)
@@ -665,7 +666,7 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
                 comm_size = int(weight) 
                 if comm_size == 0:
                     comm_size = 0 if weight == 0 else 1
-                processing_time =int(comm_size* 0.3)
+                processing_time = int(comm_size * processing_factor) #factor described above
 
                 if comm_size > 0:
                     dep_graph.add_dependency_fully_qualified(first_node, second_node , id = dep_id, type = comm_type , size = comm_size, pt_required= processing_time , cl = 0, dep= [-1] if isinstance(partition1.layer, layers.InputLayer) else [partition1.task_id])

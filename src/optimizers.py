@@ -447,8 +447,9 @@ class AntColony(BaseOpt):
             raise RuntimeError("Config Dump dir not initialized. Call initialize_globals() first.")
 
         # constuct the mapping form the path
-        mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
-
+        # old mapping: mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
+        mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
+        
         mapper = ma.Mapper()
         mapper.init(self.task_graph, self.domain)
         mapper.set_mapping(mapping)

@@ -43,6 +43,9 @@ if __name__ == "__main__":
     parser.add_argument("-algo", choices=["ACO", "GA"], required=True, help="Choose 'ACO' for Ant Colony Optimization or 'GA' for Genetic Algorithm.")
     parser.add_argument("-name", type=str, default="_run_", required=True, help="Choose name of the resulting directory (default: '_run_').")
     args = parser.parse_args()
+    
+    # Initialize global directories
+    initialize_globals(args.algo, args.name)
 
     # Set flags based on the argument
     if args.algo == "ACO":
@@ -61,8 +64,6 @@ if __name__ == "__main__":
         
     print(f"Selected algorithm: {args.algo}")
         
-    # Initialize global directories
-    initialize_globals(args.algo, args.name)
     # Get the shared timestamp
     # Debug - Print the global variables to check they're set correctly
     print(f"After initialization:")
@@ -119,16 +120,16 @@ if __name__ == "__main__":
             n_ants = 10,
             rho = 0.05, #evaporation rate
             n_best = 5,
-            n_iterations = 10,
+            n_iterations = 20,
             alpha = 1.,
             beta = 1.2,
         )
         n_procs = 10
         
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
-        opt = op.AntColony( params, grid, task_graph, seed = None)
+        #opt = op.AntColony( params, grid, task_graph, seed = None)
 
-        #opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")

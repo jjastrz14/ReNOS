@@ -128,9 +128,9 @@ InjectionProcess * InjectionProcess::New(string const & inject, int nodes,
       exit(-1);
     }
     if((alpha < 0.0 && beta < 0.0) || 
-       (alpha < 0.0 && r1 < 0.0) || 
-       (beta < 0.0 && r1 < 0.0) || 
-       (alpha >= 0.0 && beta >= 0.0 && r1 >= 0.0)) {
+      (alpha < 0.0 && r1 < 0.0) || 
+      (beta < 0.0 && r1 < 0.0) || 
+      (alpha >= 0.0 && beta >= 0.0 && r1 >= 0.0)) {
       cout << "Invalid parameters for injection process: " << inject << endl;
       exit(-1);
     }

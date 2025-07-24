@@ -126,7 +126,8 @@ class Ant:
             raise ValueError("The CONFIG_DUMP_DIR or ARCH_FILE is not set.")
 
         # constuct the mapping form the path
-        mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
+        #old mapping: mapping = {task_id : int(pe) for task_id, pe, _ in path if task_id != "start" and task_id != "end"}
+        mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
 
         mapper = mp.Mapper()
         mapper.init(graph, domain)
