@@ -20,6 +20,7 @@ import numpy as np
 import random
 from numpy.random import seed
 import simulator_stub as ss
+import simulator_stub_analytical_model as ssam
 import mapper as ma
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -143,6 +144,7 @@ class AntColony(BaseOpt):
         self.ACO_DIR = get_ACO_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
+        self.analytical_model = True
 
 
 
@@ -439,7 +441,7 @@ class AntColony(BaseOpt):
         return path
 
 
-    def path_length(self, ant_id, path, verbose = False):
+    def path_length(self, ant_id, path, analytical_model = False, verbose = False):
         """
         Compute the "length" of the path using the NoC simulator.
         """
@@ -458,10 +460,16 @@ class AntColony(BaseOpt):
         if verbose:
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
-        stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
-        #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
-        return result, logger
+        if self.analytical_model: 
+            stub = ssam.SimulatorStubAnalyticalModel()
+            result = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
+            #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
+            return result, None
+        else:
+            stub = ss.SimulatorStub()
+            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
+            #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
+            return result, logger
 
 
     def generate_colony_paths(self):
@@ -858,6 +866,7 @@ class GeneticAlgorithm(BaseOpt):
         self.GA_DIR = get_GA_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
+        self.analytical_model = True
         
     def on_start_fitness_norm(self, ga_instance):
         '''
@@ -925,8 +934,12 @@ class GeneticAlgorithm(BaseOpt):
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) + ".json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
-        stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
+        if self.analytical_model:
+            stub = ssam.SimulatorStubAnalyticalModel()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json")
+        else:
+            stub = ss.SimulatorStub()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
         
         if not hasattr(self, 'upper_latency_bound'):
             raise RuntimeError("upper_latency_bound not initialized. Call on_start_fitness_norm() first.")
@@ -1070,8 +1083,12 @@ class ParallelGA(GeneticAlgorithm):
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
-        stub = ss.SimulatorStub()
-        result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
+        if self.analytical_model:
+            stub = ssam.SimulatorStubAnalyticalModel()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
+        else:
+            stub = ss.SimulatorStub()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
         
         norm_result = self.upper_latency_bound / (result + 1e-6)
 

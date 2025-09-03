@@ -369,9 +369,7 @@ class FastNoCSimulator:
         # Return result and None for logger (as requested)
         return total_latency, None
 
-
-# Drop-in replacement for your original simulator
-class SimulatorStub:
+class SimulatorStubAnalyticalModel:
     """Drop-in replacement maintaining the same interface"""
     
     def __init__(self):
@@ -383,11 +381,11 @@ class SimulatorStub:
 
 
 # Example usage:
-if __name__ == "__main__":
-    # Your existing code works unchanged:
-    stub = SimulatorStub()
-    start_time = time.time()
-    result, logger = stub.run_simulation("./DATE26/best_solution.json", dwrap=True)
-    elapsed_time = time.time() - start_time
-    print(f"Total latency: {result} cycles")
-    print(f"Simulation time: {elapsed_time:.4f} seconds")
+#if __name__ == "__main__":
+#    # Your existing code works unchanged:
+#    stub = SimulatorStubAnalytical_noc_model()
+#    start_time = time.time()
+#    result, logger = stub.run_simulation("./DATE26/best_solution.json", dwrap=True)
+#    elapsed_time = time.time() - start_time
+#    print(f"Total latency: {result} cycles")
+#    print(f"Simulation time: {elapsed_time:.4f} seconds")

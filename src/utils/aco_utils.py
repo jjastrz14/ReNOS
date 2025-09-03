@@ -18,6 +18,7 @@ import numpy as np
 import random
 import time
 import simulator_stub as ss
+import simulator_stub_analytical_model as ssam
 import mapper as mp
 from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE
 from utils.partitioner_utils import PE
@@ -64,6 +65,8 @@ class Ant:
         
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
+        
+        self.analytical_model = True
 
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
@@ -134,9 +137,12 @@ class Ant:
         mapper.set_mapping(mapping)
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=self.ARCH_FILE)
         
-
-        stub = ss.SimulatorStub()
-        result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
+        if self.analytical_model:
+            stub = ssam.SimulatorStubAnalyticalModel()
+            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
+        else:
+            stub = ss.SimulatorStub()
+            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
         return result, logger
         
     def walk(self):
