@@ -1,6 +1,7 @@
 {
     "arch":{
             "topology" : "torus",
+            "width_phit": 64,
             "k" : 5,
             "n" : 2,
             "use_read_write" : 1,
