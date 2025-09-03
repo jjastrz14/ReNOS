@@ -71,7 +71,7 @@ class NPU{
         // ==================================================
 
         void startComputation(const ComputingWorkload * w, int current_time){
-            setTimer(w->size, current_time);
+            setTimer(w->ct_required, current_time);
         }
 
         bool checkComputation(int current_time){
