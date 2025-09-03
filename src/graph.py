@@ -603,7 +603,8 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
 
         task_id = 0
         # dep_id starts from the closest power of 10 that is greater than the number of tasks
-        dep_id = 10**math.ceil(math.log10(len(parts) + 1)) 
+        #dep_id = 10**math.ceil(math.log10(len(parts) + 1)) 
+        dep_id = 100_00**math.ceil(math.log10(len(parts) + 1)) 
         processing_factor = 0.1 #estimation for the required time to process the data arrving to an PEs. Should be modelled somewhat better in the future.
         layer_id = 0
         

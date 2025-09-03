@@ -235,7 +235,6 @@ class FastNoCSimulator:
                     G.add_edge(dep_id, task.id)
         
         return G
-
     
     def calculate_message_latency(self, src: int, dst: int, size: int, arch: ArchConfig, is_reply: bool = False) -> float:
         """Calculate latency for a single message using your analytical formula"""
@@ -311,7 +310,7 @@ class FastNoCSimulator:
         task_completion_times = {}
         task_start_times = {}
         node_available_times = defaultdict(int)  # Track when nodes can send next packet
-        
+
         for task_id in schedule_order:
             task = next(w for w in workload if w.id == task_id)
             
@@ -386,9 +385,9 @@ class SimulatorStub:
 # Example usage:
 if __name__ == "__main__":
     # Your existing code works unchanged:
-    stub = SimulatorStub() #test_ct_required.json #test_1K_GA.json
+    stub = SimulatorStub()
     start_time = time.time()
-    result, logger = stub.run_simulation("./DATE26/test_ct_required.json", dwrap=True)
+    result, logger = stub.run_simulation("./DATE26/best_solution.json", dwrap=True)
     elapsed_time = time.time() - start_time
     print(f"Total latency: {result} cycles")
     print(f"Simulation time: {elapsed_time:.4f} seconds")
