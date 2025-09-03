@@ -144,7 +144,7 @@ class AntColony(BaseOpt):
         self.ACO_DIR = get_ACO_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
-        self.analytical_model = True
+        self.analytical_model = False
 
 
 
@@ -778,6 +778,7 @@ class GAParameters:
     mutation_probability : float = 0.2
     crossover_probability : float = 0.8
     k_tournament : int = 3
+    is_analytical : bool = False
 
 
 class GeneticAlgorithm(BaseOpt):
@@ -866,7 +867,7 @@ class GeneticAlgorithm(BaseOpt):
         self.GA_DIR = get_GA_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
-        self.analytical_model = True
+        self.analytical_model = self.par.is_analytical
         
     def on_start_fitness_norm(self, ga_instance):
         '''

@@ -66,7 +66,7 @@ class Ant:
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
         
-        self.analytical_model = True
+        self.analytical_model = False
 
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):

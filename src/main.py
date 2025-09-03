@@ -160,6 +160,7 @@ if __name__ == "__main__":
         n_generations = 10, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
+        is_analytical = False, #use analytical model instead of cycle-accurate simulator
         )
         
         n_procs = 10
