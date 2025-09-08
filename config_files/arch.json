@@ -25,7 +25,7 @@
             "reconf_batch_size": 0,
             "reconf_cycles":  2.0,
             "ANY_comp_cycles": 0.25,
-            "max_pe_mem": 262144,
-            "threshold_pe_mem": 249036
+            "max_pe_mem": 10000000,
+            "threshold_pe_mem": 100000000
             }
 }

@@ -25,71 +25,87 @@ from utils.partitioner_utils import *
 from utils.plotting_utils import *
 import mapper as ma
 import simulator_stub as ss
+import simulator_stub_analytical_model as ssam
 from visualizer import plot_timeline
+from visualiser_analytical_noc_model import visualize_simulation
+from simulator_stub_analytical_model import FastNoCSimulator
 
 
-model = single_conv((10, 10, 4), num_classes=1, verbose=True)
-conv_layer = model.layers[1]  # Get the first conv layer
+if __name__ == '__main__':
+    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
 
-x_of_grid = 4
-source = 0
-drain = 15
+    x_of_grid = 4
+    source = 0
+    drain = 15
 
-grid = dm.Grid()
-grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
+    grid = dm.Grid()
+    grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
 
-# Explore all partitioning combinations
-spatial, output, input_split = search_space_split_factors(
-    conv_layer, 
-    factor=2,  # Max splitting factor
-    FLOP_threshold=3e6,
-    size_of_grid = x_of_grid**2,
-    return_best_valid=True,
-    path = "data/partitioner_data"
-)
+    partitioner_tuples = []
+    for layer in model.layers:
+        # Explore all partitioning combinations
+        spatial, output, input_split = search_space_split_factors(
+            layer, 
+            factor=5,  # Max splitting factor
+            FLOP_threshold=3e6,
+            size_of_grid = x_of_grid**2,
+            return_best_valid=True,
+            path = "data/partitioner_data"
+        )
+        print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
+        partitioner_tuples.append((spatial, output, input_split))
 
-print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
+    #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
 
-partitioner_tuple = (spatial, output, input_split)
+    #partitioner_tuple = (spatial, output, input_split)
 
-#### Model analysis and partitioning ####
+    #### Model analysis and partitioning ####
 
-print("")
-print("Analysis of the model...")
-analyze_ops(model, incl_info = True)
-    
-dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
-#spatial, output, input
-parts, deps = build_partitions_splitting_input(model, grid, partitioning_tuple = partitioner_tuple, grouping = False, verbose = True)
+    print("")
+    #print("Analysis of the model...")
+    #analyze_ops(model, incl_info = True)
+        
+    dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
+    #spatial, output, input
+    parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
 
-#print partitions and dependencies in a table format
-print("")
-print("Analysis of the partitions...") 
-print_partitions_table_adaptive(parts, deps, mode="auto") #possible modes: "auto", "compact", "vertical", "minimal"
+    #print partitions and dependencies in a table format
+    #print("")
+    #print("Analysis of the partitions...") 
+    #print_partitions_table_adaptive(parts, deps, mode="auto") #possible modes: "auto", "compact", "vertical", "minimal"
 
-print("Plotting the partitions and dependencies of the model...")
-plot_partitions(parts, deps, namefile = 'data/partitioner_data/task_graph.png')
-print("Done!")
+    #print("Plotting the partitions and dependencies of the model...")
+    #plot_partitions(parts, deps, namefile = 'data/partitioner_data/task_graph.png')
+    #print("Done!")
 
-task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = True)
+    task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
+    path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = True)
 
-# constuct the mapping form the path
-mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
+    # constuct the mapping form the path
+    mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
 
-print(f"Mapping: {mapping}")
+    #print(f"Mapping: {mapping}")
 
-mapper = ma.Mapper()
-mapper.init(task_graph, grid)
-mapper.set_mapping(mapping)
-mapper.mapping_to_json("../data/partitioner_data/mapping.json", file_to_append="./config_files/arch.json")
+    mapper = ma.Mapper()
+    mapper.init(task_graph, grid)
+    mapper.set_mapping(mapping)
+    mapper.mapping_to_json("../data/partitioner_data/mapping.json", file_to_append="./config_files/arch.json")
 
-#stub = ss.SimulatorStub()
-#result, logger = stub.run_simulation("../data/partitioner_data/mapping.json", dwrap=True)
+    stub = ss.SimulatorStub()
+    result, logger = stub.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
+    print(f"Booksim2 result: {result}")
 
-plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = True)
+    stub_anal = ssam.SimulatorStubAnalyticalModel()
+    result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
 
-print("Partitioner Done!")
+    print(f"Analytical model result: {result_anal}")
+
+    plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
+    # Visualize analytical model simulation
+    total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json")
+
+    print("Partitioner Done!")
 
 
 

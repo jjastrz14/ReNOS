@@ -1,6 +1,6 @@
 import json
 import networkx as nx
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 from collections import defaultdict
 import math
@@ -248,6 +248,7 @@ class FastNoCSimulator:
         num_ports = 2 * arch.k  # bidirectional links in k dimensions
         
         # Parallelization factor k (adapt to ports and VCs)
+        #paralelisation parameter can casue a problem here????
         k_parallel = min(4, max(2, min(num_ports, arch.num_vcs) // 2))
         
         # Link delay components
@@ -294,10 +295,178 @@ class FastNoCSimulator:
         total_latency = head_term + body_term + queuing_delay
         
         return int(round(total_latency))
+    
+    def _group_comp_ops_by_layer_and_node(self, workload: List[WorkloadEntry]) -> Dict:
+        """Group COMP_OP operations by (node, layer_id) for batching"""
+        groups = defaultdict(list)
+        for task in workload:
+            if task.type == 'COMP_OP' and task.layer_id is not None:
+                groups[(task.node, task.layer_id)].append(task)
+        return groups
+    
+    def _group_writes_by_dependencies(self, workload: List[WorkloadEntry], dep_graph) -> Dict:
+        """Group WRITE operations - currently disabled as each WRITE generates individual REPLY"""
+        # According to Rule 4, each WRITE generates its own REPLY, so no batching for now
+        return defaultdict(list)
+    
+    def _is_task_in_batch(self, task: WorkloadEntry, comp_op_groups: Dict, write_groups: Dict, completed_tasks: Dict) -> bool:
+        """Check if a task is part of a batch that should be processed together"""
+        if task.type == 'COMP_OP' and task.layer_id is not None:
+            group_key = (task.node, task.layer_id)
+            if group_key in comp_op_groups and len(comp_op_groups[group_key]) > 1:
+                # Sort batch by ID to get the correct first task
+                batch = sorted(comp_op_groups[group_key], key=lambda t: t.id)
+                first_task_id = batch[0].id
+                
+                # Skip if this is NOT the first task in the batch (it will be processed with the first)
+                return task.id != first_task_id
+        return False
+    
+    def _calculate_earliest_start_time(self, task: WorkloadEntry, task_completion_times: Dict, task_processing_completion_times: Dict) -> int:
+        """Calculate the earliest start time for a task based on dependencies"""
+        earliest_start = 0
+        for dep_id in task.dependencies:
+            if dep_id != -1 and dep_id in task_completion_times:
+                # For COMP_OP tasks, they can start as soon as the WRITE processing finishes
+                if task.type == 'COMP_OP' and dep_id in task_processing_completion_times:
+                    earliest_start = max(earliest_start, task_processing_completion_times[dep_id])
+                else:
+                    earliest_start = max(earliest_start, task_completion_times[dep_id])
+        return earliest_start
+    
+    def _process_write_operation(self, task: WorkloadEntry, earliest_start: int, arch: ArchConfig, 
+                                node_send_available_times: Dict, node_compute_available_times: Dict,
+                                task_completion_times: Dict, task_processing_completion_times: Dict,
+                                task_start_times: Dict, write_groups: Dict, event_tracker: Optional[Any] = None):
+        """Process WRITE/WRITE_REQ operations following the 7 rules"""
+        
+        # Rule 7: WRITE with dependency -1 does NOT need processing - data already at destination
+        if task.dependencies == [-1]:
+            # Data is already residing at destination, no network transfer or processing needed
+            task_start_times[task.id] = earliest_start
+            task_completion_times[task.id] = earliest_start  # Completes immediately
+            task_processing_completion_times[task.id] = earliest_start  # Processing complete immediately
+            
+            # Track as instantaneous operation for visualization
+            if event_tracker:
+                event_tracker.track_write_process_start(task.id, task.dst, earliest_start, 0)
+                event_tracker.track_write_process_end(task.id, task.dst, earliest_start)
+            
+            # No impact on node availability - data is already there
+            return
+        
+        # Rule 6: Node can start sending another message after receiving REPLY from previous message
+        earliest_start = max(earliest_start, node_send_available_times[task.src])
+        task_start_times[task.id] = earliest_start
+        
+        if task.src == task.dst:
+            # Local write - no network latency, just processing time
+            processing_time = task.pt_required * 8 / arch.flit_size if task.pt_required else 0
+            
+            # Track local processing for visualization
+            if event_tracker:
+                event_tracker.track_write_process_start(task.id, task.dst, earliest_start, task.pt_required)
+                event_tracker.track_write_process_end(task.id, task.dst, earliest_start + processing_time)
+            
+            # Rule 5: Node can start COMP_OP after receiving WRITE message (local processing completed)
+            node_compute_available_times[task.dst] = earliest_start + processing_time
+            node_send_available_times[task.src] = earliest_start + processing_time  # Can send next message immediately
+            
+            task_completion_times[task.id] = earliest_start + processing_time
+            task_processing_completion_times[task.id] = earliest_start + processing_time
+            return
+        
+        # Network communication case
+        # Calculate timings
+        network_latency = self.calculate_message_latency(task.src, task.dst, task.size, arch)
+        processing_time = task.pt_required * 8 / arch.flit_size if task.pt_required else 0
+        # Rule 4: Each WRITE generates REPLY message of one flit size
+        reply_latency = self.calculate_message_latency(task.dst, task.src, 0, arch, is_reply=True)
+        
+        # Timeline: send -> arrive & process -> reply -> reply arrives
+        send_start = earliest_start
+        send_end = send_start + network_latency  # Message arrives at destination
+        process_start = send_end
+        process_end = process_start + processing_time
+        reply_start = process_end
+        reply_end = reply_start + reply_latency  # Reply arrives back at source
+        
+        # Track events for visualization
+        if event_tracker:
+            event_tracker.track_write_send_start(task.id, task.src, task.dst, send_start, task.size)
+            event_tracker.track_write_send_end(task.id, task.src, task.dst, send_end)
+            event_tracker.track_write_receive_start(task.id, task.src, task.dst, send_start)
+            event_tracker.track_write_process_start(task.id, task.dst, process_start, task.pt_required)
+            event_tracker.track_write_process_end(task.id, task.dst, process_end)
+            event_tracker.track_reply_send_start(task.id, task.dst, task.src, reply_start)
+            event_tracker.track_reply_receive_end(task.id, task.dst, task.src, reply_end)
+        
+        # Update node availability according to rules
+        # Rule 6: Source node can't send next message until REPLY is received
+        node_send_available_times[task.src] = reply_end
+        # Rule 5: Destination node can start COMP_OP after processing WRITE message  
+        node_compute_available_times[task.dst] = process_end
+        
+        task_completion_times[task.id] = reply_end  # Task complete when REPLY received
+        task_processing_completion_times[task.id] = process_end  # Processing complete when WRITE processed
+    
+    def _process_comp_op_batch(self, task: WorkloadEntry, earliest_start: int, arch: ArchConfig,
+                                node_compute_available_times: Dict, task_completion_times: Dict,
+                                task_processing_completion_times: Dict, task_start_times: Dict,
+                                comp_op_groups: Dict, layer_completion_times: Dict, event_tracker: Optional[Any] = None):
+        """Process COMP_OP operations with layer-aware batching following the 6 rules"""
+        group_key = (task.node, task.layer_id)
+        
+        if group_key in comp_op_groups and len(comp_op_groups[group_key]) > 1:
+            # Rule 3: COMP_OP from same layer on same node can be done sequentially without messages
+            batch = comp_op_groups[group_key]
+            # Sort batch by ID to ensure smaller ID comes first (Rule 3)
+            batch = sorted(batch, key=lambda t: t.id)
+            
+            # Rule 1: COMP_OP is processed by assigned node, node can't send but can receive during processing
+            # Rule 5: Node can start COMP_OP after receiving WRITE message
+            batch_start_time = max(earliest_start, node_compute_available_times[task.node])
+            
+            # Execute all operations in the batch sequentially (Rule 3: no messages between same layer ops)
+            current_time = batch_start_time
+            for batch_task in batch:
+                task_start_times[batch_task.id] = current_time
+                task_latency = batch_task.ct_required * arch.ANY_comp_cycles if batch_task.ct_required else 1
+                current_time += task_latency
+                
+                task_completion_times[batch_task.id] = current_time
+                task_processing_completion_times[batch_task.id] = current_time
+            
+            # Rule 1: During batch processing, node can't send messages but can receive
+            # Update when the compute node can start next computation (after entire batch)
+            node_compute_available_times[task.node] = current_time
+            layer_completion_times[(task.node, task.layer_id)] = current_time
+            
+            # Track the batch execution for visualization
+            if event_tracker:
+                task_ids = [t.id for t in batch]
+                event_tracker.track_batch_comp_ops(task_ids, task.node, batch_start_time, current_time, task.layer_id)
+        else:
+            # Process individual COMP_OP
+            # Rule 5: Node can start COMP_OP after receiving WRITE message
+            earliest_start = max(earliest_start, node_compute_available_times[task.node])
+            task_start_times[task.id] = earliest_start
+            
+            task_latency = task.ct_required * arch.ANY_comp_cycles if task.ct_required else 1
+            
+            # Track individual COMP_OP for visualization
+            if event_tracker:
+                event_tracker.track_comp_op_start(task.id, task.node, earliest_start, task.ct_required)
+                event_tracker.track_comp_op_end(task.id, task.node, earliest_start + task_latency)
+            
+            # Rule 1: During processing, node can't send messages but can receive
+            node_compute_available_times[task.node] = earliest_start + task_latency
+            task_completion_times[task.id] = earliest_start + task_latency
+            task_processing_completion_times[task.id] = earliest_start + task_latency
         
 
-    def simulate_execution(self, workload: List[WorkloadEntry], arch: ArchConfig) -> int:
-        """Simulate execution and return total latency"""
+    def simulate_execution(self, workload: List[WorkloadEntry], arch: ArchConfig, event_tracker: Optional[Any] = None) -> int:
+        """Simulate execution with layer-aware batching optimization"""
         # Build dependency graph
         dep_graph = self.build_dependency_graph(workload)
         
@@ -306,58 +475,42 @@ class FastNoCSimulator:
         except nx.NetworkXError:
             raise ValueError("Circular dependency detected in workload")
         
+        # Group operations for layer-aware batching
+        comp_op_groups = self._group_comp_ops_by_layer_and_node(workload)
+        write_groups = self._group_writes_by_dependencies(workload, dep_graph)
+        
         # Calculate execution times
         task_completion_times = {}
         task_start_times = {}
-        node_available_times = defaultdict(int)  # Track when nodes can send next packet
+        task_processing_completion_times = {}  # When WRITE processing finishes (before REPLY)
+        
+        # Separate tracking for different resource types
+        node_send_available_times = defaultdict(int)  # When nodes can send next packet
+        node_compute_available_times = defaultdict(int)  # When nodes can start next computation
+        
+        # Track layer completion times for batched writes
+        layer_completion_times = defaultdict(int)
 
         for task_id in schedule_order:
             task = next(w for w in workload if w.id == task_id)
             
+            # Skip if this task is part of a batch that will be processed together
+            if self._is_task_in_batch(task, comp_op_groups, write_groups, task_completion_times):
+                continue
+                
             # Calculate earliest start time based on dependencies
-            earliest_start = 0
-            for dep_id in task.dependencies:
-                if dep_id != -1 and dep_id in task_completion_times:
-                    earliest_start = max(earliest_start, task_completion_times[dep_id])
-            
-            # For WRITE operations, also need to wait for node to be available
-            if task.type in ['WRITE', 'WRITE_REQ']:
-                earliest_start = max(earliest_start, node_available_times[task.src])
-                
-            task_start_times[task_id] = earliest_start
+            earliest_start = self._calculate_earliest_start_time(task, task_completion_times, task_processing_completion_times)
             
             if task.type in ['WRITE', 'WRITE_REQ']:
-                
-                if task.src == task.dst:
-                    # Local write, no network latency
-                    #below uncomment if you want to consider processing time for local writes
-                    processing_time = 0 # task.pt_required * 8 / arch.flit_size if task.pt_required else 0
-                    task_latency = processing_time
-                    task_completion_times[task_id] = earliest_start + task_latency
-                    continue
-                
-                # Calculate network latency for the packet
-                network_latency = self.calculate_message_latency(task.src, task.dst, task.size, arch)
-                
-                # Calculate processing time at destination
-                processing_time = task.pt_required * 8 / arch.flit_size if task.pt_required else 0
-                
-                # Calculate reply latency (small packet with only head)
-                reply_latency = self.calculate_message_latency(task.dst, task.src, 0, arch, is_reply=True)
-                
-                # Total latency for this operation
-                task_latency = network_latency + processing_time + reply_latency
-                
-                # Update when the source node can send next packet
-                node_available_times[task.src] = earliest_start + task_latency
-                
-                task_completion_times[task_id] = earliest_start + task_latency
+                self._process_write_operation(task, earliest_start, arch, node_send_available_times, 
+                                            node_compute_available_times, task_completion_times, 
+                                            task_processing_completion_times, task_start_times, write_groups, event_tracker)
                 
             elif task.type == 'COMP_OP':
-                # Computation operation
-                task_latency = task.ct_required * arch.ANY_comp_cycles if task.ct_required else 1
-                task_completion_times[task_id] = earliest_start + task_latency
-                    
+                self._process_comp_op_batch(task, earliest_start, arch, node_compute_available_times, 
+                                            task_completion_times, task_processing_completion_times, 
+                                            task_start_times, comp_op_groups, layer_completion_times, event_tracker)
+                        
         # Return the maximum completion time
         return int(np.ceil(max(task_completion_times.values()))) if task_completion_times else 0
     
@@ -380,12 +533,13 @@ class SimulatorStubAnalyticalModel:
         return self.fast_sim.run_simulation(json_path, dwrap)
 
 
-# Example usage:
+#Example usage:
 #if __name__ == "__main__":
 #    # Your existing code works unchanged:
-#    stub = SimulatorStubAnalytical_noc_model()
+#    stub = SimulatorStubAnalyticalModel()
 #    start_time = time.time()
-#    result, logger = stub.run_simulation("./DATE26/best_solution.json", dwrap=True)
-#    elapsed_time = time.time() - start_time
+#    result, logger = stub.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
+#    end_time = time.time()
+#    elapsed_time = end_time - start_time
 #    print(f"Total latency: {result} cycles")
 #    print(f"Simulation time: {elapsed_time:.4f} seconds")

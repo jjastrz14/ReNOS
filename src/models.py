@@ -3,20 +3,80 @@ import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
 import larq
 
+
+def ResNet_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    inputs = layers.Input(shape=input_shape)
+    # First layer: initial convolution
+    x = layers.Conv2D(16, kernel_size=(3, 3), padding='same')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    # First ResBlock (with 16 filters)
+    x = ResBlock(x, filters=16)
+    model = keras.Model(inputs=inputs, outputs=x)
+    if verbose:
+        model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    
+    return model 
+
+def ResNet_late_blocks(input_shape=(8, 8, 256), num_classes=10, verbose=False):
+    
+    inputs = layers.Input(shape=input_shape)
+    # Last ResBlock (with 64 filters)
+    x = ResBlock(inputs, filters=512)
+    # Global average pooling and output layer
+    x = layers.GlobalAveragePooling2D()(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=outputs)
+    if verbose:
+        model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    
+    return model 
+
+def VGG_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    
+    inputs = layers.Input(shape=input_shape)
+    # First two layers of VGG16
+    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
+    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
+    if verbose:
+        model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    
+    return model
+
+def VGG_late_layers(input_shape=(14, 14, 512), num_classes=10, verbose=False):
+    inputs = layers.Input(shape=input_shape)
+    # Last two convolutional layers before FC layers in VGG16
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(inputs)
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    if verbose:
+        model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    
+    return model
+    
+
 def ResBlock(x, filters, kernel_size=(3, 3), strides=(1, 1)):
     # First convolution in residual block
     y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(x)
     y = layers.BatchNormalization()(y)
-    y = layers.ReLU()(y)
     # Second convolution in residual block
     y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(y)
     y = layers.BatchNormalization()(y)
-    # Skip connection
+    # Skip connection (no Add, just pass y and skip connection separately)
     if x.shape[-1] != filters:
         x = layers.Conv2D(filters, kernel_size=(1, 1), strides=strides, padding='same')(x)
-    out = layers.Add()([x, y])
-    out = layers.ReLU()(out)
-    return out
+    # Output is just the skip connection (x) or y, not added together
+    return y  # or return x if you want to preserve only the skip connection
 
 def Resnet9s(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     inputs = layers.Input(shape=input_shape)

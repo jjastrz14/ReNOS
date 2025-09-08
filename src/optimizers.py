@@ -144,7 +144,7 @@ class AntColony(BaseOpt):
         self.ACO_DIR = get_ACO_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
-        self.analytical_model = False
+        self.analytical_model = True
 
 
 

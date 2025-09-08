@@ -1580,6 +1580,7 @@ def build_partitions(model: keras.Model, grid, chosen_splitting_strategy: str = 
 
     actual_prev_layer = None  # Track the actual previous non-skipped layer
     # then proceed with the other layers
+    n = 2 # multiplying PEs factor for FLOPs threshold
     for _, prev_layer, layer in sorted(layer_deps, key = lambda x: x[0]):
         
         # if the layer is in a skipped layers list we can direclty skip it
@@ -1592,7 +1593,7 @@ def build_partitions(model: keras.Model, grid, chosen_splitting_strategy: str = 
         
         # 1. strategy: Equal FLOPs per partitions across layer 
         # set FLOPS threshold per layer according to number of PEs and MACs per layer!
-        Flops_theshold = FLOPs / nPEs if isinstance(layer, computational_layers) else 1
+        Flops_theshold = FLOPs / (nPEs * n) if isinstance(layer, computational_layers) else 1
         
         #2. strategy: equal FLOPs per each partition across network
         
@@ -1714,6 +1715,108 @@ def build_partitions_splitting_input(model: keras.Model, grid, partitioning_tupl
 
     return partitions, partitions_deps
 
+def build_partitions_splitting_input_for_many__tuples(model: keras.Model, grid, partitioning_tuple=None, grouping: bool = True, verbose: bool = True) -> Tuple[dict, dict]:
+    """
+    The function creates the partitions for each layer in the model, based on the partitioning strategies provided as input.
+
+    Args:
+    - model: the model to partition
+    - partitioning_tuple: either a single tuple (spat, out_ch, in_ch) for all layers,
+                         or a list of tuples with one tuple per layer
+
+    Returns:
+    - a dict of partitions: the key is the layer name and the value is a list of PartitionInfo objects
+    - a dict of dependencies between the partitions of the layers
+    """
+    
+    partitions = {}
+    partitions_deps = {}
+    pe = PE()
+    nPEs = grid.K * grid.K  # number of PEs in the grid
+    print(f"PE memory size: {pe.mem_size} and number of PEs: {nPEs}")
+    layer_deps = _build_layer_deps(model)
+    
+    # Handle different input types for partitioning_tuple
+    if partitioning_tuple is None:
+        # Default partitioning if none provided
+        partitioning_tuple = [(1, 1, 1)] * len(model.layers)
+    elif isinstance(partitioning_tuple, tuple) and len(partitioning_tuple) == 3:
+        # Single tuple provided - use for all layers
+        partitioning_tuple = [partitioning_tuple] * len(model.layers)
+    elif isinstance(partitioning_tuple, list):
+        # List provided - check if it matches the number of layers
+        if len(partitioning_tuple) != len(model.layers):
+            print(f"Warning: partitioning list length ({len(partitioning_tuple)}) doesn't match number of layers ({len(model.layers)})")
+            # Extend or truncate as needed
+            if len(partitioning_tuple) < len(model.layers):
+                partitioning_tuple = partitioning_tuple + [(1, 1, 1)] * (len(model.layers) - len(partitioning_tuple))
+            else:
+                partitioning_tuple = partitioning_tuple[:len(model.layers)]
+    
+    # Track the most recent computational layer's partitioning
+    last_computational_partitioning = None
+    computational_layers = (layers.Conv1D, layers.Conv2D, layers.Conv3D, layers.Dense, layers.DepthwiseConv2D, layers.DepthwiseConv1D, layers.SeparableConv2D)
+    
+    layers_skip = (layers.Flatten, layers.Reshape, layers.Add, layers.Identity)
+    
+    # first run for the input layer
+    input_layer = model.layers[0]
+    
+    # Get partitioning for input layer (first element in the list)
+    spat, out_ch, in_ch = partitioning_tuple[0]
+    partitions[input_layer.name] = _build_partitions_from_layer(input_layer, spat, out_ch, in_ch)
+    
+    if verbose:
+        print(f"Layer {input_layer.name} partitioned successfully with partition parameters: {(spat, out_ch, in_ch)}")
+
+    actual_prev_layer = None  # Track the actual previous non-skipped layer
+    
+    # Create a mapping from layer to its partitioning tuple
+    layer_partitioning = {}
+    for i, layer in enumerate(model.layers):
+        layer_partitioning[layer.name] = partitioning_tuple[i]
+    
+    # then proceed with the other layers
+    for _, prev_layer, layer in sorted(layer_deps, key=lambda x: x[0]):
+        
+        # if the layer is in a skipped layers list we can directly skip it
+        if isinstance(layer, layers_skip):
+            print(f"Skipping layer {layer.name}")
+            print(f"Warning: Layer {layer.name} is skipped, might be a problem with dependencies.")
+            continue
+        
+        # Get partitioning for this specific layer
+        spat, out_ch, in_ch = layer_partitioning[layer.name]
+        partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
+        
+        # Update tracking of computational layers
+        if isinstance(layer, computational_layers):
+            last_computational_partitioning = (spat, out_ch, in_ch)
+            if verbose:
+                print(f"Updated computational layer tracking: {last_computational_partitioning}")
+        
+        # group the partitions that are interdependent
+        # Use actual_prev_layer if available, otherwise fall back to prev_layer
+        if actual_prev_layer is not None:
+            partitions1 = partitions[actual_prev_layer.name]
+        else:
+            partitions1 = partitions[prev_layer.name]
+        
+        partitions2 = partitions[layer.name]
+        # dependencies are dealt directly in _group_partitions
+        _group_partitions(partitions1, partitions2, layer_deps, partitions_deps)
+        
+        # Update the actual previous layer to current layer (since it wasn't skipped)
+        actual_prev_layer = layer
+        
+        if verbose:
+            print(f"Layer {layer.name} partitioned successfully with partition parameters: {(spat, out_ch, in_ch)}")
+
+    if grouping:
+        _section_partitions(partitions, partitions_deps, pe.mem_size)
+        partitions, partitions_deps = _build_straight_through_deps(partitions=partitions, partitions_deps=partitions_deps)
+
+    return partitions, partitions_deps
 
 def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
         """

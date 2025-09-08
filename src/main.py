@@ -71,7 +71,8 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    model = LeNet4((28, 28, 1), verbose=True)
+    #model = LeNet4((28, 28, 1), verbose=True)
+    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     # model = Resnet9s((32, 32, 3), verbose=True)
     # model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
     # model = test_model((28, 28, 1), verbose= True)
@@ -79,6 +80,9 @@ if __name__ == "__main__":
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
+    model = ResNet_early_blocks((32, 32, 3), verbose=True)
+    #model = VGG_early_layers((32, 32, 3), verbose=True)
+    #model = VGG_late_layers((14, 14, 512), verbose=True)
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
     size_of_grid = 4
@@ -140,6 +144,13 @@ if __name__ == "__main__":
         plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/timeline_ACO_" + get_timestamp() + ".png", verbose = False)
         
         plot_convergence(get_ACO_DIR(), save_path=get_ACO_DIR() + "/convg_ACO_" + get_timestamp() + ".png")
+        
+        from simulator_stub_analytical_model import FastNoCSimulator  # Import your simulator
+        from visualiser_analytical_noc_model import visualize_simulation  # Import your visualizer function
+    
+        simulator = FastNoCSimulator()
+        total_latency, visualizer = visualize_simulation(simulator, get_ACO_DIR() + "/best_solution.json")
+        
             
         end = time.time()
         elapsed_time = end - start
@@ -153,14 +164,14 @@ if __name__ == "__main__":
         print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 10, #30,
-        n_parents_mating= 5, #Number of solutions to be selected as parents.
+        sol_per_pop = 50, #30,
+        n_parents_mating= 10, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 10, #800,
+        n_generations = 20, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
-        is_analytical = False, #use analytical model instead of cycle-accurate simulator
+        is_analytical = True, #use analytical model instead of cycle-accurate simulator
         )
         
         n_procs = 10
