@@ -277,13 +277,33 @@ Using these parameters, we can define a custom partitioning strategy. In particu
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Union, Tuple, Set, Dict
 from copy import deepcopy
 import string
 import matplotlib.pyplot as plt
 import graph as dg
 import math
+
+def get_pe_memory_size_from_config():
+    """
+    Read PE memory size from arch.json configuration file.
+    Falls back to default if file not found or key missing.
+    """
+    try:
+        import json
+        import os
+        # Try to read from the default arch.json file
+        config_path = os.path.join(os.path.dirname(__file__), "../../config_files/arch.json")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                return config.get('arch', {}).get('threshold_pe_mem', 256000)
+    except Exception as e:
+        print(f"Warning: Could not read PE memory size from config: {e}")
+    
+    # Fallback to default
+    return 256000
 
 @dataclass
 class PE:
@@ -292,14 +312,17 @@ class PE:
     of the PE's available resources (memory)
     """
     # The space used to store in memory a single number (input/weights/output) (in bytes)
-    single_num: int = 1
-    # The size of the PE's memory (in bytes)
-    mem_size: int = 256000
+    single_num: int = 2 #1 for int8, 2 for int16, 4 for int32/float32, 8 for float64
+    # The size of the PE's memory (in bytes) - will be loaded from config
+    mem_size: int = field(default_factory=get_pe_memory_size_from_config)
     # The amount of memory used by the PE (in bytes)
     mem_used: int = 0
 
-    def __init__(self, mem_size: int = 256000):
-        self.mem_size = mem_size
+    def __init__(self, mem_size: int = None):
+        if mem_size is None:
+            self.mem_size = get_pe_memory_size_from_config()
+        else:
+            self.mem_size = mem_size
         self.mem_used = 0
 
     def get_memory_occupation(self, as_percent: bool = False):
@@ -1867,7 +1890,7 @@ def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
                 next_node = drain_node 
             else:
                 next_node = task_id % ass_factor
-                print(f"Task id: {task_id} and next node {next_node}")
+                #print(f"Task id: {task_id} and next node {next_node}")
                 #np.random.choice(range(domain.size), 1)[0]
             
             # udpate the resources
@@ -2056,10 +2079,10 @@ def analyze_partition(partition):
     - FLOPs : the number of FLOPs performed in the partition
     """
 
-
     FLOPs = 0
     MACs = 0
     tot_par_size = 0
+    precision = 2 # bytes per parameter (assuming float16) 1 is 1 byte (int8), float32 is 4 bytes, float64 is 8 bytes
 
     if isinstance(partition.layer, (layers.InputLayer, layers.Reshape, layers.ZeroPadding1D, layers.ZeroPadding2D, layers.Identity, layers.Flatten)):
         return MACs, FLOPs, tot_par_size
@@ -2068,12 +2091,12 @@ def analyze_partition(partition):
     layer = partition.layer
     inputs_bounds = partition.in_bounds
     inputs_shape =[inputs_bounds[1][i] - inputs_bounds[0][i] for i in range(len(inputs_bounds[0]))] if len(inputs_bounds[0]) > 1 else [inputs_bounds[1][0] - inputs_bounds[0][0]]
-    tot_par_size += np.prod(inputs_shape) * ((partition.in_ch[1] - partition.in_ch[0]) if partition.in_ch is not None else 1)
+    tot_par_size += np.prod(inputs_shape) * ((partition.in_ch[1] - partition.in_ch[0]) if partition.in_ch is not None else 1) * precision
     # prepend a 0 to the input shape to make it compatible to the hooks
     inputs_shape = [0] + inputs_shape + ([partition.in_ch[1] - partition.in_ch[0]] if partition.in_ch is not None else [1])
     outputs_bounds = partition.out_bounds
     outputs_shape = [outputs_bounds[1][i] - outputs_bounds[0][i] for i in range(len(outputs_bounds[0]))] if len(outputs_bounds[0]) > 1 else [outputs_bounds[1][0] - outputs_bounds[0][0]]
-    tot_par_size += np.prod(outputs_shape) * ((partition.out_ch[1] - partition.out_ch[0]) if partition.out_ch is not None else 1)
+    tot_par_size += np.prod(outputs_shape) * ((partition.out_ch[1] - partition.out_ch[0]) if partition.out_ch is not None else 1) * precision
     # prepend a 0 to the output shape also
     outputs_shape = [0] + outputs_shape + ([partition.out_ch[1] - partition.out_ch[0]] if partition.out_ch is not None else [1])
     # Compute the FLOPs (and MACs) using the hook
@@ -2087,7 +2110,7 @@ def analyze_partition(partition):
             FLOPs += FLOPs_act
 
     for weight in partition.weights_shape:
-        tot_par_size += np.prod(weight)
+        tot_par_size += np.prod(weight) * precision
 
     return FLOPs, MACs, tot_par_size
 

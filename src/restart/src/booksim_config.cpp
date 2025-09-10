@@ -356,29 +356,29 @@ BookSimConfig::BookSimConfig( )
 PowerConfig::PowerConfig( )
 { 
 
-  _arch_int["H_INVD2"] = 0;
-  _arch_int["W_INVD2"] = 0;
-  _arch_int["H_DFQD1"] = 0;
-  _arch_int["W_DFQD1"] = 0;
-  _arch_int["H_ND2D1"] = 0;
-  _arch_int["W_ND2D1"] = 0;
-  _arch_int["H_SRAM"] = 0;
-  _arch_int["W_SRAM"] = 0;
-  _arch_float["Vdd"] = 0;
-  _arch_float["R"] = 0;
-  _arch_float["IoffSRAM"] = 0;
-  _arch_float["IoffP"] = 0;
-  _arch_float["IoffN"] = 0;
-  _arch_float["Cg_pwr"] = 0;
-  _arch_float["Cd_pwr"] = 0;
-  _arch_float["Cgdl"] = 0;
-  _arch_float["Cg"] = 0;
-  _arch_float["Cd"] = 0;
-  _arch_float["LAMBDA"] = 0;
-  _arch_float["MetalPitch"] = 0;
-  _arch_float["Rw"] = 0;
-  _arch_float["Cw_gnd"] = 0;
-  _arch_float["Cw_cpl"] = 0;
-  _arch_float["wire_length"] = 0;
+  _arch_int["H_INVD2"] = 8;
+  _arch_int["W_INVD2"] = 3;
+  _arch_int["H_DFQD1"] = 8;
+  _arch_int["W_DFQD1"] = 16;
+  _arch_int["H_ND2D1"] = 8;
+  _arch_int["W_ND2D1"] = 3;
+  _arch_int["H_SRAM"] = 8;
+  _arch_int["W_SRAM"] = 6;
+  _arch_float["Vdd"] = 0.9;
+  _arch_float["R"] = 606.321;
+  _arch_float["IoffSRAM"] = 0.00000032;
+  _arch_float["IoffP"] = 0.00000102;
+  _arch_float["IoffN"] = 0.00000102;
+  _arch_float["Cg_pwr"] = 0.000000000000000534;
+  _arch_float["Cd_pwr"] = 0.000000000000000267;
+  _arch_float["Cgdl"] = 0.0000000000000001068;
+  _arch_float["Cg"] = 0.000000000000000534;
+  _arch_float["Cd"] = 0.000000000000000267;
+  _arch_float["LAMBDA"] = 0.016;
+  _arch_float["MetalPitch"] = 0.000080;
+  _arch_float["Rw"] = 0.720044;
+  _arch_float["Cw_gnd"] = 0.000000000000267339;
+  _arch_float["Cw_cpl"] = 0.000000000000267339;
+  _arch_float["wire_length"] = 2.0;
 
 }

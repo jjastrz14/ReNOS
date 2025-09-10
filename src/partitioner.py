@@ -34,6 +34,7 @@ from simulator_stub_analytical_model import FastNoCSimulator
 if __name__ == '__main__':
     model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    
 
     x_of_grid = 4
     source = 0

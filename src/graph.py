@@ -607,6 +607,7 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
         dep_id = 100_00**math.ceil(math.log10(len(parts) + 1)) 
         processing_factor = 0.1 #estimation for the required time to process the data arrving to an PEs. Should be modelled somewhat better in the future.
         layer_id = 0
+        floating_point_size = 2
         
         #create the start node (source point)
         dep_graph.add_task_fully_qualified(id="start", type = "START", layer_id = -1, part_name = "None", size = 0, weight_size= 0,input_range=0,output_range=0,ct_required= 0, dep = [])
@@ -627,7 +628,7 @@ def model_to_graph(model, grid, dep_graph, parts, deps, verbose = False):
                 task_size = 1 if task_size == 0 else task_size
                 weight_size = 0
                 for weight in partition.weights_shape:
-                    weight_size += np.prod(weight)
+                    weight_size += np.prod(weight) * floating_point_size #assumes 2 bytes per weight (FP16)
                 weight_size = int(weight_size)
                 # create input_range and output_range:
                 # input_range = [ "spatial_min": [min_x, min_y], "spatial_max": [max_x, max_y], "ch_bounds": [min_c, max_c]]

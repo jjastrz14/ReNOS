@@ -16,7 +16,7 @@ ext_modules = [
     Extension(
         'nocsim',
         sources=cpp_files,
-        include_dirs=include_dirs,
+        include_dirs=include_dirs + ['/opt/homebrew/Cellar/nlohmann-json/3.11.3/include'],
         language='c++',
         extra_compile_args=['-std=c++17'],
     )

@@ -22,9 +22,9 @@ _size(size),
 _available(size), 
 _threshold_bytes(threshold_bytes),
 no_more_to_reconfigure(false){
-    assert(_size > 0);
+    assert(_size >= 0);  // Allow size 0 when reconfiguration is disabled
     assert(_threshold_bytes >= 0);
-    assert(_threshold_bytes <= _size);
+    assert(_size == 0 || _threshold_bytes <= _size);  // Skip threshold check when size is 0
     assert(_reg);
     resetTimer();
 }
@@ -35,9 +35,9 @@ _size(size),
 _available(size), 
 _threshold_bytes(threshold*size), 
 no_more_to_reconfigure(false){
-    assert(_size > 0);
+    assert(_size >= 0);  // Allow size 0 when reconfiguration is disabled
     assert(_threshold_bytes >= 0);
-    assert(_threshold_bytes <= _size);
+    assert(_size == 0 || _threshold_bytes <= _size);  // Skip threshold check when size is 0
     assert(_reg);
     resetTimer();
 }
