@@ -132,7 +132,7 @@ def LeNet4(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     x = layers.ReLU()(x)
     x = layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2))(x)
     # Flatten
-    x = layers.Flatten()(x)
+    #x = layers.Flatten()(x)
     # Layer 3: FC + BN + ReLU
     x = layers.Dense(100, use_bias=False)(x)
     x = layers.BatchNormalization()(x)
@@ -217,6 +217,36 @@ def single_conv(input_shape, num_classes, verbose = False):
         larq.models.summary(model, print_fn=None, include_macs=True)
     return model
 
+def double_conv(input_shape, num_classes, verbose = False):
+    
+    inputs = layers.Input(shape=input_shape)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
+    #x = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    if verbose:
+        summary = model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    return model
+
+def triple_conv(input_shape, num_classes, verbose = False):
+    
+    inputs = layers.Input(shape=input_shape)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
+    x = layers.Conv2D(4, kernel_size=(3, 3), data_format="channels_last", activation=None) (x)
+    #x = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    if verbose:
+        summary = model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    return model
 
 def load_model(model_name, verbose = False):
     available_models = ["ResNet50", "MobileNetV2", "MobileNet", "ResNet18"]

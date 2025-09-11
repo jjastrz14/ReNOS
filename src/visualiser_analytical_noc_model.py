@@ -54,6 +54,7 @@ class NoCSimulationVisualizer:
     # Implement EventTracker interface methods
     def track_comp_op_start(self, task_id: int, node: int, start_time: int, ct_required: int) -> None:
         """Track the start of a COMP_OP operation"""
+        #print(f"DEBUG: track_comp_op_start - task_id={task_id}, node={node}, start_time={start_time}, ct_required={ct_required}")
         self.add_event(NodeEvent(
             node_id=node,
             task_id=task_id,
@@ -66,13 +67,19 @@ class NoCSimulationVisualizer:
     
     def track_comp_op_end(self, task_id: int, node: int, end_time: int) -> None:
         """Track the completion of a COMP_OP operation"""
+        #print(f"DEBUG: track_comp_op_end - task_id={task_id}, node={node}, end_time={end_time}")
         # Find and update the existing start event
+        updated = False
         for event in self.events:
             if event.task_id == task_id and event.node_id == node and event.event_type == 'compute_start':
                 event.end_time = end_time
                 event.event_type = 'compute'
                 event.description = f"COMP_OP task {task_id} completed"
+                updated = True
                 break
+        if not updated:
+            print(f"DEBUG: WARNING - Could not find compute_start event for task {task_id}")
+        #print(f"DEBUG: Total events after comp_op_end: {len(self.events)}")
         
     def track_write_send_start(self, task_id: int, src: int, dst: int, start_time: int, size: int) -> None:
         """Track the start of sending a WRITE message"""
@@ -159,6 +166,27 @@ class NoCSimulationVisualizer:
             description=f"Receive REPLY from node {src}"
         ))
         
+    def track_write_receive_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of receiving and processing a write at destination"""
+        self.add_event(NodeEvent(
+            node_id=dst,
+            task_id=task_id,
+            task_type='WRITE',
+            start_time=end_time-1,  # Simplified - assume processing took some time
+            end_time=end_time,
+            event_type='process',
+            related_node=src,
+            description=f"Process WRITE from node {src}"
+        ))
+        
+    def track_reply_send_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of sending a reply"""
+        # Find and update the existing reply send event
+        for event in self.events:
+            if event.task_id == task_id and event.node_id == src and event.event_type == 'send_reply':
+                event.end_time = end_time
+                break
+        
     def track_batch_comp_ops(self, task_ids: List[int], node: int, start_time: int, end_time: int, layer_id: int) -> None:
         """Track a batch of COMP_OP operations executed together"""
         # Create events for the batched operations
@@ -194,23 +222,30 @@ class NoCSimulationVisualizer:
         self.events.append(event)
         self.node_states[event.node_id].append(event)
     
-    def plot_timeline(self, figsize=(15, 10)):
+    def plot_timeline(self, figsize=(15, 10), save_path=None):
         """Create a Gantt chart showing node activities over time"""
         if not self.events:
             print("No events to plot. Run simulation first.")
             return
         
+        # Debug: print event summary
+        #print(f"DEBUG: Total events to plot: {len(self.events)}")
+        event_types = {}
+        for event in self.events:
+            event_types[event.event_type] = event_types.get(event.event_type, 0) + 1
+        #print(f"DEBUG: Event types: {event_types}")
+        
         fig, ax = plt.subplots(figsize=figsize)
         
         # Color mapping for different event types
         colors = {
-            'send': '#FF6B6B',
-            'receive': '#4ECDC4',
-            'process': '#45B7D1',
-            'compute': '#96CEB4',
-            'send_reply': '#FFEAA7',
-            'receive_reply': '#DDA0DD',
-            'local_process': '#98D8C8'
+            'send': '#0066CC',          # Blue - All traffic from the node
+            'receive': '#4ECDC4',       # Keep existing
+            'process': '#45B7D1',       # Keep existing  
+            'compute': '#FF6347',       # Tomato - Compute operations
+            'send_reply': '#FFD700',    # Yellow - All reply going out of the node
+            'receive_reply': '#40E0D0', # Turquoise - All reply IN
+            'local_process': '#98D8C8'  # Keep existing
         }
         
         y_positions = {}
@@ -231,23 +266,12 @@ class NoCSimulationVisualizer:
                 width,
                 0.8,
                 facecolor=colors.get(event.event_type, '#95A5A6'),
-                edgecolor='black',
-                linewidth=0.5,
+                edgecolor='none',
                 alpha=0.8
             )
             ax.add_patch(rect)
             
-            # Add task ID label
-            if width > self.max_time * 0.02:  # Only label if wide enough
-                ax.text(
-                    event.start_time + width/2,
-                    y_pos,
-                    f"T{event.task_id}",
-                    ha='center',
-                    va='center',
-                    fontsize=8,
-                    fontweight='bold'
-                )
+            # you can add text labels if the rectangle is wide enough
         
         # Customize plot
         ax.set_xlim(0, self.max_time * 1.05)
@@ -263,17 +287,32 @@ class NoCSimulationVisualizer:
         # Add grid
         ax.grid(True, axis='x', alpha=0.3)
         
-        # Create legend
+        # Create legend with clearer labels
+        legend_labels = {
+            'send': 'Send Traffic',
+            'receive': 'Receive Traffic',
+            'process': 'Process Data',
+            'compute': 'Compute Operation',
+            'send_reply': 'Send Reply',
+            'receive_reply': 'Receive Reply',
+            'local_process': 'Local Process'
+        }
+        
         legend_elements = [
-            patches.Patch(color=color, label=event_type.replace('_', ' ').title())
+            patches.Patch(color=color, label=legend_labels.get(event_type, event_type.replace('_', ' ').title()))
             for event_type, color in colors.items()
         ]
         ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.15, 1))
         
         plt.tight_layout()
+        
+        if save_path:
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+        
         return fig
     
-    def plot_node_utilization(self, figsize=(12, 8)):
+    def plot_node_utilization(self, figsize=(12, 8), save_path=None):
         """Plot utilization statistics for each node"""
         if not self.events:
             print("No events to plot. Run simulation first.")
@@ -340,6 +379,11 @@ class NoCSimulationVisualizer:
         ax2.grid(True, axis='y', alpha=0.3)
         
         plt.tight_layout()
+        
+        if save_path:
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+        
         return fig
     
     def print_event_summary(self):
@@ -383,7 +427,7 @@ class NoCSimulationVisualizer:
             print(f"{event_type:<15} {count:<8} {total_time:<12} {avg_duration:.1f}")
 
 # Example usage function
-def visualize_simulation(simulator, json_path):
+def visualize_simulation(simulator, json_path, timeline_path=None, utilization_path=None):
     """Main function to run simulation with visualization"""
     # Parse config
     arch, workload = simulator.parse_config(json_path)
@@ -396,10 +440,29 @@ def visualize_simulation(simulator, json_path):
     viz.print_event_summary()
     
     # Create plots
-    timeline_fig = viz.plot_timeline()
-    util_fig = viz.plot_node_utilization()
+    timeline_fig = viz.plot_timeline(save_path=timeline_path)
+    util_fig = viz.plot_node_utilization(save_path=utilization_path)
     
-    plt.show()
+    # Only show plots if no save paths provided (backwards compatibility)
+    if not timeline_path and not utilization_path:
+        plt.show()
+    
+    return total_latency, viz
+
+def plot_timeline(json_path, timeline_path=None, utilization_path=None, verbose=True):
+    """Convenience function to plot timeline from JSON path"""
+    from simulator_stub_analytical_model import FastNoCSimulator
+    
+    simulator = FastNoCSimulator()
+    total_latency, viz = visualize_simulation(
+        simulator, 
+        json_path, 
+        timeline_path=timeline_path, 
+        utilization_path=utilization_path
+    )
+    
+    if verbose:
+        print(f"Total simulation latency: {total_latency} cycles")
     
     return total_latency, viz
 

@@ -743,7 +743,7 @@ class NoCTimelinePlotter(NoCPlotter):
         ('traf_in', 'orange', 'Traffic PE in', 0.7),
         ('traf_between', 'silver', 'Traffic NoC', 0.3),
         ('reply_in','turquoise', 'Reply PE in', 0.7),
-        ('reply_out','gold', 'Reply PE out', 0.7)
+        ('reply_out','gold', 'Reply PE out', 0.5)
         ]
     
         # Track used labels to prevent duplicates in legend

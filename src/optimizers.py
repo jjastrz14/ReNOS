@@ -73,6 +73,7 @@ class ACOParameters:
     n_best : int = 10
     rho_start : Union[float, None] = None
     rho_end : Union[float, None] = None
+    is_analytical : bool = False
 
 
 class BaseOpt :
@@ -144,9 +145,64 @@ class AntColony(BaseOpt):
         self.ACO_DIR = get_ACO_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
-        self.analytical_model = True
+        self.analytical_model = self.par.is_analytical
+        
+        # Initialize upper latency bound (will be set by normalization)
+        self.upper_latency_bound = None
 
+    def on_start_fitness_norm(self):
+        '''
+        Method to be called before starting the ACO process. It is used to dynamically estimate 
+        the parameters which scale the fitness function by running a random mapping.
+        '''
+        print("Starting fitness normalization for ACO...")
+        
+        init_genes = []
+        # randomly assign the tasks to the PEs in the NoC
+        for task in self.tasks:
+            if task == 'start':
+                # 'start' task must be mapped to source node
+                init_genes.append(self.task_graph.SOURCE_POINT)
+            elif task == 'end':
+                # 'end' task must be mapped to drain node  
+                init_genes.append(self.task_graph.DRAIN_POINT)
+            else:
+                # Regular tasks can be mapped to any PE
+                init_genes.append(np.random.choice(range(self.domain.size)))
+        
+        # Create mapping from random assignment
+        mapping_norm = {}
+        for task_idx, task in enumerate(self.tasks):
+            if task != "start" and task != "end":
+                mapping_norm[task] = int(init_genes[task_idx])
 
+        # Apply the mapping to the task graph
+        import mapper as ma
+        mapper_norm = ma.Mapper()
+        mapper_norm.init(self.task_graph, self.domain)
+        mapper_norm.set_mapping(mapping_norm)
+        mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", file_to_append=self.ARCH_FILE)
+
+        # Run the simulation for normalization
+        #if self.analytical_model:
+            #import simulator_stub_analytical_model as ssam
+            #stub = ssam.SimulatorStubAnalyticalModel()
+            #result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json")
+        #else:
+        import simulator_stub as ss
+        stub = ss.SimulatorStub()
+        result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
+        
+        print(f"Initial fitness norm result: {result_to_norm}")
+        
+        # Result rounded up to the nearest 1000
+        result_norm = int(np.ceil(result_to_norm / 1000.0)) * 1000
+        
+        print(f"Initial fitness norm result rounded: {result_norm}")
+        
+        self.upper_latency_bound = result_norm 
+        
+        print("Finished on_start_fitness_norm, upper_latency_bound set to:", self.upper_latency_bound)
 
     def run_and_show_traces(self, single_iteration_func, **kwargs):
         """
@@ -243,6 +299,9 @@ class AntColony(BaseOpt):
         """
         Run the algorithm
         """
+        # Run fitness normalization before starting optimization
+        self.on_start_fitness_norm()
+        
         if self.seed is not None:
             np.random.seed(self.seed)
             random.seed(self.seed)
@@ -441,7 +500,7 @@ class AntColony(BaseOpt):
         return path
 
 
-    def path_length(self, ant_id, path, analytical_model = False, verbose = False):
+    def path_length(self, ant_id, path, verbose = False):
         """
         Compute the "length" of the path using the NoC simulator.
         """
@@ -462,9 +521,9 @@ class AntColony(BaseOpt):
 
         if self.analytical_model: 
             stub = ssam.SimulatorStubAnalyticalModel()
-            result = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
             #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
-            return result, None
+            return result, _
         else:
             stub = ss.SimulatorStub()
             result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
@@ -497,11 +556,17 @@ class AntColony(BaseOpt):
         best_paths = sorted_paths[:self.par.n_best]
         
         for ant_id, path, path_length in best_paths:
+            # Normalize path_length using upper_latency_bound (similar to GA fitness normalization)
+            if self.upper_latency_bound is not None:
+                normalized_path_length = self.upper_latency_bound / (path_length + 1e-6)
+            else:
+                normalized_path_length = path_length
+                
             for d_level, path_node in enumerate(path):
                 if path_node[1] == -1: # starting decision level
-                    self.tau_start[path_node[2]] += 1 / path_length
+                    self.tau_start[path_node[2]] += 1 / normalized_path_length
                 elif d_level-1 < self.tau.shape[0]:
-                    self.tau[d_level-1, path_node[1], path_node[2]] += 1 / path_length
+                    self.tau[d_level-1, path_node[1], path_node[2]] += 1 / normalized_path_length
                 else:
                     raise ValueError("The path node is not valid")
 
@@ -540,7 +605,7 @@ class ParallelAntColony(AntColony):
         # self.logger = mp.log_to_stderr()
         # self.logger.setLevel(logging.INFO)
 
-        self.ants = [Ant(i, self.task_graph, self.domain, self.tasks, self.par.alpha, self.par.beta) for i in range(self.par.n_ants)]
+        self.ants = [Ant(i, self.task_graph, self.domain, self.tasks, self.par.alpha, self.par.beta, self.analytical_model) for i in range(self.par.n_ants)]
         
         #seed for repeating simulations
         self.seed = seed
@@ -576,11 +641,14 @@ class ParallelAntColony(AntColony):
         if self.par.n_best >= self.n_processes:
             self.best_intervals = [ (i, i + self.par.n_best//self.n_processes + min(i, self.par.n_best % self.n_processes)) for i in range(0, self.par.n_best, self.par.n_best//self.n_processes)]
 
-    
+        self.analytical_model = self.par.is_analytical
+
     def run(self, once_every = 10, show_traces = False):
         """
         Run the algorithm
         """
+        # Run fitness normalization before starting optimization
+        self.on_start_fitness_norm()
         
         if self.seed is not None:
             np.random.seed(self.seed)
@@ -665,13 +733,14 @@ class ParallelAntColony(AntColony):
         return all_time_shortest_path
 
     @staticmethod
-    def init(tau_start_, tau_, eta_, tau_shape, eta_shape, **kwargs):
+    def init(tau_start_, tau_, eta_, tau_shape, eta_shape, upper_latency_bound=None, **kwargs):
         global vardict
         vardict["tau_start"] = tau_start_
         vardict["tau"] = tau_
         vardict["eta"] = eta_
         vardict["tau.size"] = tau_shape
         vardict["eta.size"] = eta_shape
+        vardict["upper_latency_bound"] = upper_latency_bound
 
     def generate_colony_paths(self):
         # generate the colony of ants (parallel workers)
@@ -681,7 +750,8 @@ class ParallelAntColony(AntColony):
                     initializer = ParallelAntColony.init, 
                     initargs = (self.tau_start, self.tau, self.eta, 
                                 (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
-                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)),
+                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
+                                self.upper_latency_bound),
                                 )) as pool:
             # generate the paths in parallel: each process is assigned to a subset of the ants
             # evenly distributed
@@ -712,12 +782,12 @@ class ParallelAntColony(AntColony):
         best_paths = sorted_paths[:self.par.n_best]
         if self.par.n_best < self.n_processes:
             # update the pheromones in parallel
-            with closing(mp.Pool(processes = self.par.n_best, initializer = ParallelAntColony.init, initargs = (self.tau_start, self.tau, self.eta, (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)))) as pool:
+            with closing(mp.Pool(processes = self.par.n_best, initializer = ParallelAntColony.init, initargs = (self.tau_start, self.tau, self.eta, (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), self.upper_latency_bound))) as pool:
                 pool.map(update_pheromones_batch, [[best_paths[i]] for i in range(self.par.n_best)])
             pool.join()
         else:
             # update the pheromones in parallel
-            with closing(mp.Pool(processes = self.n_processes, initializer = ParallelAntColony.init, initargs = (self.tau_start, self.tau, self.eta, (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), (self.task_graph.n_nodes-1, self.domain.size, self.domain.size)))) as pool:
+            with closing(mp.Pool(processes = self.n_processes, initializer = ParallelAntColony.init, initargs = (self.tau_start, self.tau, self.eta, (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), self.upper_latency_bound))) as pool:
                 pool.map(update_pheromones_batch, [best_paths[start:end] for start, end in self.best_intervals])
             pool.join()
 

@@ -1,0 +1,73 @@
+"""
+Utility functions for simulator comparison and analysis
+"""
+
+def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, algorithm_name: str, 
+                                   timestamp: str, verbose: bool = True):
+    """
+    Compare analytical model vs BookSim2 simulator and create visualizations
+    
+    Args:
+        best_solution_path: Path to the best solution JSON file
+        output_dir: Directory to save outputs
+        algorithm_name: Name of the algorithm (ACO, GA, etc.)
+        timestamp: Timestamp string for file naming
+        verbose: Whether to create timeline visualization
+    
+    Returns:
+        dict: Results containing latencies and comparison metrics
+    """
+    import simulator_stub as ss
+    from simulator_stub_analytical_model import FastNoCSimulator
+    from visualiser_analytical_noc_model import visualize_simulation, plot_timeline
+    
+    results = {}
+    timeline_path = f"{output_dir}/timeline_{algorithm_name}_{timestamp}.png"
+    analytical_timeline_path = f"{output_dir}/analytical_timeline_{algorithm_name}_{timestamp}.png"
+    utilization_path = f"{output_dir}/utilization_{algorithm_name}_{timestamp}.png"
+
+    if verbose:
+        print("Visualizing the best path...\n")
+        # Visualize the best path
+        plot_timeline(json_path=best_solution_path, timeline_path=timeline_path, verbose=False)
+    else: 
+        #run just NoC complex simulator and get the latency
+        print("Running the NoC simulator on the best path found...\n")
+    
+    # Run analytical simulator
+    print("Running analytical model...")
+    simulator = FastNoCSimulator()
+    total_latency, visualizer = visualize_simulation(simulator, best_solution_path, timeline_path=analytical_timeline_path, utilization_path=utilization_path)
+    print(f"Analytical model result: {total_latency} cycles")
+    results['analytical_latency'] = total_latency
+    
+    # Run BookSim2 simulator for comparison
+    print("Running BookSim2 simulator for comparison...")
+    stub = ss.SimulatorStub()
+    booksim_result, logger = stub.run_simulation(best_solution_path, dwrap=True)
+    print(f"BookSim2 result: {booksim_result} cycles")
+    results['booksim_latency'] = booksim_result
+    
+    # Calculate comparison metrics
+    if booksim_result > 0:
+        percentage_diff = abs(total_latency - booksim_result) / booksim_result * 100
+        ratio = total_latency / booksim_result
+        results['percentage_diff'] = percentage_diff
+        results['ratio'] = ratio
+        
+        print(f"Difference: {abs(total_latency - booksim_result)} cycles ({percentage_diff:.2f}%)")
+        print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
+        
+        if total_latency > booksim_result:
+            print(f"Analytical model is {ratio:.2f}x slower than BookSim2")
+            results['comparison'] = f"{ratio:.2f}x slower"
+        else:
+            print(f"Analytical model is {1/ratio:.2f}x faster than BookSim2")
+            results['comparison'] = f"{1/ratio:.2f}x faster"
+    else:
+        print("Warning: BookSim2 returned 0 cycles, cannot calculate ratio")
+        results['percentage_diff'] = None
+        results['ratio'] = None
+        results['comparison'] = "BookSim2 returned 0 cycles"
+    
+    return results

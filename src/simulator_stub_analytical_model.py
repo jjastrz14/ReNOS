@@ -105,7 +105,7 @@ class FastNoCSimulator:
         return arch, workload
     
     def build_topology_graph(self, arch: ArchConfig) -> nx.Graph:
-        """Build NetworkX graph for the topology - cached for speed"""
+        """Build NetworkX graph for the topology - cached per instance for multiprocessing safety"""
         if self.topology_graph is not None:
             return self.topology_graph
             
@@ -253,7 +253,7 @@ class FastNoCSimulator:
         # T_body^(hop) = log2(num_ports^2)/k + 1
         t_body_hop = math.log2(num_ports**2) / k_parallel + 1
         
-        # Your analytical formula:
+        #analytical formula:
         # T_packet = N_routers × (T_head^(hop) + T_link) + (N_flits-1) × max(T_body^(hop), T_link) + Queuing_delay
         
         head_term = n_routers * (t_head_hop + t_link)
@@ -269,52 +269,167 @@ class FastNoCSimulator:
         
         return int(round(total_latency))
     
-    def simulate_execution(self, workload: List[WorkloadEntry], arch: ArchConfig) -> int:
-        """Simplified execution simulation - process tasks when dependencies are satisfied"""
+    def simulate_execution(self, workload: List[WorkloadEntry], arch: ArchConfig, tracker=None) -> int:
+        """Enhanced execution simulation with proper dependency and parallelism handling"""
         
-        # Use workload data as-is from JSON
         task_completion_times = {}  # task_id -> completion_time
         node_available_times = {}   # node -> when it can start next operation
         
         # Initialize all nodes as available at time 0
+        all_nodes = set()
         for task in workload:
-            if task.node not in node_available_times:
-                node_available_times[task.node] = 0
+            if task.node is not None:
+                all_nodes.add(task.node)
+            if task.src is not None:
+                all_nodes.add(task.src)
+            if task.dst is not None:
+                all_nodes.add(task.dst)
         
-        # Process tasks until all are completed
+        for node in all_nodes:
+            node_available_times[node] = 0
+        
+        # Process tasks in dependency order
         completed_tasks = set()
+        remaining_tasks = workload.copy()
         
-        while len(completed_tasks) < len(workload):
-            # Find tasks that can be executed now (dependencies satisfied)
+        while remaining_tasks:
+            # Find tasks that can be executed (all dependencies satisfied)
             ready_tasks = []
-            
-            for task in workload:
-                if task.id in completed_tasks:
-                    continue  # Already completed
-                
-                # Check if dependencies are satisfied
-                can_execute = True
+            for task in remaining_tasks:
+                # Check if all dependencies are satisfied
+                deps_satisfied = True
                 for dep_id in task.dependencies:
                     if dep_id != -1 and dep_id not in completed_tasks:
-                        can_execute = False
+                        deps_satisfied = False
                         break
                 
-                if can_execute:
+                if deps_satisfied:
                     ready_tasks.append(task)
             
             if not ready_tasks:
-                raise RuntimeError("No ready tasks found - possible circular dependency")
+                # This might indicate a circular dependency or error in the workload
+                print("WARNING: No ready tasks but still have remaining tasks")
+                break
             
-            # Execute ready tasks
+            # Process all ready tasks
             for task in ready_tasks:
-                self._execute_single_task(task, arch, node_available_times, task_completion_times)
+                if task.type == "COMP_OP":
+                    #print(f"DEBUG: Processing COMP_OP task {task.id}")
+                    self._execute_single_comp_task(task, arch, node_available_times, task_completion_times, tracker)
+                elif task.type in ["WRITE", "WRITE_REQ"]:
+                    #print(f"DEBUG: Processing WRITE task {task.id}")
+                    self._execute_single_write_task(task, arch, node_available_times, task_completion_times, tracker)
+                
                 completed_tasks.add(task.id)
+                remaining_tasks.remove(task)
         
         # Return total execution time (latest completion)
         return max(task_completion_times.values()) if task_completion_times else 0
     
+    def _execute_single_comp_task(self, task: WorkloadEntry, arch: ArchConfig, node_available_times: dict, 
+                                task_completion_times: dict, tracker=None):
+        """Execute a single COMP_OP task"""
+        #print(f"DEBUG: _execute_single_comp_task called for task {task.id}, node {task.node}, tracker={tracker is not None}")
+        # Calculate when this task can start
+        earliest_start = node_available_times.get(task.node, 0)
+        
+        # Consider dependencies - allow more parallelism for COMP_OP
+        for dep_id in task.dependencies:
+            if dep_id != -1 and dep_id in task_completion_times:
+                # For COMP_OP, we can start as soon as input data is available
+                # Don't wait for the entire dependency chain to complete
+                dep_completion = task_completion_times[dep_id]
+                # Reduce dependency wait time for better pipeline parallelism
+                earliest_start = max(earliest_start, dep_completion * 0.8)
+        
+        # COMP_OP tasks start at time 0 minimum (to match debug file behavior)
+        earliest_start = max(earliest_start, 0)
+        
+        # Execute the computation task - use integer rounding
+        task_latency = int(task.ct_required * arch.ANY_comp_cycles) if task.ct_required else 1
+        completion_time = earliest_start + task_latency
+        
+        # Add size-proportional break time (like the real NoC simulator)
+        # Break time proportional to computation size with a factor
+        #break_factor = 0.0  # Adjust this factor as needed
+        #break_time = max(1, int(task.ct_required * break_factor)) if task.ct_required else 1
+        #completion_time += break_time
+        
+        # Track computation operation
+        if tracker:
+            tracker.track_comp_op_start(task.id, task.node, earliest_start, task.ct_required)
+            tracker.track_comp_op_end(task.id, task.node, completion_time)
+        
+        # Update completion time and node availability
+        task_completion_times[task.id] = completion_time
+        node_available_times[task.node] = max(node_available_times[task.node], completion_time)
+    
+    def _execute_single_write_task(self, task: WorkloadEntry, arch: ArchConfig, node_available_times: dict, 
+                                task_completion_times: dict, tracker=None):
+        """Execute a single WRITE task"""
+        # Calculate when this task can start - only consider source node availability, not destination
+        earliest_start = node_available_times.get(task.src, 0)
+        
+        # New logic: WRITE can start immediately after COMP_OP completion
+        dependency_ready_time = 0
+        for dep_id in task.dependencies:
+            if dep_id != -1 and dep_id in task_completion_times:
+                # WRITE starts immediately when dependency (usually COMP_OP) completes
+                dep_ready_time = task_completion_times[dep_id]
+                dependency_ready_time = max(dependency_ready_time, dep_ready_time)
+        
+        earliest_start = max(earliest_start, dependency_ready_time)
+        
+        # No additional break time - start immediately after dependency
+        
+        if task.src == task.dst:
+            # Local write
+            processing_time = task.pt_required if task.pt_required else 1
+            completion_time = earliest_start + processing_time
+            
+            if tracker:
+                tracker.track_write_process_start(task.id, task.dst, earliest_start, task.pt_required)
+                tracker.track_write_process_end(task.id, task.dst, completion_time)
+            
+            # For local writes, update both src and dst node availability
+            task_completion_times[task.id] = completion_time
+            node_available_times[task.src] = max(node_available_times.get(task.src, 0), completion_time)
+        else:
+            # Network write
+            write_latency = self.calculate_message_latency(task.src, task.dst, task.size, arch)
+            arrival_time = earliest_start + write_latency
+            
+            if task.pt_required and task.pt_required > 0:
+                processing_end = arrival_time + task.pt_required
+            else:
+                processing_end = arrival_time
+            
+            reply_latency = self.calculate_message_latency(task.dst, task.src, arch.flit_size, arch, is_reply=True)
+            # Double the reply latency as requested - replies take 2x more time
+            reply_latency *= 2
+            completion_time = processing_end + reply_latency
+            
+            if tracker:
+                tracker.track_write_send_start(task.id, task.src, task.dst, earliest_start, task.size)
+                tracker.track_write_send_end(task.id, task.src, task.dst, arrival_time)
+                if task.pt_required and task.pt_required > 0:
+                    tracker.track_write_receive_start(task.id, task.src, task.dst, arrival_time)
+                    tracker.track_write_receive_end(task.id, task.src, task.dst, processing_end)
+                tracker.track_reply_send_start(task.id, task.dst, task.src, processing_end)
+                tracker.track_reply_send_end(task.id, task.dst, task.src, completion_time)
+            
+            # Communication hiding: Node can continue with computation immediately
+            task_completion_times[task.id] = completion_time
+            # Source node is NOT blocked - can continue with next COMP_OP immediately
+            # Communication happens in background
+            node_available_times[task.src] = max(node_available_times.get(task.src, 0), earliest_start)
+            
+            # Destination node also minimal blocking - can overlap with other work
+            if task.dst is not None:
+                node_available_times[task.dst] = max(node_available_times.get(task.dst, 0), arrival_time)
+    
     def _execute_single_task(self, task: WorkloadEntry, arch: ArchConfig, node_available_times: dict, 
-                            task_completion_times: dict):
+                            task_completion_times: dict, tracker=None):
         """Execute a single task based on its type"""
         
         # Calculate when this task can start (after dependencies and node availability)
@@ -329,6 +444,11 @@ class FastNoCSimulator:
             # Computation task
             task_latency = task.ct_required * arch.ANY_comp_cycles if task.ct_required else 1
             completion_time = earliest_start + task_latency
+            
+            # Track computation operation
+            if tracker:
+                tracker.track_comp_op_start(task.id, task.node, earliest_start, task.ct_required)
+                tracker.track_comp_op_end(task.id, task.node, completion_time)
                 
         elif task.type in ["WRITE", "WRITE_REQ"]:
             # Communication task - simplified model
@@ -336,10 +456,21 @@ class FastNoCSimulator:
                 # Local communication
                 processing_time = task.pt_required * 8 / arch.flit_size if task.pt_required else 0
                 completion_time = earliest_start + processing_time
+                
+                # Track local processing
+                if tracker:
+                    tracker.track_write_process_start(task.id, task.dst, earliest_start, task.pt_required)
+                    tracker.track_write_process_end(task.id, task.dst, completion_time)
             else:
                 # Network communication
                 communication_latency = self.calculate_message_latency(task.src, task.dst, task.size, arch)
                 completion_time = earliest_start + communication_latency
+                
+                # Track network communication
+                if tracker:
+                    tracker.track_write_send_start(task.id, task.src, task.dst, earliest_start, task.size)
+                    tracker.track_write_send_end(task.id, task.src, task.dst, completion_time)
+                    tracker.track_write_receive_start(task.id, task.src, task.dst, completion_time)
         else:
             # Unknown task type - default behavior
             completion_time = earliest_start + 1

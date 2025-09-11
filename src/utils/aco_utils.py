@@ -53,21 +53,20 @@ vardict = {}
 
 class Ant:
 
-    def __init__(self, id, graph, domain, tasks, alpha, beta):
+    def __init__(self, id, graph, domain, tasks, alpha, beta, is_analytical=False):
         self.id = id
         self.graph = graph
         self.domain = domain
         self.tasks = tasks
         self.alpha = alpha
         self.beta = beta
+        self.analytical_model = is_analytical
 
         self.current_path = None
         
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
         
-        self.analytical_model = True
-
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
         """
@@ -211,10 +210,20 @@ class Ant:
         tau_start = np.frombuffer(vardict["tau_start"].get_obj())
         tau = np.frombuffer(vardict["tau"].get_obj()).reshape(vardict["tau.size"])
 
+        # Apply normalization if upper_latency_bound is available
+        path_length = path[2]
+        upper_latency_bound = vardict.get("upper_latency_bound")
+        if upper_latency_bound is not None:
+            normalized_path_length = upper_latency_bound / (path_length + 1e-6)
+        else:
+            normalized_path_length = path_length
+        
+        pheromone_update = 1 / normalized_path_length
+
         with vardict["tau_start"].get_lock():
             path_node = path[1][0]
             assert path_node[1] == -1
-            tau_start[path_node[2]] += 1/path[2]
+            tau_start[path_node[2]] += pheromone_update
             # print("Tau start: ", tau_start)
 
         # print("Path", path)
@@ -222,7 +231,7 @@ class Ant:
             for d_level, path_node in enumerate(path[1][1:]):
                 if d_level < vardict["tau.size"][0]:
                     # print("(first) tau[{},{},{}] = {}".format(d_level, path_node[1], path_node[2], tau[d_level, path_node[1], path_node[2]]))
-                    tau[d_level, path_node[1], path_node[2]] += 1/path[2]
+                    tau[d_level, path_node[1], path_node[2]] += pheromone_update
                     # print("(later) tau[{},{},{}] = {}".format(d_level, path_node[1], path_node[2], tau[d_level, path_node[1], path_node[2]]))
 
         

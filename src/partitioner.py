@@ -32,8 +32,11 @@ from simulator_stub_analytical_model import FastNoCSimulator
 
 
 if __name__ == '__main__':
-    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
-    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
+    model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
 
     x_of_grid = 4
@@ -48,7 +51,7 @@ if __name__ == '__main__':
         # Explore all partitioning combinations
         spatial, output, input_split = search_space_split_factors(
             layer, 
-            factor=5,  # Max splitting factor
+            factor=3,  # Max splitting factor
             FLOP_threshold=3e6,
             size_of_grid = x_of_grid**2,
             return_best_valid=True,
@@ -81,7 +84,7 @@ if __name__ == '__main__':
     #print("Done!")
 
     task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-    path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = True)
+    path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = False)
 
     # constuct the mapping form the path
     mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
@@ -102,9 +105,14 @@ if __name__ == '__main__':
 
     print(f"Analytical model result: {result_anal}")
 
-    plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
+    #plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
     # Visualize analytical model simulation
-    total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json")
+    total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
+    
+    percentage_diff = abs(total_latency - result) / result * 100
+    ratio = total_latency / result
+    print(f"Difference: {abs(total_latency - result)} cycles ({percentage_diff:.2f}%)")
+    print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
 
     print("Partitioner Done!")
 

@@ -27,11 +27,14 @@ from utils.plotting_utils import *
 from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
+from utils.simulator_utils import compare_simulators_and_visualize
 from graph import TaskGraph
 from visualizer import plot_timeline, plot_convergence
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
+from simulator_stub_analytical_model import FastNoCSimulator
+from visualiser_analytical_noc_model import visualize_simulation  
 
 from models import *
 
@@ -116,6 +119,8 @@ if __name__ == "__main__":
     #plot_graph(task_graph)
     #print_dependencies(task_graph)
     
+    verbose = False
+    
     ##### Optimization algorithms #####
     if ACO:
         print("\n ...Running Ant Colony Optimization...")
@@ -124,33 +129,31 @@ if __name__ == "__main__":
             n_ants = 10,
             rho = 0.05, #evaporation rate
             n_best = 5,
-            n_iterations = 10,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
+            is_analytical = True, #use analytical model instead of cycle-accurate simulator
         )
         n_procs = 10
         
         print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
         #opt = op.AntColony( params, grid, task_graph, seed = None)
-
         opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
         print(shortest)
         
-        print("Visualizing the best path...\n")
-        # Visualize the best path
-        plot_timeline(path_to_json = get_ACO_DIR() + "/best_solution.json", timeline_path = get_ACO_DIR() + "/timeline_ACO_" + get_timestamp() + ".png", verbose = False)
-        
         plot_convergence(get_ACO_DIR(), save_path=get_ACO_DIR() + "/convg_ACO_" + get_timestamp() + ".png")
         
-        from simulator_stub_analytical_model import FastNoCSimulator  # Import your simulator
-        from visualiser_analytical_noc_model import visualize_simulation  # Import your visualizer function
-    
-        simulator = FastNoCSimulator()
-        total_latency, visualizer = visualize_simulation(simulator, get_ACO_DIR() + "/best_solution.json")
-        
+        # Compare simulators and visualize results
+        results = compare_simulators_and_visualize(
+            best_solution_path=get_ACO_DIR() + "/best_solution.json",
+            output_dir=get_ACO_DIR(),
+            algorithm_name="ACO",
+            timestamp=get_timestamp(),
+            verbose=verbose
+        )
             
         end = time.time()
         elapsed_time = end - start
@@ -164,11 +167,11 @@ if __name__ == "__main__":
         print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 50, #30,
+        sol_per_pop = 30, #30,
         n_parents_mating= 10, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 20, #800,
+        n_generations = 1, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
@@ -188,11 +191,16 @@ if __name__ == "__main__":
         
         #opt.summary()
         
-        print("Visualizing the best path...\n")
-        # Visualize the best path
-        plot_timeline(path_to_json = get_GA_DIR() + "/best_solution.json", timeline_path = get_GA_DIR() + "/timeline_GA_" + get_timestamp() + ".png", verbose = False)
-        
         plot_convergence(str(get_GA_DIR()), save_path=get_GA_DIR() + "/convg_GA_" + get_timestamp() + ".png")
+        
+        # Compare simulators and visualize results
+        results = compare_simulators_and_visualize(
+            best_solution_path=get_GA_DIR() + "/best_solution.json",
+            output_dir=get_GA_DIR(),
+            algorithm_name="GA",
+            timestamp=get_timestamp(),
+            verbose=True  # GA always creates timeline visualization
+        )
         
         #opt.plot_summary()
         
