@@ -494,36 +494,41 @@ void Power_Module::run(){
   
   double totalpower =  channelWirePower+channelClkPower+channelDFFPower+channelLeakPower+ inputReadPower+inputWritePower+inputLeakagePower+ switchPower+switchPowerCtrl+switchPowerLeak+outputPower+outputPowerClk+outputCtrlPower;
   double totalarea =  channelArea+switchArea+inputArea+outputArea;
-  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n";
   *(net->context->gDumpFile)<< "- OCN Power Summary\n" ;
-  *(net->context->gDumpFile)<< "- Completion Time:         "<<totalTime <<"\n" ;
-  *(net->context->gDumpFile)<< "- Flit Widths:            "<<channel_width<<"\n" ;
-  *(net->context->gDumpFile)<< "- Channel Wire Power:      "<<channelWirePower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Channel Clock Power:     "<<channelClkPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Channel Retiming Power:  "<<channelDFFPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Channel Leakage Power:   "<<channelLeakPower <<"\n" ;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n";
+  *(net->context->gDumpFile)<< "- Vdd:                   "<<Vdd<<" V \n" ;
+  *(net->context->gDumpFile)<< "- R:                     "<<R<<" Ohm \n" ;
+  *(net->context->gDumpFile)<< "- fCLK:                  "<<fCLK<<" Hz \n" ;
+  *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
+  *(net->context->gDumpFile)<< "- Completion Time:         "<<totalTime <<" cycles \n" ;
+  *(net->context->gDumpFile)<< "- Flit Widths:            "<<channel_width<<" bits \n" ;
+  *(net->context->gDumpFile)<< "- Channel Wire Power:      "<<channelWirePower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Channel Clock Power:     "<<channelClkPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Channel Retiming Power:  "<<channelDFFPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Channel Leakage Power:   "<<channelLeakPower <<" W \n" ;
   
-  *(net->context->gDumpFile)<< "- Input Read Power:        "<<inputReadPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Input Write Power:       "<<inputWritePower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Input Leakage Power:     "<<inputLeakagePower <<"\n" ;
+  *(net->context->gDumpFile)<< "- Input Read Power:        "<<inputReadPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Input Write Power:       "<<inputWritePower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Input Leakage Power:     "<<inputLeakagePower <<" W \n" ;
   
-  *(net->context->gDumpFile)<< "- Switch Power:            "<<switchPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Switch Control Power:    "<<switchPowerCtrl <<"\n" ;
-  *(net->context->gDumpFile)<< "- Switch Leakage Power:    "<<switchPowerLeak <<"\n" ;
+  *(net->context->gDumpFile)<< "- Switch Power:            "<<switchPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Switch Control Power:    "<<switchPowerCtrl <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Switch Leakage Power:    "<<switchPowerLeak <<" W \n" ;
   
-  *(net->context->gDumpFile)<< "- Output DFF Power:        "<<outputPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Output Clk Power:        "<<outputPowerClk <<"\n" ;
-  *(net->context->gDumpFile)<< "- Output Control Power:    "<<outputCtrlPower <<"\n" ;
-  *(net->context->gDumpFile)<< "- Total Power:             "<<totalpower <<"\n";
+  *(net->context->gDumpFile)<< "- Output DFF Power:        "<<outputPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Output Clk Power:        "<<outputPowerClk <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Output Control Power:    "<<outputCtrlPower <<" W \n" ;
+  *(net->context->gDumpFile)<< "- Total Power:             "<<totalpower <<" W \n";
   *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
   *(net->context->gDumpFile)<< "\n" ;
   *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
   *(net->context->gDumpFile)<< "- OCN Area Summary\n" ;
-  *(net->context->gDumpFile)<< "- Channel Area:  "<<channelArea<<"\n" ;
-  *(net->context->gDumpFile)<< "- Switch  Area:  "<<switchArea<<"\n" ;
-  *(net->context->gDumpFile)<< "- Input  Area:   "<<inputArea<<"\n" ;
-  *(net->context->gDumpFile)<< "- Output  Area:  "<<outputArea<<"\n" ;
-  *(net->context->gDumpFile)<< "- Total Area:    "<<totalarea<<endl;
+  *(net->context->gDumpFile)<< "- Channel Area:  "<<channelArea<<" mm^2\n" ;
+  *(net->context->gDumpFile)<< "- Switch  Area:  "<<switchArea<<" mm^2\n" ;
+  *(net->context->gDumpFile)<< "- Input  Area:   "<<inputArea<<" mm^2\n" ;
+  *(net->context->gDumpFile)<< "- Output  Area:  "<<outputArea<<" mm^2\n" ;
+  *(net->context->gDumpFile)<< "- Total Area:    "<<totalarea<<" mm^2\n" ;
   *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
 
 

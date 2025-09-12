@@ -1,3 +1,7 @@
+import simulator_stub as ss
+from simulator_stub_analytical_model import FastNoCSimulator
+from ani_utils import visualize_simulation, plot_timeline
+
 """
 Utility functions for simulator comparison and analysis
 """
@@ -17,9 +21,6 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
     Returns:
         dict: Results containing latencies and comparison metrics
     """
-    import simulator_stub as ss
-    from simulator_stub_analytical_model import FastNoCSimulator
-    from visualiser_analytical_noc_model import visualize_simulation, plot_timeline
     
     results = {}
     timeline_path = f"{output_dir}/timeline_{algorithm_name}_{timestamp}.png"

@@ -2,7 +2,7 @@
     "arch":{
             "topology" : "torus",
             "width_phit": 64,
-            "k" : 5,
+            "k" : 4,
             "n" : 2,
             "use_read_write" : 1,
             "routing_function" : "dim_order",
@@ -26,6 +26,10 @@
             "reconf_cycles":  2.0,
             "ANY_comp_cycles": 0.25,
             "max_pe_mem": 100000000,
-            "threshold_pe_mem": 80000000
+            "threshold_pe_mem": 80000000,
+            "sim_power": 1,
+            "tech_file": "src/restart/src/power/techfile.json",
+            "channel_width": 64,
+            "channel_sweep": 0
             }
 }

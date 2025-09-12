@@ -3,7 +3,7 @@
 File: ani_utils.py
 Project: utils
 File Created: Thursday, 23rd January 2025
-Author: Edoardo Cabiati (edoardo.cabiati@mail.polimi.it)
+Author: Jakub Jastrzebski, Edoardo Cabiati (jakubandrze.jastrzebski@polimi.it)
 Under the supervision of: Politecnico di Milano
 ==================================================
 '''
@@ -14,25 +14,558 @@ The ani_utils.py module contains the functions used to generate the animation of
 The general framework to create the animation as been taken from https://github.com/jmjos/ratatoskr/blob/master/bin/plot_network.py
 """
 
-import matplotlib.pyplot
+import matplotlib.pyplot as plt
 from typing import Union
-
-# This script generates simple topology files for 2D or 3D meshes
-###############################################################################
 import sys
 import os
 import numpy as np
 import json
+import seaborn as sns
+import networkx as nx
+from collections import defaultdict
+from typing import Dict, List, Tuple, Any
+from dataclasses import dataclass
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import matplotlib.ticker as ticker
 from matplotlib.ticker import MaxNLocator
-import matplotlib.pyplot as plt
-PATH_TO_SIMULATOR = os.path.join("/Users/edoardocabiati/Desktop/Cose_brutte_PoliMI/_tesi/restart", "lib")
-sys.path.append(PATH_TO_SIMULATOR)
+from matplotlib.patches import Rectangle
+import matplotlib.patches as patches
+
 import nocsim
 
+'''#backup: 
+GLOBAL_EVENT_COLORS = {
+    'comp': ('#FF6347', 0.9),           # tomato - Computation
+    'recon': ('#2E8B57', 0.9),          # seagreen - Reconfiguration  
+    'traf_out': ('#6495ED', 0.7),       # cornflowerblue - Traffic PE out
+    'traf_in': ('#FFA500', 0.7),        # orange - Traffic PE in
+    'traf_between': ('#C0C0C0', 0.3),   # silver - Traffic NoC
+    'reply_out': ('#FFD700', 0.5),      # gold - Reply PE out
+    'reply_in': ('#40E0D0', 0.7),       # turquoise - Reply PE in
+    'process': ('#45B7D1', 0.8),        # existing process color
+    'local_process': ('#98D8C8', 0.9),  # existing local process color
+}'''
+
+# Global color and alpha configuration for consistent plotting across all classes
+GLOBAL_EVENT_COLORS = {
+    'comp': ('#FF6347', 0.15),           # tomato - Computation
+    'recon': ('#2E8B57', 0.0),          # seagreen - Reconfiguration  
+    'traf_out': ('#6495ED', 0.7),       # cornflowerblue - Traffic PE out
+    'traf_in': ('#FFA500', 0.1),        # orange - Traffic PE in
+    'traf_between': ('#C0C0C0', 0.0),   # silver - Traffic NoC
+    'reply_out': ('#FFD700', 0.0),      # gold - Reply PE out
+    'reply_in': ('#40E0D0', 0.0),       # turquoise - Reply PE in
+    'process': ('#45B7D1', 0.0),        # existing process color
+    'local_process': ('#98D8C8', 0.0),  # existing local process color
+}
+
+def get_event_color_and_alpha(event_type):
+    """Helper function to get color and alpha for an event type"""
+    return GLOBAL_EVENT_COLORS.get(event_type, ('#95A5A6', 0.8))  # Default gray color
+
+
+@dataclass
+class NodeEvent:
+    """Represents an event on a node"""
+    node_id: int
+    task_id: int
+    task_type: str
+    start_time: int
+    end_time: int
+    event_type: str  # 'send', 'compute', 'receive', 'process'
+    related_node: int = None  # for network operations
+    size: int = 0
+    description: str = ""
+
+class NoCSimulationVisualizer:
+    """Visualization tool for NoC simulation"""
+    
+    def __init__(self):
+        self.events = []
+        self.node_states = defaultdict(list)
+        self.total_nodes = 0
+        self.max_time = 0
+        
+    def simulate_with_tracking(self, simulator, workload, arch):
+        """Enhanced simulation that tracks all node events using the real simulator"""
+        
+        # Track all nodes mentioned in workload
+        all_nodes = set()
+        for task in workload:
+            if hasattr(task, 'src') and task.src is not None:
+                all_nodes.add(task.src)
+            if hasattr(task, 'dst') and task.dst is not None:
+                all_nodes.add(task.dst)
+            if hasattr(task, 'node') and task.node is not None:
+                all_nodes.add(task.node)
+        
+        self.total_nodes = max(all_nodes) + 1 if all_nodes else 0
+        
+        # Use the real simulator to get accurate results including batching optimizations
+        total_latency = simulator.simulate_execution(workload, arch, self)
+        self.max_time = total_latency
+        
+        return total_latency
+    
+    # Implement EventTracker interface methods
+    def track_comp_op_start(self, task_id: int, node: int, start_time: int, ct_required: int) -> None:
+        """Track the start of a COMP_OP operation"""
+        #print(f"DEBUG: track_comp_op_start - task_id={task_id}, node={node}, start_time={start_time}, ct_required={ct_required}")
+        self.add_event(NodeEvent(
+            node_id=node,
+            task_id=task_id,
+            task_type='COMP_OP',
+            start_time=start_time,
+            end_time=start_time,  # Will be updated by track_comp_op_end
+            event_type='comp_start',
+            description=f"Start COMP_OP task {task_id} (cycles: {ct_required})"
+        ))
+    
+    def track_comp_op_end(self, task_id: int, node: int, end_time: int) -> None:
+        """Track the completion of a COMP_OP operation"""
+        #print(f"DEBUG: track_comp_op_end - task_id={task_id}, node={node}, end_time={end_time}")
+        # Find and update the existing start event
+        updated = False
+        for event in self.events:
+            if event.task_id == task_id and event.node_id == node and event.event_type == 'comp_start':
+                event.end_time = end_time
+                event.event_type = 'comp'
+                event.description = f"COMP_OP task {task_id} completed"
+                updated = True
+                break
+        if not updated:
+            print(f"DEBUG: WARNING - Could not find compute_start event for task {task_id}")
+        #print(f"DEBUG: Total events after comp_op_end: {len(self.events)}")
+        
+    def track_write_send_start(self, task_id: int, src: int, dst: int, start_time: int, size: int) -> None:
+        """Track the start of sending a WRITE message"""
+        self.add_event(NodeEvent(
+            node_id=src,
+            task_id=task_id,
+            task_type='WRITE',
+            start_time=start_time,
+            end_time=start_time,  # Will be updated by track_write_send_end
+            event_type='traf_out_start',
+            related_node=dst,
+            size=size,
+            description=f"Start sending WRITE to node {dst} (size: {size})"
+        ))
+        
+    def track_write_send_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of sending a WRITE message"""
+        # Find and update the existing send start event
+        for event in self.events:
+            if event.task_id == task_id and event.node_id == src and event.event_type == 'traf_out_start':
+                event.end_time = end_time
+                event.event_type = 'traf_out'
+                event.description = f"Send WRITE to node {dst} completed"
+                break
+        
+    def track_write_receive_start(self, task_id: int, src: int, dst: int, start_time: int) -> None:
+        """Track the start of receiving a WRITE message"""
+        self.add_event(NodeEvent(
+            node_id=dst,
+            task_id=task_id,
+            task_type='WRITE',
+            start_time=start_time,
+            end_time=start_time,  # Will be updated when receive completes
+            event_type='traf_in',
+            related_node=src,
+            description=f"Receive WRITE from node {src}"
+        ))
+        
+    def track_write_process_start(self, task_id: int, dst: int, start_time: int, pt_required: int) -> None:
+        """Track the start of processing a WRITE message"""
+        self.add_event(NodeEvent(
+            node_id=dst,
+            task_id=task_id,
+            task_type='WRITE',
+            start_time=start_time,
+            end_time=start_time,  # Will be updated by track_write_process_end
+            event_type='process_start',
+            description=f"Start processing WRITE task {task_id} (pt_required: {pt_required})"
+        ))
+        
+    def track_write_process_end(self, task_id: int, dst: int, end_time: int) -> None:
+        """Track the end of processing a WRITE message"""
+        # Find and update the existing process start event
+        for event in self.events:
+            if event.task_id == task_id and event.node_id == dst and event.event_type == 'process_start':
+                event.end_time = end_time
+                event.event_type = 'process'
+                event.description = f"Process WRITE task {task_id} completed"
+                break
+        
+    def track_reply_send_start(self, task_id: int, src: int, dst: int, start_time: int) -> None:
+        """Track the start of sending a reply"""
+        self.add_event(NodeEvent(
+            node_id=src,
+            task_id=task_id,
+            task_type='REPLY',
+            start_time=start_time,
+            end_time=start_time,  # Will be updated when reply completes
+            event_type='reply_out_start',
+            related_node=dst,
+            description=f"Send REPLY to node {dst}"
+        ))
+        
+    def track_reply_receive_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of receiving a reply"""
+        self.add_event(NodeEvent(
+            node_id=dst,
+            task_id=task_id,
+            task_type='REPLY',
+            start_time=end_time,  # Simplified - assume instantaneous receive
+            end_time=end_time,
+            event_type='reply_in',
+            related_node=src,
+            description=f"Receive REPLY from node {src}"
+        ))
+        
+    def track_write_receive_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of receiving and processing a write at destination"""
+        self.add_event(NodeEvent(
+            node_id=dst,
+            task_id=task_id,
+            task_type='WRITE',
+            start_time=end_time-1,  # Simplified - assume processing took some time
+            end_time=end_time,
+            event_type='process',
+            related_node=src,
+            description=f"Process WRITE from node {src}"
+        ))
+        
+    def track_reply_send_end(self, task_id: int, src: int, dst: int, end_time: int) -> None:
+        """Track the end of sending a reply"""
+        # Find and update the existing reply send event
+        for event in self.events:
+            if event.task_id == task_id and event.node_id == src and event.event_type == 'reply_out_start':
+                event.end_time = end_time
+                event.event_type = 'reply_out'
+                break
+        
+    def track_batch_comp_ops(self, task_ids: List[int], node: int, start_time: int, end_time: int, layer_id: int) -> None:
+        """Track a batch of COMP_OP operations executed together"""
+        # Create events for the batched operations
+        for task_id in task_ids:
+            self.add_event(NodeEvent(
+                node_id=node,
+                task_id=task_id,
+                task_type='COMP_OP',
+                start_time=start_time,
+                end_time=end_time,
+                event_type='comp',
+                description=f"Batched COMP_OP from layer {layer_id} (batch of {len(task_ids)} ops)"
+            ))
+    
+    def track_batched_write(self, task_ids: List[int], src: int, dst: int, start_time: int, end_time: int, total_size: int) -> None:
+        """Track a batched WRITE operation"""
+        # Create a single event for the batched write
+        self.add_event(NodeEvent(
+            node_id=src,
+            task_id=task_ids[0],  # Use first task ID as representative
+            task_type='WRITE_BATCH',
+            start_time=start_time,
+            end_time=end_time,
+            event_type='traf_out',
+            related_node=dst,
+            size=total_size,
+            description=f"Batched WRITE to node {dst} (batch of {len(task_ids)} writes, total size: {total_size})"
+        ))
+    
+
+    
+    def add_event(self, event: NodeEvent):
+        """Add an event to tracking"""
+        self.events.append(event)
+        self.node_states[event.node_id].append(event)
+    
+    def plot_timeline(self, figsize=(10, 6), save_path=None):
+        """Create a Gantt chart showing node activities over time"""
+        if not self.events:
+            print("No events to plot. Run simulation first.")
+            return
+        
+        # Debug: print event summary
+        #print(f"DEBUG: Total events to plot: {len(self.events)}")
+        event_types = {}
+        for event in self.events:
+            event_types[event.event_type] = event_types.get(event.event_type, 0) + 1
+        #print(f"DEBUG: Event types: {event_types}")
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        y_positions = {}
+        current_y = 0
+        
+        # Sort events by node for cleaner visualization
+        for node_id in sorted(self.node_states.keys()):
+            y_positions[node_id] = current_y
+            current_y += 1
+        
+        # Create legend labels mapping - define before use (match BookSim2 order)
+        legend_labels = {
+            'comp': 'Computation',
+            'recon': 'Reconfiguration', 
+            'traf_out': 'Traffic PE out',
+            'traf_in': 'Traffic PE in',
+            'traf_between': 'Traffic NoC',
+            'reply_in': 'Reply PE in',
+            'reply_out': 'Reply PE out',
+            'process': 'Process Data',
+            'local_process': 'Local Process'
+        }
+        
+        # Define event types order to match BookSim2
+        event_types = [
+            (event_type, color, legend_labels[event_type], alpha)
+            for event_type, (color, alpha) in GLOBAL_EVENT_COLORS.items()
+            if event_type in legend_labels
+        ]
+        
+        # Group events by node and event type like BookSim2
+        node_event_data = {}
+        for node_id in sorted(self.node_states.keys()):
+            node_event_data[node_id] = {}
+            for event in self.node_states[node_id]:
+                event_type = event.event_type
+                if event_type not in node_event_data[node_id]:
+                    node_event_data[node_id][event_type] = []
+                duration = event.end_time - event.start_time
+                node_event_data[node_id][event_type].append((event.start_time, duration))
+        
+        # Track used labels to prevent duplicates in legend
+        used_labels = set()
+        
+        # Plot events using broken_barh exactly like BookSim2
+        for node_id, events in node_event_data.items():
+            has_events = False  # Flag to check if node has any events
+            
+            for event_key, color, label, alpha in event_types:
+                event_list = events.get(event_key, [])
+                if event_list:
+                    has_events = True
+                    # Use label only if it hasn't been used before
+                    current_label = label if label not in used_labels else None
+                    ax.broken_barh(
+                        event_list,
+                        (node_id - 0.4, 0.8),
+                        facecolors=color,
+                        label=current_label,
+                        alpha=alpha
+                    )
+                    if current_label:
+                        used_labels.add(label)
+            
+            # Handle nodes with no events
+            if not has_events:
+                print(f"No events found for node {node_id}")
+            
+            # you can add text labels if the rectangle is wide enough
+        
+        # Set y-ticks to node IDs (match BookSim2)
+        ax.set_yticks(range(len(y_positions)))
+        ax.set_yticklabels([f'{node_id}' for node_id in sorted(y_positions.keys())])
+        
+        # Set x-ticks to cycle numbers (match BookSim2)
+        ax.set_xlim(0, self.max_time)
+        ax.set_xlabel('Cycle', fontsize=12)
+        ax.set_ylabel('Node', fontsize=12)
+        
+        # Auto-adjust ticks like BookSim2
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        
+        # Add vertical lines at each major x-tick (match BookSim2)
+        for tick in ax.xaxis.get_major_locator().tick_values(ax.get_xlim()[0], ax.get_xlim()[1]):
+            ax.axvline(x=tick, color='grey', linestyle='-', linewidth=0.5, zorder=0)
+
+        # Add horizontal lines at the corners of the nodes (match BookSim2)
+        for node in range(len(y_positions)):
+            ax.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
+            ax.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
+        
+        # Create legend elements in the same order as BookSim2
+        legend_elements = []
+        for event_key, color, label, alpha in event_types:
+            if label in used_labels:
+                legend_elements.append(patches.Patch(color=color, label=label))
+        
+        # Use BookSim2 style legend placement
+        if legend_elements:
+            ax.legend(
+                handles=legend_elements,
+                loc='upper center',
+                ncol=6,
+                bbox_to_anchor=(0.5, 1.05),
+                fancybox=True,
+                shadow=True,
+                title_fontsize='medium',
+                frameon=True
+            )
+        
+        plt.tight_layout()
+        
+        if save_path:
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+        
+        return fig
+    
+    def plot_node_utilization(self, figsize=(12, 8), save_path=None):
+        """Plot utilization statistics for each node"""
+        if not self.events:
+            print("No events to plot. Run simulation first.")
+            return
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+        
+        # Calculate utilization for each node
+        node_utilization = {}
+        node_activity_breakdown = defaultdict(lambda: defaultdict(int))
+        
+        for node_id in range(self.total_nodes):
+            total_busy_time = 0
+            activity_times = defaultdict(int)
+            
+            for event in self.node_states[node_id]:
+                duration = event.end_time - event.start_time
+                total_busy_time += duration
+                activity_times[event.event_type] += duration
+            
+            node_utilization[node_id] = (total_busy_time / self.max_time) * 100 if self.max_time > 0 else 0
+            node_activity_breakdown[node_id] = activity_times
+        
+        # Plot 1: Overall utilization
+        nodes = list(range(self.total_nodes))
+        utilizations = [node_utilization.get(node, 0) for node in nodes]
+        
+        bars = ax1.bar(nodes, utilizations, color='skyblue', alpha=0.7, edgecolor='navy')
+        ax1.set_xlabel('Node ID')
+        ax1.set_ylabel('Utilization (%)')
+        ax1.set_title('Node Utilization')
+        ax1.set_xticks(nodes)
+        ax1.grid(True, axis='y', alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, util in zip(bars, utilizations):
+            if util > 0:
+                ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                        f'{util:.1f}%', ha='center', va='bottom', fontsize=9)
+        
+        # Plot 2: Activity breakdown (stacked bar) - use global configuration
+        activity_types = ['traf_out', 'traf_in', 'process', 'comp', 'reply_out', 'reply_in', 'local_process']
+        colors_list = [get_event_color_and_alpha(activity)[0] for activity in activity_types]
+        
+        bottom = np.zeros(self.total_nodes)
+        
+        for i, activity in enumerate(activity_types):
+            values = []
+            for node_id in range(self.total_nodes):
+                activity_time = node_activity_breakdown[node_id].get(activity, 0)
+                percentage = (activity_time / self.max_time) * 100 if self.max_time > 0 else 0
+                values.append(percentage)
+            
+            if sum(values) > 0:  # Only plot if there are activities of this type
+                ax2.bar(nodes, values, bottom=bottom, label=activity.replace('_', ' ').title(),
+                        color=colors_list[i % len(colors_list)], alpha=0.8)
+                bottom += values
+        
+        ax2.set_xlabel('Node ID')
+        ax2.set_ylabel('Time (%)')
+        ax2.set_title('Node Activity Breakdown')
+        ax2.set_xticks(nodes)
+        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax2.grid(True, axis='y', alpha=0.3)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+        
+        return fig
+    
+    def print_event_summary(self):
+        """Print a summary of all events"""
+        if not self.events:
+            print("No events recorded.")
+            return
+        
+        print(f"\n{'='*60}")
+        print(f"SIMULATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Total simulation time: {self.max_time} cycles")
+        print(f"Total events: {len(self.events)}")
+        print(f"Nodes involved: {self.total_nodes}")
+        
+        print(f"\n{'Node':<6} {'Events':<8} {'First':<8} {'Last':<8} {'Utilization'}")
+        print(f"{'-'*50}")
+        
+        for node_id in sorted(self.node_states.keys()):
+            events = self.node_states[node_id]
+            if events:
+                first_event = min(event.start_time for event in events)
+                last_event = max(event.end_time for event in events)
+                total_time = sum(event.end_time - event.start_time for event in events)
+                utilization = (total_time / self.max_time) * 100 if self.max_time > 0 else 0
+                
+                print(f"{node_id:<6} {len(events):<8} {first_event:<8} {last_event:<8} {utilization:.1f}%")
+        
+        print(f"\n{'Event Type':<15} {'Count':<8} {'Total Time':<12} {'Avg Duration'}")
+        print(f"{'-'*50}")
+        
+        event_stats = defaultdict(list)
+        for event in self.events:
+            duration = event.end_time - event.start_time
+            event_stats[event.event_type].append(duration)
+        
+        for event_type, durations in event_stats.items():
+            count = len(durations)
+            total_time = sum(durations)
+            avg_duration = total_time / count if count > 0 else 0
+            print(f"{event_type:<15} {count:<8} {total_time:<12} {avg_duration:.1f}")
+
+def visualize_simulation(simulator, json_path, timeline_path=None, utilization_path=None):
+    """Main function to run simulation with visualization"""
+    # Parse config
+    arch, workload = simulator.parse_config(json_path)
+    
+    # Create visualizer and run enhanced simulation
+    viz = NoCSimulationVisualizer()
+    total_latency = viz.simulate_with_tracking(simulator, workload, arch)
+    
+    # Print summary
+    viz.print_event_summary()
+    
+    # Create plots
+    timeline_fig = viz.plot_timeline(save_path=timeline_path)
+    util_fig = viz.plot_node_utilization(save_path=utilization_path)
+    
+    # Only show plots if no save paths provided (backwards compatibility)
+    if not timeline_path and not utilization_path:
+        plt.show()
+    
+    return total_latency, viz
+
+def plot_timeline(json_path, timeline_path=None, utilization_path=None, verbose=True):
+    """Convenience function to plot timeline from JSON path"""
+    from simulator_stub_analytical_model import FastNoCSimulator
+    
+    simulator = FastNoCSimulator()
+    total_latency, viz = visualize_simulation(
+        simulator, 
+        json_path, 
+        timeline_path=timeline_path, 
+        utilization_path=utilization_path
+    )
+    
+    if verbose:
+        print(f"Total simulation latency: {total_latency} cycles")
+    
+    return total_latency, viz
 
 class NoCPlotter:
 
@@ -529,7 +1062,7 @@ class NoCPlotter:
                             # remove the event from the current events
                             event_to_remove.append(event)
                             break
-                     
+                    
                     if len(event_to_remove) == 0:
                         raise RuntimeError(f"Event {events_pointer} not found in the current events")
                     for event in event_to_remove:
@@ -610,7 +1143,6 @@ class NoCPlotter:
         #plt.show()
     ###############################################################################
 
-# Thanks to J. Jastrzebski for the original code of this class
 class NoCTimelinePlotter(NoCPlotter):
     """Subclass for 2D timeline visualization. Inherits all NoCPlotter methods."""
     
@@ -632,9 +1164,9 @@ class NoCTimelinePlotter(NoCPlotter):
         self.max_cycle = logger.events[-1].cycle
 
     def _preprocess_events(self, logger):
-        """Extract computation/traffic events per node.
-           Information about Computing, Traffic (out and in) and Reconfiguration 
-           is collected from the logger
+        """ Extract computation/traffic events per node.
+            Information about Computing, Traffic (out and in) and Reconfiguration 
+            is collected from the logger
         """
         self.node_events = {i: {"comp": [], "recon": [], "traf_out": [], "traf_in": [], "traf_between":[], "reply_in": [], "reply_out": []} for i in range(len(self.points[1]))}
     
@@ -735,16 +1267,22 @@ class NoCTimelinePlotter(NoCPlotter):
     def plot_timeline(self, filename, legend=True, hihlight_xticks=True):
         """Draw horizontal bars for events."""
         
-        #(key, color, label, alpha)
+        # Create event_types from global configuration
+        event_type_labels = {
+            'comp': 'Computation',
+            'recon': 'Reconfiguration', 
+            'traf_out': 'Traffic PE out',
+            'traf_in': 'Traffic PE in',
+            'traf_between': 'Traffic NoC',
+            'reply_in': 'Reply PE in',
+            'reply_out': 'Reply PE out'
+        }
         event_types = [
-        ('comp', 'tomato', 'Computation', 1.0), 
-        ('recon', 'seagreen', 'Reconfiguration', 1.0),
-        ('traf_out', 'cornflowerblue', 'Traffic PE out', 0.7),
-        ('traf_in', 'orange', 'Traffic PE in', 0.7),
-        ('traf_between', 'silver', 'Traffic NoC', 0.3),
-        ('reply_in','turquoise', 'Reply PE in', 0.7),
-        ('reply_out','gold', 'Reply PE out', 0.5)
+            (event_type, color, event_type_labels[event_type], alpha)
+            for event_type, (color, alpha) in GLOBAL_EVENT_COLORS.items()
+            if event_type in event_type_labels
         ]
+    
     
         # Track used labels to prevent duplicates in legend
         used_labels = set()
@@ -818,14 +1356,20 @@ class NoCTimelinePlotter(NoCPlotter):
     def plot_timeline_with_debug_annotations(self, filename, legend=True, hihlight_xticks=True, annoate_events = True):
         """Draw horizontal bars for events."""
         
+        # Create event_types from global configuration
+        event_type_labels = {
+            'comp': 'Computation',
+            'recon': 'Reconfiguration', 
+            'traf_out': 'Traffic PE out',
+            'traf_in': 'Traffic PE in',
+            'traf_between': 'Traffic NoC',
+            'reply_in': 'Reply PE in',
+            'reply_out': 'Reply PE out'
+        }
         event_types = [
-        ('comp', 'tomato', 'Computation', 1.0), 
-        ('recon', 'seagreen', 'Reconfiguration', 1.0),
-        ('traf_out', 'dodgerblue', 'Traffic PE out', 0.7),
-        ('traf_in', 'darkorange', 'Traffic PE in', 0.7),
-        ('traf_between', 'silver', 'Traffic NoC', 0.3),
-        ('reply_in','turquoise', 'Reply PE in', 0.7),
-        ('reply_out','gold', 'Reply PE out', 0.7)
+            (event_type, color, event_type_labels[event_type], alpha)
+            for event_type, (color, alpha) in GLOBAL_EVENT_COLORS.items()
+            if event_type in event_type_labels
         ]
 
         used_labels = set()
@@ -933,19 +1477,24 @@ class NoCTimelinePlotter(NoCPlotter):
             print(f"Timeline graph saved to {filename}")
         plt.close(self.fig)
         
-        
+    '''      
     def plot_timeline_factor_back(self, filename, factor_comp, factor_recon, legend=True, hihlight_xticks=True):
         """Draw horizontal bars for events."""
         
-        #(key, color, label, alpha)
+        # Create event_types from global configuration
+        event_type_labels = {
+            'comp': 'Computation',
+            'recon': 'Reconfiguration', 
+            'traf_out': 'Traffic PE out',
+            'traf_in': 'Traffic PE in',
+            'traf_between': 'Traffic NoC',
+            'reply_in': 'Reply PE in',
+            'reply_out': 'Reply PE out'
+        }
         event_types = [
-        ('comp', 'tomato', 'Computation', 1.0), 
-        ('recon', 'seagreen', 'Reconfiguration', 1.0),
-        ('traf_out', 'cornflowerblue', 'Traffic PE out', 0.7),
-        ('traf_in', 'orange', 'Traffic PE in', 0.7),
-        ('traf_between', 'silver', 'Traffic NoC', 0.3),
-        ('reply_in','turquoise', 'Reply PE in', 0.7),
-        ('reply_out','gold', 'Reply PE out', 0.7)
+            (event_type, color, event_type_labels[event_type], alpha)
+            for event_type, (color, alpha) in GLOBAL_EVENT_COLORS.items()
+            if event_type in event_type_labels
         ]
         
         # Create factor mapping and initialize data structures
@@ -1097,7 +1646,7 @@ class NoCTimelinePlotter(NoCPlotter):
             self.fig2d.savefig(filename, dpi=300)
             print(f"Timeline graph saved to {filename}")
         plt.close(self.fig)   
-
+        '''
 class SynchronizedNoCAnimator:
     """Handles synchronized 3D NoC + 2D timeline animation."""
     

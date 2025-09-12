@@ -27,15 +27,15 @@ import mapper as ma
 import simulator_stub as ss
 import simulator_stub_analytical_model as ssam
 from visualizer import plot_timeline
-from visualiser_analytical_noc_model import visualize_simulation
-from simulator_stub_analytical_model import FastNoCSimulator
+from utils.ani_utils import visualize_simulation
+import time
 
 
 if __name__ == '__main__':
-    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
-    model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
     #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
 
@@ -90,29 +90,41 @@ if __name__ == '__main__':
     mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
 
     #print(f"Mapping: {mapping}")
-
     mapper = ma.Mapper()
     mapper.init(task_graph, grid)
     mapper.set_mapping(mapping)
     mapper.mapping_to_json("../data/partitioner_data/mapping.json", file_to_append="./config_files/arch.json")
 
+    # Measure Booksim2 simulation time
     stub = ss.SimulatorStub()
+    start_time = time.time()
     result, logger = stub.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
+    booksim_time = time.time() - start_time
     print(f"Booksim2 result: {result}")
 
+    # Measure Analytical Model simulation time
     stub_anal = ssam.SimulatorStubAnalyticalModel()
+    start_time = time.time()
     result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
-
+    analytical_time = time.time() - start_time
     print(f"Analytical model result: {result_anal}")
 
-    #plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
-    # Visualize analytical model simulation
-    total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
+    visualise = True
+    if visualise:
+        plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
+        # Visualize analytical model simulation
+        total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
+        
+    percentage_diff = abs(result_anal - result) / result * 100
+    ratio = result_anal / result
     
-    percentage_diff = abs(total_latency - result) / result * 100
-    ratio = total_latency / result
-    print(f"Difference: {abs(total_latency - result)} cycles ({percentage_diff:.2f}%)")
-    print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
+    print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff:.2f}%)")
+    #print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
+    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
+    print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
+    # Compare simulation times
+    time_ratio = booksim_time / analytical_time
+    print(f"Time gain: {time_ratio:.4f}x")
 
     print("Partitioner Done!")
 
