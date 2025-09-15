@@ -59,7 +59,7 @@ bool isReplyType(commType type) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AnalyticalLogger::log_event(double time, const std::string& type, int packet_id,
-                                 int node, const std::string& description) {
+                                int node, const std::string& description) {
     Event event;
     event.time = time;
     event.type = type;
@@ -216,9 +216,9 @@ void AnalyticalModel::configure(const std::string& config_file) {
     preprocess_packets();
 
     *_output_file << "Analytical model configured with " << _packets.size()
-                  << " packets and " << _workloads.size() << " workloads" << std::endl;
+                << " packets and " << _workloads.size() << " workloads" << std::endl;
     *_output_file << "Network: " << _arch.topology << " " << _arch.k << "^" << _arch.n
-                  << " (" << _nodes << " nodes)" << std::endl;
+                << " (" << _nodes << " nodes)" << std::endl;
 }
 
 int AnalyticalModel::calculate_hop_distance(int src, int dst) const {
@@ -262,7 +262,7 @@ double AnalyticalModel::calculate_message_latency(int src, int dst, int size, bo
 
     // Head flit processing time per hop
     int t_head_hop = _arch.routing_delay + _arch.vc_alloc_delay + _arch.sw_alloc_delay +
-                     _arch.st_prepare_delay + _arch.st_final_delay;
+                    _arch.st_prepare_delay + _arch.st_final_delay;
 
     // Body flit processing time per hop
     int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
@@ -466,7 +466,7 @@ void AnalyticalModel::process_workloads() {
             // Log completion
             if (_logger) {
                 _logger->log_event(_current_time, "WORKLOAD_COMPLETE", completed_workload->id, node,
-                                 "Workload processing completed");
+                                "Workload processing completed");
             }
 
             _pending_workloads[node] = nullptr;
@@ -482,7 +482,7 @@ void AnalyticalModel::process_workloads() {
                 if (check_dependencies_satisfied(workload, node)) {
                     // Dependencies satisfied, start processing
                     double start_time = std::max(_current_time,
-                                               get_dependency_completion_time(workload->dep, node));
+                                            get_dependency_completion_time(workload->dep, node));
                     double end_time = start_time + workload->cycles_required;
 
                     _npu_free_time[node] = end_time;
@@ -491,7 +491,7 @@ void AnalyticalModel::process_workloads() {
                     // Log start
                     if (_logger) {
                         _logger->log_event(start_time, "WORKLOAD_START", workload->id, node,
-                                         "Started processing workload");
+                                        "Started processing workload");
                     }
 
                     // Remove from waiting queue
@@ -582,7 +582,7 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
 
             if (_logger) {
                 _logger->log_event(_current_time, "GENERATE_WRITE", new_packet->id, dest,
-                                 "Generated WRITE packet in response to READ_REQ");
+                                "Generated WRITE packet in response to READ_REQ");
             }
         } else {
             // WRITE_REQ -> READ_REQ packet from dst to src
@@ -591,7 +591,7 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
 
             if (_logger) {
                 _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet->id, dest,
-                                 "Generated READ_REQ packet in response to WRITE_REQ");
+                                "Generated READ_REQ packet in response to WRITE_REQ");
             }
         }
 
@@ -599,8 +599,8 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
         _waiting_packets[dest].push_back(new_packet);
 
         *_output_file << "Generated " << commTypeToString(new_packet->type)
-                      << " (id: " << new_packet->id << ") packet at time: " << _current_time
-                      << " from node: " << dest << " to node: " << src << std::endl;
+                    << " (id: " << new_packet->id << ") packet at time: " << _current_time
+                    << " from node: " << dest << " to node: " << src << std::endl;
     }
 }
 
@@ -626,12 +626,12 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
 
         if (_logger) {
             _logger->log_event(_current_time, "GENERATE_REPLY", reply_packet->id, reply_packet->src,
-                             "Generated " + commTypeToString(reply_packet->type) + " reply");
+                            "Generated " + commTypeToString(reply_packet->type) + " reply");
         }
 
         *_output_file << "Generated " << commTypeToString(reply_packet->type)
-                      << " reply (id: " << reply_packet->id << ") at time: " << _current_time
-                      << " from node: " << reply_packet->src << " to node: " << reply_packet->dst << std::endl;
+                    << " reply (id: " << reply_packet->id << ") at time: " << _current_time
+                    << " from node: " << reply_packet->src << " to node: " << reply_packet->dst << std::endl;
     }
 }
 

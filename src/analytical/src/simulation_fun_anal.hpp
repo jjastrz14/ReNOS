@@ -26,7 +26,7 @@ class AnalyticalModel;
  * @return Tuple of (simulation_time, logger_pointer)
  */
 std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
-                                                     const std::string& output_file = "");
+                                                    const std::string& output_file = "");
 
 /**
  * Create and configure an analytical model from config file
