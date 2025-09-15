@@ -15,13 +15,20 @@ class ArchConfig:
     num_vcs: int
     vc_buf_size: int
     flit_size: int
+    output_delay: int
+    credit_delay: int
     routing_delay: int
     vc_alloc_delay: int
     sw_alloc_delay: int
+    st_prepare_delay: int
     st_final_delay: int
+    internal_speedup: float
+    input_speedup: int
+    output_speedup: int
     reconf_cycles: float
     ANY_comp_cycles: float
     logger: int
+
 
     @classmethod
     def from_dict(cls, arch_dict: Dict) -> 'ArchConfig':
@@ -34,10 +41,16 @@ class ArchConfig:
             num_vcs=arch_dict.get('num_vcs', 16),
             vc_buf_size=arch_dict.get('vc_buf_size', 8),
             flit_size=arch_dict.get('flit_size', 64),
-            routing_delay=arch_dict.get('routing_delay', 0),
+            output_delay=arch_dict.get('output_delay', 0),
+            credit_delay=arch_dict.get('credit_delay', 0),
+            routing_delay=arch_dict.get('routing_delay', 1),
             vc_alloc_delay=arch_dict.get('vc_alloc_delay', 1),
             sw_alloc_delay=arch_dict.get('sw_alloc_delay', 1),
+            st_prepare_delay=arch_dict.get('st_prepare_delay', 1),
             st_final_delay=arch_dict.get('st_final_delay', 1),
+            internal_speedup=arch_dict.get('internal_speedup', 1.0),
+            input_speedup=arch_dict.get('input_speedup', 1),
+            output_speedup=arch_dict.get('output_speedup', 1),
             reconf_cycles=arch_dict.get('reconf_cycles', 2.0),
             ANY_comp_cycles=arch_dict.get('ANY_comp_cycles', 1.0),
             logger=arch_dict.get('logger', 0)
@@ -217,57 +230,64 @@ class FastNoCSimulator:
     
     def calculate_message_latency(self, src: int, dst: int, size: int, arch: ArchConfig, is_reply: bool = False) -> float:
         """Calculate latency for a single message using your analytical formula"""
-        # Network communication using your analytical model
+        # hop distance based on topology
         n_routers = self.calculate_hop_distance(src, dst, arch)
         
-        # Calculate number of flits
+        # Calculate number of flits of a message
         n_flits = 1 if is_reply else (size + arch.flit_size - 1) // arch.flit_size
         
+        t_link = 1 #I assume that injection time and ejection time to the router is also 1 cycle! 
+        
+        t_head_hop = arch.routing_delay + arch.vc_alloc_delay + arch.sw_alloc_delay + arch.st_prepare_delay + arch.st_final_delay #+ arch.output_delay + arch.credit_delay
+        
+        t_body_hop = arch.sw_alloc_delay + arch.st_prepare_delay + arch.st_final_delay
+        
+        queuing_delay = 0
+        
+        #head + body term
+        T_packet =  n_routers * (t_head_hop + t_link + queuing_delay) + (n_flits - 1) * max(t_body_hop, t_link) 
+        
         # Calculate number of ports (assuming torus topology)
-        num_ports = 2 * arch.k  # bidirectional links in k dimensions
+        # (because + 1 for PE)
+        #num_ports = 2 * arch.k + 1  # bidirectional links in k dimensions
         
         # Parallelization factor k (adapt to ports and VCs)
-        k_parallel = min(4, max(2, min(num_ports, arch.num_vcs) // 2))
+        #k_parallel = 4 #min(4, max(2, min(num_ports, arch.num_vcs) // 2))
         
         # Link delay components
-        width_flit = arch.flit_size  # bits
-        width_phit = arch.width_phit  # physical link width
+        #width_flit = arch.flit_size  # bits
+        #width_phit = arch.width_phit  # physical link width
         
-        if arch.topology == "torus":
-            t_phy = 2  # physical delay
-        else:
-            t_phy = 1
+        #it should be 1 flit -> 1 cycle in 1 channel
+        #if arch.topology == "torus":
+        #    t_phy = 2  # physical delay
+        #else:
+        #    t_phy = 1
             
-        t_link = max(1, (width_flit + width_phit - 1) // width_phit) * t_phy
         
         # Calculate T_head^(hop) - time for head flit per hop
         # T_head^(hop) = 1 + 0.2 × adaptive_enabled + log2(num_vcs)/k + log2(num_ports^2)/k + 1
         # With adaptive_enabled = 0:
-        t_head_hop = (1 + 
-                        0.2 * 0 +  # adaptive_enabled = 0
-                    math.log2(arch.num_vcs) / k_parallel +
-                    math.log2(num_ports**2) / k_parallel + 
-                    1)
         
-        # Calculate T_body^(hop) - time for body flit per hop
-        # T_body^(hop) = log2(num_ports^2)/k + 1
-        t_body_hop = math.log2(num_ports**2) / k_parallel + 1
         
         #analytical formula:
         # T_packet = N_routers × (T_head^(hop) + T_link) + (N_flits-1) × max(T_body^(hop), T_link) + Queuing_delay
         
-        head_term = n_routers * (t_head_hop + t_link)
-        body_term = (n_flits - 1) * max(t_body_hop, t_link)
         
         # Queuing delay - simplified model
-        base_queuing_per_router = max(0, (1 / arch.vc_buf_size) * (1 / arch.num_vcs))
-        total_queuing = n_routers * base_queuing_per_router
-        size_factor = (size % 100) / 1000.0  # 0-0.1 range
-        queuing_delay = total_queuing + size_factor
+        #base_queuing_per_router = max(0, (1 / arch.vc_buf_size) * (1 / arch.num_vcs))
+        #total_queuing = n_routers * base_queuing_per_router
+        #size_factor = (size % 100) / 1000.0  # 0-0.1 range
+        #queuing_delay = 0 #total_queuing + size_factor
         
-        total_latency = head_term + body_term + queuing_delay
+        #total_latency = head_term + body_term + queuing_delay
         
-        return int(round(total_latency))
+        
+        #paper: Analytical latency model for networks-on-chip:
+        # latency_packet = latency_head + latency_body
+        # latency_body = (n_flits - 1) * max(T_body_hop, T_link)
+        # latency_head = t_inj + n_hops * (t_routing + Waiting_time_i + t_switching) + (n_flits - 1) * t_link + t_eject
+        return int(round(T_packet))
     
     def simulate_execution(self, workload: List[WorkloadEntry], arch: ArchConfig, tracker=None) -> int:
         """Enhanced execution simulation with proper dependency and parallelism handling"""

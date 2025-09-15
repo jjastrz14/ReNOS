@@ -108,16 +108,9 @@ if __name__ == '__main__':
     result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
     analytical_time = time.time() - start_time
     print(f"Analytical model result: {result_anal}")
-
-    visualise = True
-    if visualise:
-        plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
-        # Visualize analytical model simulation
-        total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
-        
+    
     percentage_diff = abs(result_anal - result) / result * 100
     ratio = result_anal / result
-    
     print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff:.2f}%)")
     #print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
     print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
@@ -126,6 +119,12 @@ if __name__ == '__main__':
     time_ratio = booksim_time / analytical_time
     print(f"Time gain: {time_ratio:.4f}x")
 
+    visualise = True
+    if visualise:
+        plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
+        # Visualize analytical model simulation
+        total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
+        
     print("Partitioner Done!")
 
 
