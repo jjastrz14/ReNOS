@@ -110,7 +110,8 @@ PYBIND11_MODULE(analytical_simulator, m) {
         .def_readwrite("id", &AnalyticalWorkload::id)
         .def_readwrite("pe", &AnalyticalWorkload::pe)
         .def_readwrite("dep", &AnalyticalWorkload::dep)
-        .def_readwrite("cycles_required", &AnalyticalWorkload::cycles_required);
+        .def_readwrite("cycles_required", &AnalyticalWorkload::cycles_required)
+        .def_readwrite("size", &AnalyticalWorkload::size);
 
     // AnalyticalModel class
     py::class_<AnalyticalModel>(m, "AnalyticalModel")

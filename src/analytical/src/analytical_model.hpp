@@ -59,12 +59,14 @@ struct ArchConfig {
     // Flow control
     int num_vcs;
     int vc_buf_size;
+    float ANY_comp_cycles; // Processing cycles for ANY type packets
+    int threshold_pe_mem;  // Threshold to distinguish PE vs Memory nodes
 
     // Defaults
     ArchConfig() : topology("torus"), k(4), n(2),
                    routing_delay(1), vc_alloc_delay(1), sw_alloc_delay(1),
                    st_prepare_delay(0), st_final_delay(1), flit_size(64),
-                   num_vcs(16), vc_buf_size(8) {}
+                   num_vcs(16), vc_buf_size(8), ANY_comp_cycles(1.0), threshold_pe_mem(1024) {}
 };
 
 // Packet structure (simplified from restart version)
@@ -101,9 +103,10 @@ struct AnalyticalWorkload {
     int id;
     int pe;  // processing element
     std::vector<int> dep;
+    int size;  // in bytes
     int cycles_required;
 
-    AnalyticalWorkload() : id(-1), pe(-1), cycles_required(0) {}
+    AnalyticalWorkload() : id(-1), pe(-1), size(0), cycles_required(0) {}
 };
 
 // Logger for tracking events and results
@@ -132,6 +135,7 @@ private:
     ArchConfig _arch;
     std::vector<AnalyticalPacket> _packets;
     std::vector<AnalyticalWorkload> _workloads;
+    std::vector<AnalyticalPacket> _generated_packets;  // For dynamically generated packets
 
     // Dependency tracking
     std::vector<std::set<std::tuple<int, int, double>>> _executed;  // (id, type, completion_time)
@@ -144,6 +148,7 @@ private:
     int _nodes;
     AnalyticalLogger* _logger;
     std::ostream* _output_file;
+    size_t _last_generated_processed;
 
     // Processing element timers
     std::vector<double> _npu_free_time;  // when each NPU becomes free
@@ -174,6 +179,7 @@ public:
     void process_packets();
     void process_workloads();
     void inject_ready_packets();
+    void process_generated_packets();
     void advance_time();
 
     // Handshake protocol methods
@@ -189,6 +195,10 @@ public:
     // Utility functions
     void preprocess_packets();  // Convert bytes to flits
     void print_statistics(std::ostream& out) const;
+
+private:
+    // Helper functions
+    bool check_dependencies_helper(const std::vector<int>& deps, int node) const;
 };
 
 #endif // _ANALYTICAL_MODEL_HPP_

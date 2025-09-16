@@ -86,7 +86,7 @@ void AnalyticalLogger::clear() {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 AnalyticalModel::AnalyticalModel()
-    : _current_time(0.0), _nodes(0), _logger(nullptr), _output_file(&std::cout) {
+    : _current_time(0.0), _nodes(0), _logger(nullptr), _output_file(&std::cout), _last_generated_processed(0) {
     _logger = new AnalyticalLogger();
 }
 
@@ -121,6 +121,10 @@ void AnalyticalModel::configure(const std::string& config_file) {
         if (arch.contains("flit_size")) _arch.flit_size = arch["flit_size"];
         if (arch.contains("num_vcs")) _arch.num_vcs = arch["num_vcs"];
         if (arch.contains("vc_buf_size")) _arch.vc_buf_size = arch["vc_buf_size"];
+        if (arch.contains("ANY_comp_cycles")) _arch.ANY_comp_cycles = arch["ANY_comp_cycles"];
+        if (arch.contains("threshold_pe_mem")) _arch.threshold_pe_mem = arch["threshold_pe_mem"];
+    } else {
+        throw std::runtime_error("Configuration missing 'arch' section");
     }
 
     // Calculate number of nodes
@@ -136,80 +140,80 @@ void AnalyticalModel::configure(const std::string& config_file) {
     _pending_workloads.resize(_nodes, nullptr);
     _npu_free_time.resize(_nodes, 0.0);
 
-    // Parse packets
-    if (config.contains("packets")) {
-        const json& packets = config["packets"];
-        _packets.reserve(packets.size());
 
-        for (const auto& packet_json : packets) {
-            AnalyticalPacket packet;
-            packet.id = packet_json["id"];
-            packet.src = packet_json["src"];
-            packet.dst = packet_json["dst"];
-            packet.size = packet_json["size"];
-            packet.cl = packet_json.value("cl", 0);
+    // Parse workloads (check if "workload" contains packet-like entries or actual workloads)
+    if (config.contains("workload")) {
+        const json& workload_array = config["workload"];
 
-            // Parse packet type and convert to commType
-            int type_int = packet_json.value("type", 1);
-            packet.type = intToCommType(type_int);
+        // Parse workload array - separate packets from PE computations based on type
+        for (const auto& item_json : workload_array) {
+            std::string type_str = item_json.value("type", "");
 
-            packet.pt_required = packet_json.value("pt_required", 0);
+            if (type_str == "COMP_OP") {
+                // This is a PE computation workload
+                AnalyticalWorkload workload;
+                workload.id = item_json["id"];
+                workload.pe = item_json.value("node", -1); // Use node field for PE
+                workload.cycles_required = static_cast<int>(std::ceil(item_json.value("ct_required", 0) * item_json.value("ANY_comp_cycles", 0.25))); // Use ct_required * by factor as cycles, always round up
+                workload.size = item_json.value("size", 0); // Use size field for data size if available
 
-            // Parse additional handshake protocol fields
-            packet.data_size = packet_json.value("data_size", packet.size);
-            packet.data_ptime_expected = packet_json.value("data_ptime_expected", packet.pt_required);
-            packet.data_dep = packet_json.value("data_dep", -1);
-            packet.rpid = packet_json.value("rpid", packet.id);
-
-            // Parse dependencies
-            if (packet_json.contains("dep")) {
-                if (packet_json["dep"].is_number()) {
-                    int dep_val = packet_json["dep"];
-                    if (dep_val != -1) {
-                        packet.dep.push_back(dep_val);
-                    }
-                } else if (packet_json["dep"].is_array()) {
-                    for (const auto& dep_val : packet_json["dep"]) {
-                        if (dep_val != -1) {
-                            packet.dep.push_back(dep_val);
-                        }
-                    }
-                }
-            }
-
-            _packets.push_back(packet);
-        }
-    }
-
-    // Parse workloads (if present)
-    if (config.contains("workloads")) {
-        const json& workloads = config["workloads"];
-        _workloads.reserve(workloads.size());
-
-        for (const auto& workload_json : workloads) {
-            AnalyticalWorkload workload;
-            workload.id = workload_json["id"];
-            workload.pe = workload_json["pe"];
-            workload.cycles_required = workload_json.value("cycles_required", 0);
-
-            // Parse dependencies
-            if (workload_json.contains("dep")) {
-                if (workload_json["dep"].is_number()) {
-                    int dep_val = workload_json["dep"];
-                    if (dep_val != -1) {
-                        workload.dep.push_back(dep_val);
-                    }
-                } else if (workload_json["dep"].is_array()) {
-                    for (const auto& dep_val : workload_json["dep"]) {
+                // Parse dependencies
+                if (item_json.contains("dep")) {
+                    if (item_json["dep"].is_number()) {
+                        int dep_val = item_json["dep"];
                         if (dep_val != -1) {
                             workload.dep.push_back(dep_val);
                         }
+                    } else if (item_json["dep"].is_array()) {
+                        for (const auto& dep_val : item_json["dep"]) {
+                            if (dep_val != -1) {
+                                workload.dep.push_back(dep_val);
+                            }
+                        }
                     }
                 }
-            }
 
-            _workloads.push_back(workload);
+                _workloads.push_back(workload);
+
+            } else if (type_str == "WRITE" || type_str == "WRITE_REQ") {
+                // This is a network packet
+                AnalyticalPacket packet;
+                packet.id = item_json["id"];
+                packet.src = item_json["src"];
+                packet.dst = item_json["dst"];
+                packet.size = item_json["size"];
+                packet.cl = item_json.value("cl", 0);
+                packet.pt_required = item_json.value("pt_required", 0);
+
+                // Set packet type
+                if (type_str == "WRITE") packet.type = WRITE;
+                else if (type_str == "WRITE_REQ") packet.type = WRITE_REQ;
+
+                packet.data_size = item_json.value("data_size", packet.size);
+                packet.data_ptime_expected = item_json.value("data_ptime_expected", packet.pt_required);
+                packet.data_dep = item_json.value("data_dep", -1);
+                packet.rpid = item_json.value("rpid", packet.id);
+
+                // Parse dependencies
+                if (item_json.contains("dep")) {
+                    if (item_json["dep"].is_number()) {
+                        int dep_val = item_json["dep"];
+                        if (dep_val != -1) {
+                            packet.dep.push_back(dep_val);
+                        }
+                    } else if (item_json["dep"].is_array()) {
+                        for (const auto& dep_val : item_json["dep"]) {
+                            if (dep_val != -1) {
+                                packet.dep.push_back(dep_val);
+                            }
+                        }
+                    }
+                }
+
+                _packets.push_back(packet);
+            }
         }
+
     }
 
     // Preprocess packets (convert bytes to flits)
@@ -273,6 +277,8 @@ double AnalyticalModel::calculate_message_latency(int src, int dst, int size, bo
     // Total packet latency: head + body term
     double T_packet = n_routers * (t_head_hop + t_link + queuing_delay) +
                       (n_flits - 1) * std::max(t_body_hop, t_link);
+    //debug
+    *_output_file << "Calculated latency from " << src << " to " << dst << " for size " << size << " (" << n_flits << " flits, " << n_routers << " hops): " << T_packet << std::endl;
 
     return T_packet;
 }
@@ -288,37 +294,20 @@ int AnalyticalModel::calculate_num_flits(int size_bytes) const {
 }
 
 bool AnalyticalModel::check_dependencies_satisfied(const AnalyticalPacket* packet, int node) const {
-    if (packet->dep.empty()) {
-        return true;  // No dependencies
-    }
-
-    // Check if all dependencies are satisfied
-    for (int dep_id : packet->dep) {
-        bool found = false;
-
-        // Search in executed packets at this node
-        for (const auto& executed : _executed[node]) {
-            if (std::get<0>(executed) == dep_id) {
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            return false;  // Dependency not satisfied
-        }
-    }
-
-    return true;  // All dependencies satisfied
+    return check_dependencies_helper(packet->dep, node);
 }
 
 bool AnalyticalModel::check_dependencies_satisfied(const AnalyticalWorkload* workload, int node) const {
-    if (workload->dep.empty()) {
+    return check_dependencies_helper(workload->dep, node);
+}
+
+bool AnalyticalModel::check_dependencies_helper(const std::vector<int>& deps, int node) const {
+    if (deps.empty()) {
         return true;  // No dependencies
     }
 
     // Check if all dependencies are satisfied
-    for (int dep_id : workload->dep) {
+    for (int dep_id : deps) {
         bool found = false;
 
         // Search in executed packets/workloads at this node
@@ -357,6 +346,7 @@ double AnalyticalModel::get_dependency_completion_time(const std::vector<int>& d
 }
 
 void AnalyticalModel::preprocess_packets() {
+    // Only preprocess original packets from JSON - generated packets already have size in flits
     for (auto& packet : _packets) {
         packet.size_flits = calculate_num_flits(packet.size);
     }
@@ -370,10 +360,18 @@ int AnalyticalModel::run_simulation() {
     // Initialize waiting queues
     for (const auto& packet : _packets) {
         _waiting_packets[packet.src].push_back(&packet);
+
+        // Log packet insertion
+        *_output_file << "Packet " << packet.id << " with size " << packet.size_flits
+                    << " inserted in queue at node " << packet.src << std::endl;
     }
 
     for (const auto& workload : _workloads) {
         _waiting_workloads[workload.pe].push_back(&workload);
+
+        // Log workload insertion
+        *_output_file << "Workload " << workload.id << " with size " << workload.size
+                    << " inserted in queue at node " << workload.pe << std::endl;
     }
 
     // Main simulation loop
@@ -383,6 +381,7 @@ int AnalyticalModel::run_simulation() {
         // Process packets and workloads
         inject_ready_packets();
         process_workloads();
+        process_generated_packets();
 
         // Check if any packets are still waiting or being processed
         for (int node = 0; node < _nodes; node++) {
@@ -407,61 +406,115 @@ int AnalyticalModel::run_simulation() {
 }
 
 void AnalyticalModel::inject_ready_packets() {
+    bool any_local_processing = false;
+    double next_time = _current_time; // Track the next time we should advance to
+
+    // Process all packets that are ready at the current time simultaneously
     for (int node = 0; node < _nodes; node++) {
         auto& waiting = _waiting_packets[node];
 
-        for (auto it = waiting.begin(); it != waiting.end();) {
-            const AnalyticalPacket* packet = *it;
+        if (!waiting.empty()) {
+            const AnalyticalPacket* packet = waiting.front();
 
             if (check_dependencies_satisfied(packet, node)) {
-                // Dependencies satisfied, inject packet
+                // Dependencies satisfied, check if ready at current time
                 double dep_time = get_dependency_completion_time(packet->dep, node);
                 double injection_time = std::max(_current_time, dep_time);
-                double latency = calculate_message_latency(packet->src, packet->dst, packet->size);
-                double completion_time = injection_time + latency;
 
-                // Log injection
-                if (_logger) {
-                    _logger->log_event(injection_time, "INJECT", packet->id, packet->src,
-                                     "Packet injected to destination " + std::to_string(packet->dst));
+                // Only process if ready at current time
+                if (injection_time <= _current_time) {
+                    // Handle local packets (src == dst) separately
+                    if (packet->src == packet->dst) {
+                        // Convert packet type for local processing (like BookSim2)
+                        commType processed_type = packet->type;
+                        if (packet->type == WRITE_REQ) processed_type = WRITE;
+                        else if (packet->type == READ_REQ) processed_type = READ;
+
+                        *_output_file << " --( No communication )--  Packet with ID:" << packet->id
+                                    << " and type " << static_cast<int>(packet->type)
+                                    << " at node " << packet->src << " has been processed at time "
+                                    << static_cast<int>(_current_time) << std::endl;
+
+                        // Mark packet as executed locally with converted type (no network latency)
+                        _executed[packet->dst].insert(std::make_tuple(packet->id, processed_type, _current_time));
+
+                        // Track that we had local processing
+                        any_local_processing = true;
+
+                        // Remove from waiting queue
+                        waiting.pop_front();
+
+                        // Don't generate handshake packets for local communications
+                        continue;
+                    }
+
+                    // Handle network packets (src != dst)
+                    double latency = calculate_message_latency(packet->src, packet->dst, packet->size);
+                    double completion_time = _current_time + latency;
+
+                    *_output_file << "Packet with ID:" << packet->id << " and type " << static_cast<int>(packet->type)
+                                << " at node " << packet->src << " has been injected at time "
+                                << static_cast<int>(_current_time) << std::endl;
+
+                    // Log arrival at destination
+                    *_output_file << " Bulk packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                    *_output_file << "Processing time: " << packet->pt_required << std::endl;
+
+                    // Log injection
+                    if (_logger) {
+                        _logger->log_event(_current_time, "INJECT", packet->id, packet->src,
+                                        "Packet injected to destination " + std::to_string(packet->dst));
+                    }
+
+                    // Log completion at destination
+                    if (_logger) {
+                        _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
+                                        "Packet completed with latency " + std::to_string(latency));
+                    }
+
+                    // Mark packet as executed at destination
+                    _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, completion_time));
+
+                    // Generate handshake packets based on received packet type (only for network packets)
+                    if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
+                        generate_handshake_packets(packet);
+                    } else if (packet->type == READ || packet->type == WRITE) {
+                        generate_reply_packet(packet);
+                    }
+
+                    // Track future completion time
+                    next_time = std::max(next_time, completion_time);
+
+                    // Remove from waiting queue
+                    waiting.pop_front();
                 }
-
-                // Log completion at destination
-                if (_logger) {
-                    _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
-                                     "Packet completed with latency " + std::to_string(latency));
-                }
-
-                // Mark packet as executed at destination
-                _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, completion_time));
-
-                // Generate handshake packets based on received packet type
-                if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
-                    generate_handshake_packets(packet);
-                } else if (packet->type == READ || packet->type == WRITE) {
-                    generate_reply_packet(packet);
-                }
-
-                // Update current time if necessary
-                _current_time = std::max(_current_time, completion_time);
-
-                // Remove from waiting queue
-                it = waiting.erase(it);
-            } else {
-                ++it;
             }
         }
+    }
+
+    // Update time only after processing all ready packets
+    // Add +1 cycle overhead if any local processing occurred (BookSim2 behavior)
+    if (any_local_processing) {
+        _current_time += 1;
+    } else {
+        _current_time = next_time;
     }
 }
 
 void AnalyticalModel::process_workloads() {
+    // First, complete any workloads that finished at current time
     for (int node = 0; node < _nodes; node++) {
-        // Check if NPU is free and there's a pending workload that completed
         if (_pending_workloads[node] != nullptr && _current_time >= _npu_free_time[node]) {
             const AnalyticalWorkload* completed_workload = _pending_workloads[node];
 
             // Mark workload as executed
             _executed[node].insert(std::make_tuple(completed_workload->id, 0, _current_time));
+
+            // Log workload completion in BookSim2 format
+            *_output_file << "Workload with ID:" << completed_workload->id << " at node " << node
+                        << " has been processed at time " << static_cast<int>(_current_time) << std::endl;
 
             // Log completion
             if (_logger) {
@@ -471,7 +524,10 @@ void AnalyticalModel::process_workloads() {
 
             _pending_workloads[node] = nullptr;
         }
+    }
 
+    // Then, start all workloads that can start at current time simultaneously
+    for (int node = 0; node < _nodes; node++) {
         // Try to start new workload if NPU is free
         if (_pending_workloads[node] == nullptr && !_waiting_workloads[node].empty()) {
             auto& waiting = _waiting_workloads[node];
@@ -480,27 +536,49 @@ void AnalyticalModel::process_workloads() {
                 const AnalyticalWorkload* workload = *it;
 
                 if (check_dependencies_satisfied(workload, node)) {
-                    // Dependencies satisfied, start processing
-                    double start_time = std::max(_current_time,
-                                            get_dependency_completion_time(workload->dep, node));
-                    double end_time = start_time + workload->cycles_required;
+                    // Check if ready at current time
+                    double dep_completion_time = get_dependency_completion_time(workload->dep, node);
+                    double start_time = std::max(_current_time, dep_completion_time);
 
-                    _npu_free_time[node] = end_time;
-                    _pending_workloads[node] = workload;
+                    // Only start if ready at current time
+                    if (start_time <= _current_time) {
+                        double end_time = _current_time + workload->cycles_required;
 
-                    // Log start
-                    if (_logger) {
-                        _logger->log_event(start_time, "WORKLOAD_START", workload->id, node,
-                                        "Started processing workload");
+                        _npu_free_time[node] = end_time;
+                        _pending_workloads[node] = workload;
+
+                        // Log workload start in BookSim2 format - all at same time
+                        *_output_file << "Workload with ID:" << workload->id << " at node " << node
+                                    << " has started processing at time " << static_cast<int>(_current_time) << std::endl;
+
+                        // Log start
+                        if (_logger) {
+                            _logger->log_event(_current_time, "WORKLOAD_START", workload->id, node,
+                                            "Started processing workload");
+                        }
+
+                        // Remove from waiting queue
+                        waiting.erase(it);
+                        break;
                     }
-
-                    // Remove from waiting queue
-                    waiting.erase(it);
-                    break;
                 }
             }
         }
     }
+}
+
+void AnalyticalModel::process_generated_packets() {
+    // Process any newly generated packets and add them to waiting queues
+    // This avoids pointer invalidation issues with vector reallocation
+
+    for (size_t i = _last_generated_processed; i < _generated_packets.size(); i++) {
+        const AnalyticalPacket& packet = _generated_packets[i];
+
+        // Add pointer to waiting queue
+        _waiting_packets[packet.src].push_back(&packet);
+    }
+
+    _last_generated_processed = _generated_packets.size();
 }
 
 void AnalyticalModel::advance_time() {
@@ -515,6 +593,109 @@ void AnalyticalModel::advance_time() {
     }
 
     _current_time = next_time;
+}
+
+void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* received_packet) {
+    // Based on restart/trafficmanager.cpp:905-925
+    // AUTOMATIC GENERATION OF READ_REQ AND WRITEs AFTER RECEIVED MESSAGES
+
+    if ((received_packet->type == WRITE_REQ || received_packet->type == READ_REQ)) {
+
+        int dest = received_packet->dst;
+        int src = received_packet->src;
+
+        // Create new packet based on handshake protocol
+        AnalyticalPacket new_packet;
+
+        new_packet.id = received_packet->rpid;  // Use request packet ID
+        new_packet.src = dest;  // Reverse direction: dst becomes src
+        new_packet.dst = src;   // src becomes dst
+        new_packet.size = received_packet->data_size;  // Size from data field
+        new_packet.cl = received_packet->cl;
+        new_packet.pt_required = received_packet->data_ptime_expected;
+        new_packet.rpid = received_packet->rpid;
+        new_packet.data_dep = received_packet->data_dep;
+        new_packet.auto_generated = true;
+
+        // Set dependencies
+        if (received_packet->type == READ_REQ) {
+            // READ_REQ -> WRITE packet from dst to src
+            new_packet.type = WRITE;
+            new_packet.dep.clear();
+            if (received_packet->data_dep != -1) {
+                new_packet.dep.push_back(received_packet->data_dep);
+            }
+
+            if (_logger) {
+                _logger->log_event(_current_time, "GENERATE_WRITE", new_packet.id, dest,
+                                "Generated WRITE packet in response to READ_REQ");
+            }
+        } else {
+            // WRITE_REQ -> READ_REQ packet from dst to src
+            new_packet.type = READ_REQ;
+            new_packet.dep.clear();  // No dependencies
+
+            if (_logger) {
+                _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
+                                "Generated READ_REQ packet in response to WRITE_REQ");
+            }
+        }
+
+        // Size already in flits for generated packets
+        new_packet.size_flits = new_packet.size;
+        _generated_packets.push_back(new_packet);
+        // Don't add to waiting queue immediately - let next iteration find it
+
+        *_output_file << "Generated " << commTypeToString(new_packet.type)
+                    << " (id: " << new_packet.id << ") packet at time: " << _current_time
+                    << " from node: " << dest << " to node: " << src << std::endl;
+    }
+}
+
+void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet) {
+    // Generate automatic reply packets (READ/WRITE -> READ_ACK/WRITE_ACK)
+
+    if (request_packet->type == READ || request_packet->type == WRITE) {
+        AnalyticalPacket reply_packet;
+
+        reply_packet.id = request_packet->rpid;  // Use request packet ID
+        reply_packet.src = request_packet->dst;  // Reply from destination
+        reply_packet.dst = request_packet->src;  // Reply to source
+        reply_packet.size = 1;  // Reply packets are typically small (1 flit)
+        reply_packet.cl = request_packet->cl;
+        reply_packet.pt_required = 0;  // Minimal processing for ACK
+        reply_packet.type = get_reply_type(request_packet->type);
+        reply_packet.rpid = request_packet->rpid;
+        reply_packet.auto_generated = true;
+        reply_packet.dep.clear();  // No dependencies for replies
+
+        // Size already in flits for generated packets
+        reply_packet.size_flits = reply_packet.size;
+        _generated_packets.push_back(reply_packet);
+        // Don't add to waiting queue immediately - let next iteration find it
+
+        if (_logger) {
+            _logger->log_event(_current_time, "GENERATE_REPLY", reply_packet.id, reply_packet.src,
+                            "Generated " + commTypeToString(reply_packet.type) + " reply");
+        }
+
+        *_output_file << "Generated " << commTypeToString(reply_packet.type)
+                    << " reply (id: " << reply_packet.id << ") at time: " << _current_time
+                    << " from node: " << reply_packet.src << " to node: " << reply_packet.dst << std::endl;
+    }
+}
+
+commType AnalyticalModel::get_reply_type(commType request_type) {
+    switch(request_type) {
+        case READ:
+        case READ_REQ:
+            return READ_ACK;
+        case WRITE:
+        case WRITE_REQ:
+            return WRITE_ACK;
+        default:
+            return ANY;  // No reply needed
+    }
 }
 
 void AnalyticalModel::print_statistics(std::ostream& out) const {
@@ -546,104 +727,5 @@ void AnalyticalModel::print_statistics(std::ostream& out) const {
 
     if (completed_packets > 0) {
         out << "Average packet latency: " << (total_latency / completed_packets) << " cycles" << std::endl;
-    }
-}
-
-void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* received_packet) {
-    // Based on restart/trafficmanager.cpp:905-925
-    // AUTOMATIC GENERATION OF READ_REQ AND WRITEs AFTER RECEIVED MESSAGES
-
-    if ((received_packet->type == WRITE_REQ || received_packet->type == READ_REQ)) {
-
-        int dest = received_packet->dst;
-        int src = received_packet->src;
-
-        // Create new packet based on handshake protocol
-        AnalyticalPacket* new_packet = new AnalyticalPacket();
-
-        new_packet->id = received_packet->rpid;  // Use request packet ID
-        new_packet->src = dest;  // Reverse direction: dst becomes src
-        new_packet->dst = src;   // src becomes dst
-        new_packet->size = received_packet->data_size;  // Size from data field
-        new_packet->cl = received_packet->cl;
-        new_packet->pt_required = received_packet->data_ptime_expected;
-        new_packet->rpid = received_packet->rpid;
-        new_packet->data_dep = received_packet->data_dep;
-        new_packet->auto_generated = true;
-
-        // Set dependencies
-        if (received_packet->type == READ_REQ) {
-            // READ_REQ -> WRITE packet from dst to src
-            new_packet->type = WRITE;
-            new_packet->dep.clear();
-            if (received_packet->data_dep != -1) {
-                new_packet->dep.push_back(received_packet->data_dep);
-            }
-
-            if (_logger) {
-                _logger->log_event(_current_time, "GENERATE_WRITE", new_packet->id, dest,
-                                "Generated WRITE packet in response to READ_REQ");
-            }
-        } else {
-            // WRITE_REQ -> READ_REQ packet from dst to src
-            new_packet->type = READ_REQ;
-            new_packet->dep.clear();  // No dependencies
-
-            if (_logger) {
-                _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet->id, dest,
-                                "Generated READ_REQ packet in response to WRITE_REQ");
-            }
-        }
-
-        // Add to waiting queue for injection
-        _waiting_packets[dest].push_back(new_packet);
-
-        *_output_file << "Generated " << commTypeToString(new_packet->type)
-                    << " (id: " << new_packet->id << ") packet at time: " << _current_time
-                    << " from node: " << dest << " to node: " << src << std::endl;
-    }
-}
-
-void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet) {
-    // Generate automatic reply packets (READ/WRITE -> READ_ACK/WRITE_ACK)
-
-    if (request_packet->type == READ || request_packet->type == WRITE) {
-        AnalyticalPacket* reply_packet = new AnalyticalPacket();
-
-        reply_packet->id = request_packet->rpid;  // Use request packet ID
-        reply_packet->src = request_packet->dst;  // Reply from destination
-        reply_packet->dst = request_packet->src;  // Reply to source
-        reply_packet->size = 1;  // Reply packets are typically small (1 flit)
-        reply_packet->cl = request_packet->cl;
-        reply_packet->pt_required = 0;  // Minimal processing for ACK
-        reply_packet->type = get_reply_type(request_packet->type);
-        reply_packet->rpid = request_packet->rpid;
-        reply_packet->auto_generated = true;
-        reply_packet->dep.clear();  // No dependencies for replies
-
-        // Add to waiting queue
-        _waiting_packets[reply_packet->src].push_back(reply_packet);
-
-        if (_logger) {
-            _logger->log_event(_current_time, "GENERATE_REPLY", reply_packet->id, reply_packet->src,
-                            "Generated " + commTypeToString(reply_packet->type) + " reply");
-        }
-
-        *_output_file << "Generated " << commTypeToString(reply_packet->type)
-                    << " reply (id: " << reply_packet->id << ") at time: " << _current_time
-                    << " from node: " << reply_packet->src << " to node: " << reply_packet->dst << std::endl;
-    }
-}
-
-commType AnalyticalModel::get_reply_type(commType request_type) {
-    switch(request_type) {
-        case READ:
-        case READ_REQ:
-            return READ_ACK;
-        case WRITE:
-        case WRITE_REQ:
-            return WRITE_ACK;
-        default:
-            return ANY;  // No reply needed
     }
 }
