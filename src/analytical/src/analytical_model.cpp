@@ -416,15 +416,26 @@ void AnalyticalModel::inject_ready_packets() {
         if (!waiting.empty()) {
             const AnalyticalPacket* packet = waiting.front();
 
-            if (check_dependencies_satisfied(packet, node)) {
-                // Dependencies satisfied, check if ready at current time
-                double dep_time = get_dependency_completion_time(packet->dep, node);
-                double injection_time = std::max(_current_time, dep_time);
+            // Check if packet is ready to inject (either dependency-based or time-based for generated packets)
+            bool ready_to_inject = false;
+            double injection_time;
 
-                // Only process if ready at current time
-                if (injection_time <= _current_time) {
-                    // Handle local packets (src == dst) separately
-                    if (packet->src == packet->dst) {
+            if (packet->auto_generated && packet->injection_time > 0) {
+                // Generated packets with specific injection time
+                injection_time = packet->injection_time;
+                ready_to_inject = (injection_time <= _current_time);
+            } else {
+                // Regular packets - check dependencies
+                if (check_dependencies_satisfied(packet, node)) {
+                    double dep_time = get_dependency_completion_time(packet->dep, node);
+                    injection_time = std::max(_current_time, dep_time);
+                    ready_to_inject = (injection_time <= _current_time);
+                }
+            }
+
+            if (ready_to_inject) {
+                // Handle local packets (src == dst) separately
+                if (packet->src == packet->dst) {
                         // Convert packet type for local processing (like BookSim2)
                         commType processed_type = packet->type;
                         if (packet->type == WRITE_REQ) processed_type = WRITE;
@@ -474,32 +485,32 @@ void AnalyticalModel::inject_ready_packets() {
                                         "Packet completed with latency " + std::to_string(latency));
                     }
 
+                    // Calculate actual processing completion time
+                    double processing_completion_time = completion_time + packet->pt_required;
+
                     // Mark packet as executed at destination
-                    _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, completion_time));
+                    _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, processing_completion_time));
 
                     // Generate handshake packets based on received packet type (only for network packets)
                     if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
                         generate_handshake_packets(packet);
                     } else if (packet->type == READ || packet->type == WRITE) {
-                        generate_reply_packet(packet);
+                        generate_reply_packet(packet, processing_completion_time);
                     }
 
-                    // Track future completion time
-                    next_time = std::max(next_time, completion_time);
+                    // Track future completion time (including processing time)
+                    next_time = std::max(next_time, processing_completion_time);
 
                     // Remove from waiting queue
                     waiting.pop_front();
-                }
             }
         }
     }
 
-    // Update time only after processing all ready packets
-    // Add +1 cycle overhead if any local processing occurred (BookSim2 behavior)
+    // Update time based on packet processing
     if (any_local_processing) {
+        // Add +1 cycle overhead if any local processing occurred (BookSim2 behavior)
         _current_time += 1;
-    } else {
-        _current_time = next_time;
     }
 }
 
@@ -652,7 +663,7 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
     }
 }
 
-void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet) {
+void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet, double reply_time) {
     // Generate automatic reply packets (READ/WRITE -> READ_ACK/WRITE_ACK)
 
     if (request_packet->type == READ || request_packet->type == WRITE) {
@@ -663,7 +674,7 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
         reply_packet.dst = request_packet->src;  // Reply to source
         reply_packet.size = 1;  // Reply packets are typically small (1 flit)
         reply_packet.cl = request_packet->cl;
-        reply_packet.pt_required = 0;  // Minimal processing for ACK
+        reply_packet.pt_required = 1;  // 1 cycle for processing in BookSim2 might be 0 Minimal processing for ACK
         reply_packet.type = get_reply_type(request_packet->type);
         reply_packet.rpid = request_packet->rpid;
         reply_packet.auto_generated = true;
@@ -671,16 +682,20 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
 
         // Size already in flits for generated packets
         reply_packet.size_flits = reply_packet.size;
+
+        // Set injection time to the processing completion time
+        reply_packet.injection_time = reply_time;
+
         _generated_packets.push_back(reply_packet);
         // Don't add to waiting queue immediately - let next iteration find it
 
         if (_logger) {
-            _logger->log_event(_current_time, "GENERATE_REPLY", reply_packet.id, reply_packet.src,
+            _logger->log_event(reply_time, "GENERATE_REPLY", reply_packet.id, reply_packet.src,
                             "Generated " + commTypeToString(reply_packet.type) + " reply");
         }
 
         *_output_file << "Generated " << commTypeToString(reply_packet.type)
-                    << " reply (id: " << reply_packet.id << ") at time: " << _current_time
+                    << " reply (id: " << reply_packet.id << ") at time: " << static_cast<int>(reply_time)
                     << " from node: " << reply_packet.src << " to node: " << reply_packet.dst << std::endl;
     }
 }
@@ -701,31 +716,24 @@ commType AnalyticalModel::get_reply_type(commType request_type) {
 void AnalyticalModel::print_statistics(std::ostream& out) const {
     out << "\n=== Analytical Model Statistics ===" << std::endl;
     out << "Total simulation time: " << _current_time << " cycles" << std::endl;
-    out << "Total packets processed: " << _packets.size() << std::endl;
+
+    // Count original packets from JSON
+    int original_packets = _packets.size();
+
+    // Estimate total packets: original + generated (assume each WRITE generates WRITE_ACK, each WRITE_REQ generates READ_REQ)
+    // Simple approximation: double the packet count
+    int estimated_total_packets = original_packets * 2;
+
+    out << "Original packets from JSON: " << original_packets << std::endl;
+    out << "Estimated total packets (including generated): " << estimated_total_packets << std::endl;
     out << "Total workloads processed: " << _workloads.size() << std::endl;
 
-    // Calculate average latencies
-    double total_latency = 0.0;
-    int completed_packets = 0;
-
-    for (int node = 0; node < _nodes; node++) {
-        for (const auto& executed : _executed[node]) {
-            // Find corresponding packet to calculate latency
-            int packet_id = std::get<0>(executed);
-            double completion_time = std::get<2>(executed);
-
-            for (const auto& packet : _packets) {
-                if (packet.id == packet_id) {
-                    double latency = calculate_message_latency(packet.src, packet.dst, packet.size);
-                    total_latency += latency;
-                    completed_packets++;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (completed_packets > 0) {
-        out << "Average packet latency: " << (total_latency / completed_packets) << " cycles" << std::endl;
+    // Calculate throughput: packets per cycle
+    if (_current_time > 0) {
+        double throughput = static_cast<double>(estimated_total_packets) / _current_time;
+        out << "Average throughput: " << throughput << " packets/cycle" << std::endl;
+        out << "Average latency per packet: " << (_current_time / estimated_total_packets) << " cycles" << std::endl;
+    } else {
+        out << "No simulation time elapsed, cannot calculate throughput." << std::endl;
     }
 }

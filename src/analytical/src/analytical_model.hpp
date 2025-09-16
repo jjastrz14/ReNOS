@@ -184,7 +184,7 @@ public:
 
     // Handshake protocol methods
     void generate_handshake_packets(const AnalyticalPacket* received_packet);
-    void generate_reply_packet(const AnalyticalPacket* request_packet);
+    void generate_reply_packet(const AnalyticalPacket* request_packet, double reply_time);
     commType get_reply_type(commType request_type);
 
     // Results and statistics
