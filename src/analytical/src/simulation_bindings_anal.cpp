@@ -114,6 +114,7 @@ PYBIND11_MODULE(analytical_simulator, m) {
         .def_readwrite("size", &AnalyticalWorkload::size);
 
     // AnalyticalModel class
+    /*
     py::class_<AnalyticalModel>(m, "AnalyticalModel")
         .def(py::init<>())
         .def("configure", &AnalyticalModel::configure,
@@ -152,7 +153,8 @@ PYBIND11_MODULE(analytical_simulator, m) {
                 }
             }
         }, "Set output file for simulation messages", py::arg("filename"));
-
+    */
+   
     // High-level simulation wrapper function
     m.def("simulate_analytical", &SimulateAnalytical,
           "Run analytical simulation with config file and output file",

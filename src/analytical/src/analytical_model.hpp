@@ -153,6 +153,12 @@ private:
     // Processing element timers
     std::vector<double> _npu_free_time;  // when each NPU becomes free
 
+    // Reply packet completion times
+    std::vector<double> _pending_reply_completions;  // completion times of in-flight reply packets
+
+    // Debug flag
+    bool _debug_output;  // enable/disable verbose debug output
+
 public:
     AnalyticalModel();
     ~AnalyticalModel();
@@ -166,7 +172,7 @@ public:
     int calculate_hop_distance(int src, int dst) const;
 
     // Latency calculations
-    double calculate_message_latency(int src, int dst, int size, bool is_reply = false) const;
+    double calculate_message_latency(int src, int dst, int size_flits) const;
     int calculate_num_flits(int size_bytes) const;
 
     // Dependency management
@@ -183,7 +189,7 @@ public:
     void advance_time();
 
     // Handshake protocol methods
-    void generate_handshake_packets(const AnalyticalPacket* received_packet);
+    void generate_handshake_packets(const AnalyticalPacket* received_packet, double arrival_time);
     void generate_reply_packet(const AnalyticalPacket* request_packet, double reply_time);
     commType get_reply_type(commType request_type);
 
@@ -194,7 +200,7 @@ public:
 
     // Utility functions
     void preprocess_packets();  // Convert bytes to flits
-    void print_statistics(std::ostream& out) const;
+    void print_statistics(std::ostream& out, double final_time = -1) const;
 
 private:
     // Helper functions

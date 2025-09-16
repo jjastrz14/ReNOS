@@ -86,7 +86,7 @@ void AnalyticalLogger::clear() {
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 AnalyticalModel::AnalyticalModel()
-    : _current_time(0.0), _nodes(0), _logger(nullptr), _output_file(&std::cout), _last_generated_processed(0) {
+    : _current_time(0.0), _nodes(0), _logger(nullptr), _output_file(&std::cout), _last_generated_processed(0), _debug_output(false) {
     _logger = new AnalyticalLogger();
 }
 
@@ -254,12 +254,12 @@ int AnalyticalModel::calculate_hop_distance(int src, int dst) const {
     return std::abs(src - dst);
 }
 
-double AnalyticalModel::calculate_message_latency(int src, int dst, int size, bool is_reply) const {
+double AnalyticalModel::calculate_message_latency(int src, int dst, int size_flits) const {
     // Number of hops
     int n_routers = calculate_hop_distance(src, dst);
 
-    // Calculate number of flits
-    int n_flits = is_reply ? 1 : calculate_num_flits(size);
+    // Use the already calculated number of flits
+    int n_flits = size_flits;
 
     // Link traversal time (assumed 1 cycle)
     int t_link = 1;
@@ -278,7 +278,7 @@ double AnalyticalModel::calculate_message_latency(int src, int dst, int size, bo
     double T_packet = n_routers * (t_head_hop + t_link + queuing_delay) +
                       (n_flits - 1) * std::max(t_body_hop, t_link);
     //debug
-    *_output_file << "Calculated latency from " << src << " to " << dst << " for size " << size << " (" << n_flits << " flits, " << n_routers << " hops): " << T_packet << std::endl;
+    //*_output_file << "Calculated latency from " << src << " to " << dst << " for size " << size << " (" << n_flits << " flits, " << n_routers << " hops): " << T_packet << std::endl;
 
     return T_packet;
 }
@@ -298,7 +298,30 @@ bool AnalyticalModel::check_dependencies_satisfied(const AnalyticalPacket* packe
 }
 
 bool AnalyticalModel::check_dependencies_satisfied(const AnalyticalWorkload* workload, int node) const {
-    return check_dependencies_helper(workload->dep, node);
+    // For COMP_OP workloads, dependencies should only be satisfied by WRITE (type 6) packets,
+    // not WRITE_REQ (type 2) packets. This ensures handshake completes before computation starts.
+    if (workload->dep.empty()) {
+        return true;  // No dependencies
+    }
+
+    // Check if all dependencies are satisfied by WRITE packets (bulk data transfer complete)
+    for (int dep_id : workload->dep) {
+        bool found = false;
+
+        // Search for executed packets at this node with matching ID and type = WRITE (6)
+        for (const auto& executed : _executed[node]) {
+            if (std::get<0>(executed) == dep_id && std::get<1>(executed) == WRITE) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            return false;  // Dependency not satisfied (no WRITE packet with this ID)
+        }
+    }
+
+    return true;  // All dependencies satisfied by WRITE packets
 }
 
 bool AnalyticalModel::check_dependencies_helper(const std::vector<int>& deps, int node) const {
@@ -357,6 +380,10 @@ void AnalyticalModel::preprocess_packets() {
 int AnalyticalModel::run_simulation() {
     *_output_file << "Starting analytical simulation..." << std::endl;
 
+    // Reserve space for generated packets to prevent vector reallocation and pointer invalidation
+    // Estimate: each original packet might generate 2-3 additional packets (handshake + reply)
+    _generated_packets.reserve(_packets.size() * 5);
+
     // Initialize waiting queues
     for (const auto& packet : _packets) {
         _waiting_packets[packet.src].push_back(&packet);
@@ -375,8 +402,15 @@ int AnalyticalModel::run_simulation() {
     }
 
     // Main simulation loop
+    //int loop_counter = 0;
     while (true) {
         bool activity = false;
+        //loop_counter++;
+
+        //if (loop_counter > 10000) {
+        //    *_output_file << "ERROR: Simulation loop exceeded 1000 iterations, breaking to prevent infinite loop" << std::endl;
+        //    break;
+        //}
 
         // Process packets and workloads
         inject_ready_packets();
@@ -385,9 +419,23 @@ int AnalyticalModel::run_simulation() {
 
         // Check if any packets are still waiting or being processed
         for (int node = 0; node < _nodes; node++) {
-            if (!_waiting_packets[node].empty() || !_waiting_workloads[node].empty() ||
-                _pending_workloads[node] != nullptr) {
+            if (!_waiting_packets[node].empty()) {
                 activity = true;
+                if (_debug_output) {
+                    *_output_file << "Activity detected: node " << node << " has " << _waiting_packets[node].size() << " waiting packets" << std::endl;
+                    for (const auto* packet : _waiting_packets[node]) {
+                        *_output_file << "  Packet " << packet->id << " type " << static_cast<int>(packet->type)
+                                    << " auto_generated=" << packet->auto_generated
+                                    << " injection_time=" << packet->injection_time << std::endl;
+                    }
+                }
+                break;
+            }
+            if (!_waiting_workloads[node].empty() || _pending_workloads[node] != nullptr) {
+                activity = true;
+                if (_debug_output) {
+                    *_output_file << "Activity detected: node " << node << " has workload activity" << std::endl;
+                }
                 break;
             }
         }
@@ -399,10 +447,17 @@ int AnalyticalModel::run_simulation() {
         advance_time();
     }
 
-    *_output_file << "Analytical simulation completed at time: " << _current_time << std::endl;
-    print_statistics(*_output_file);
+    // Calculate final simulation time including pending reply packet completions
+    double final_time = _current_time;
+    if (!_pending_reply_completions.empty()) {
+        double max_reply_time = *std::max_element(_pending_reply_completions.begin(), _pending_reply_completions.end());
+        final_time = std::max(final_time, max_reply_time);
+    }
 
-    return static_cast<int>(_current_time);
+    *_output_file << "Analytical simulation completed at time: " << final_time << std::endl;
+    print_statistics(*_output_file, final_time);
+
+    return static_cast<int>(final_time);
 }
 
 void AnalyticalModel::inject_ready_packets() {
@@ -413,8 +468,10 @@ void AnalyticalModel::inject_ready_packets() {
     for (int node = 0; node < _nodes; node++) {
         auto& waiting = _waiting_packets[node];
 
-        if (!waiting.empty()) {
-            const AnalyticalPacket* packet = waiting.front();
+        // Process all ready packets in the queue, not just the front one
+        auto it = waiting.begin();
+        while (it != waiting.end()) {
+            const AnalyticalPacket* packet = *it;
 
             // Check if packet is ready to inject (either dependency-based or time-based for generated packets)
             bool ready_to_inject = false;
@@ -452,26 +509,54 @@ void AnalyticalModel::inject_ready_packets() {
                         // Track that we had local processing
                         any_local_processing = true;
 
-                        // Remove from waiting queue
-                        waiting.pop_front();
+                        // Remove from waiting queue and advance iterator
+                        it = waiting.erase(it);
 
                         // Don't generate handshake packets for local communications
                         continue;
                     }
 
                     // Handle network packets (src != dst)
-                    double latency = calculate_message_latency(packet->src, packet->dst, packet->size);
+                    double latency = calculate_message_latency(packet->src, packet->dst, packet->size_flits);
                     double completion_time = _current_time + latency;
 
                     *_output_file << "Packet with ID:" << packet->id << " and type " << static_cast<int>(packet->type)
                                 << " at node " << packet->src << " has been injected at time "
                                 << static_cast<int>(_current_time) << std::endl;
 
-                    // Log arrival at destination
-                    *_output_file << " Bulk packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
-                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
-                                << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
-                    *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                    if (packet->type == WRITE) {
+                        // Log arrival at destination
+                        *_output_file << " Bulk packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                    }
+                    else if (packet->type == READ_REQ) {
+                        // Log arrival at destination
+                        *_output_file << " READ_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                    }
+                    else if (packet->type == WRITE_REQ) {
+                        // Log arrival at destination
+                        *_output_file << " WRITE_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                    }
+                    else if (packet->type == WRITE_ACK) {
+                        // Log arrival at destination
+                        *_output_file << " WRITE_ACK packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                    }
+                    else {
+                        // Unknown packet type
+                        *_output_file << "Packet with ID:" << packet->id << " has unknown type "
+                                    << static_cast<int>(packet->type) << " at node " << packet->src << std::endl;
+                    }
 
                     // Log injection
                     if (_logger) {
@@ -489,11 +574,13 @@ void AnalyticalModel::inject_ready_packets() {
                     double processing_completion_time = completion_time + packet->pt_required;
 
                     // Mark packet as executed at destination
+                    // All packets get marked as executed for tracking, but dependency satisfaction
+                    // is determined by the dependency checking logic
                     _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, processing_completion_time));
 
                     // Generate handshake packets based on received packet type (only for network packets)
                     if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
-                        generate_handshake_packets(packet);
+                        generate_handshake_packets(packet, completion_time);
                     } else if (packet->type == READ || packet->type == WRITE) {
                         generate_reply_packet(packet, processing_completion_time);
                     }
@@ -501,8 +588,11 @@ void AnalyticalModel::inject_ready_packets() {
                     // Track future completion time (including processing time)
                     next_time = std::max(next_time, processing_completion_time);
 
-                    // Remove from waiting queue
-                    waiting.pop_front();
+                    // Remove from waiting queue and advance iterator
+                    it = waiting.erase(it);
+            } else {
+                // Packet not ready, move to next packet
+                ++it;
             }
         }
     }
@@ -585,8 +675,19 @@ void AnalyticalModel::process_generated_packets() {
     for (size_t i = _last_generated_processed; i < _generated_packets.size(); i++) {
         const AnalyticalPacket& packet = _generated_packets[i];
 
-        // Add pointer to waiting queue
+        // Add reply packets (READ_ACK/WRITE_ACK) to the front of the queue since they have no dependencies
+        // and should be processed with higher priority
+        //if (packet.type == READ_ACK || packet.type == WRITE_ACK) {
         _waiting_packets[packet.src].push_back(&packet);
+        if (_debug_output) {
+            *_output_file << "Added generated packet " << packet.id << " (type " << static_cast<int>(packet.type)
+                        << ") to waiting queue at node " << packet.src
+                        << " with injection_time " << packet.injection_time << std::endl;
+        }
+        //} else {
+            // Regular generated packets (WRITE from READ_REQ, READ_REQ from WRITE_REQ) go to the back
+            //_waiting_packets[packet.src].push_back(&packet);
+        //}
     }
 
     _last_generated_processed = _generated_packets.size();
@@ -595,73 +696,103 @@ void AnalyticalModel::process_generated_packets() {
 void AnalyticalModel::advance_time() {
     // Find next event time
     double next_time = _current_time + 1.0;  // Default advance
+    if (_debug_output) {
+        *_output_file << "advance_time: current_time=" << _current_time << ", initial next_time=" << next_time << std::endl;
+    }
 
     // Check for NPU completion times
     for (int node = 0; node < _nodes; node++) {
         if (_pending_workloads[node] != nullptr && _npu_free_time[node] > _current_time) {
             next_time = std::min(next_time, _npu_free_time[node]);
+            if (_debug_output) {
+                *_output_file << "  NPU completion at node " << node << " time " << _npu_free_time[node] << ", next_time=" << next_time << std::endl;
+            }
+        }
+
+        // Check for generated packet injection times
+        for (const auto* packet : _waiting_packets[node]) {
+            if (packet->auto_generated && packet->injection_time > _current_time) {
+                next_time = std::min(next_time, packet->injection_time);
+                if (_debug_output) {
+                    *_output_file << "  Generated packet " << packet->id << " at node " << node << " injection_time " << packet->injection_time << ", next_time=" << next_time << std::endl;
+                }
+            }
         }
     }
 
+    if (_debug_output) {
+        *_output_file << "advance_time: advancing from " << _current_time << " to " << next_time << std::endl;
+    }
     _current_time = next_time;
 }
 
-void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* received_packet) {
+// this function needs some fixes and improvements!
+void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* received_packet, double arrival_time) {
     // Based on restart/trafficmanager.cpp:905-925
     // AUTOMATIC GENERATION OF READ_REQ AND WRITEs AFTER RECEIVED MESSAGES
 
-    if ((received_packet->type == WRITE_REQ || received_packet->type == READ_REQ)) {
+    int dest = received_packet->dst;
+    int src = received_packet->src;
 
-        int dest = received_packet->dst;
-        int src = received_packet->src;
+    // Create new packet based on handshake protocol
+    AnalyticalPacket new_packet;
 
-        // Create new packet based on handshake protocol
-        AnalyticalPacket new_packet;
+    new_packet.id = received_packet->rpid;  // Use request packet ID
+    new_packet.src = dest;  // Reverse direction: dst becomes src
+    new_packet.dst = src;   // src becomes dst
+    // Set size based on packet type - control packets are 1 byte, data packets use original size
+    if (received_packet->type == WRITE_REQ) {
+        // READ_REQ -> WRITE: use the original packet size for bulk data transfer
+        new_packet.size = received_packet->size;  // Use original packet size for bulk data
+    } else {
+        // WRITE_REQ -> READ_REQ: control packet
+        new_packet.size = 1;  // Will be overridden below
+    }
+    new_packet.cl = received_packet->cl;
+    new_packet.pt_required = received_packet->data_ptime_expected;
+    new_packet.rpid = received_packet->rpid;
+    new_packet.data_dep = received_packet->data_dep;
+    new_packet.auto_generated = true;
 
-        new_packet.id = received_packet->rpid;  // Use request packet ID
-        new_packet.src = dest;  // Reverse direction: dst becomes src
-        new_packet.dst = src;   // src becomes dst
-        new_packet.size = received_packet->data_size;  // Size from data field
-        new_packet.cl = received_packet->cl;
-        new_packet.pt_required = received_packet->data_ptime_expected;
-        new_packet.rpid = received_packet->rpid;
-        new_packet.data_dep = received_packet->data_dep;
-        new_packet.auto_generated = true;
-
-        // Set dependencies
-        if (received_packet->type == READ_REQ) {
-            // READ_REQ -> WRITE packet from dst to src
-            new_packet.type = WRITE;
-            new_packet.dep.clear();
-            if (received_packet->data_dep != -1) {
-                new_packet.dep.push_back(received_packet->data_dep);
-            }
-
-            if (_logger) {
-                _logger->log_event(_current_time, "GENERATE_WRITE", new_packet.id, dest,
-                                "Generated WRITE packet in response to READ_REQ");
-            }
-        } else {
-            // WRITE_REQ -> READ_REQ packet from dst to src
-            new_packet.type = READ_REQ;
-            new_packet.dep.clear();  // No dependencies
-
-            if (_logger) {
-                _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
-                                "Generated READ_REQ packet in response to WRITE_REQ");
-            }
+    // Set dependencies
+    if (received_packet->type == READ_REQ) {
+        // READ_REQ -> WRITE packet from dst to src
+        new_packet.type = WRITE;
+        // Size already in flits for generated packets
+        new_packet.size_flits = calculate_num_flits(new_packet.size);
+        new_packet.dep.clear();
+        if (received_packet->data_dep != -1) {
+            new_packet.dep.push_back(received_packet->data_dep);
         }
 
-        // Size already in flits for generated packets
-        new_packet.size_flits = new_packet.size;
-        _generated_packets.push_back(new_packet);
-        // Don't add to waiting queue immediately - let next iteration find it
+        if (_logger) {
+            _logger->log_event(_current_time, "GENERATE_WRITE", new_packet.id, dest,
+                            "Generated WRITE packet in response to READ_REQ");
+        }
+    } else {
+        // WRITE_REQ -> READ_REQ packet from dst to src
+        new_packet.type = READ_REQ;
+        new_packet.size = 1;  // READ_REQ packets are typically small (1 byte)
+        new_packet.size_flits = 1;  // 1 flit for control packets
+        new_packet.dep.clear();  // No dependencies
 
-        *_output_file << "Generated " << commTypeToString(new_packet.type)
-                    << " (id: " << new_packet.id << ") packet at time: " << _current_time
-                    << " from node: " << dest << " to node: " << src << std::endl;
+        if (_logger) {
+            _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
+                            "Generated READ_REQ packet in response to WRITE_REQ");
+        }
     }
+
+    // Set injection time to be 1 cycle after generation (BookSim2 behavior)
+    new_packet.injection_time = arrival_time + 1;
+
+    _generated_packets.push_back(new_packet);
+    // Don't add to waiting queue immediately - let next iteration find it
+
+    *_output_file << "Generated " << commTypeToString(new_packet.type)
+                << " (id: " << new_packet.id << ") packet at time: " << static_cast<int>(arrival_time)
+                << " from node: " << dest << " to node: " << src << std::endl;
 }
+
 
 void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet, double reply_time) {
     // Generate automatic reply packets (READ/WRITE -> READ_ACK/WRITE_ACK)
@@ -672,7 +803,8 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
         reply_packet.id = request_packet->rpid;  // Use request packet ID
         reply_packet.src = request_packet->dst;  // Reply from destination
         reply_packet.dst = request_packet->src;  // Reply to source
-        reply_packet.size = 1;  // Reply packets are typically small (1 flit)
+        reply_packet.size = 1;  // Reply packets are typically small (1 byte)
+        reply_packet.size_flits = 1;  // 1 flit for control packets
         reply_packet.cl = request_packet->cl;
         reply_packet.pt_required = 1;  // 1 cycle for processing in BookSim2 might be 0 Minimal processing for ACK
         reply_packet.type = get_reply_type(request_packet->type);
@@ -680,11 +812,16 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
         reply_packet.auto_generated = true;
         reply_packet.dep.clear();  // No dependencies for replies
 
-        // Size already in flits for generated packets
-        reply_packet.size_flits = reply_packet.size;
+        // Set injection time to be 1 cycle after generation (BookSim2 behavior)
+        reply_packet.injection_time = reply_time + 1;
 
-        // Set injection time to the processing completion time
-        reply_packet.injection_time = reply_time;
+        // Calculate when this reply packet will actually complete (injection + network latency + processing)
+        double reply_network_latency = calculate_message_latency(reply_packet.src, reply_packet.dst, reply_packet.size_flits);
+        double reply_completion_time = reply_packet.injection_time + reply_network_latency + reply_packet.pt_required;
+        reply_packet.completion_time = reply_completion_time;
+
+        // Track this completion time for final simulation time calculation
+        _pending_reply_completions.push_back(reply_completion_time);
 
         _generated_packets.push_back(reply_packet);
         // Don't add to waiting queue immediately - let next iteration find it
@@ -713,27 +850,30 @@ commType AnalyticalModel::get_reply_type(commType request_type) {
     }
 }
 
-void AnalyticalModel::print_statistics(std::ostream& out) const {
+void AnalyticalModel::print_statistics(std::ostream& out, double final_time) const {
+    // Use final_time if provided, otherwise fall back to _current_time
+    double time_to_use = (final_time > 0) ? final_time : _current_time;
+
     out << "\n=== Analytical Model Statistics ===" << std::endl;
-    out << "Total simulation time: " << _current_time << " cycles" << std::endl;
+    out << "Total simulation time: " << time_to_use << " cycles" << std::endl;
 
     // Count original packets from JSON
-    int original_packets = _packets.size();
+    //int original_packets = _packets.size();
 
     // Estimate total packets: original + generated (assume each WRITE generates WRITE_ACK, each WRITE_REQ generates READ_REQ)
     // Simple approximation: double the packet count
-    int estimated_total_packets = original_packets * 2;
+    //int estimated_total_packets = original_packets * 2;
 
-    out << "Original packets from JSON: " << original_packets << std::endl;
-    out << "Estimated total packets (including generated): " << estimated_total_packets << std::endl;
-    out << "Total workloads processed: " << _workloads.size() << std::endl;
+    //out << "Original packets from JSON: " << original_packets << std::endl;
+    //out << "Estimated total packets (including generated): " << estimated_total_packets << std::endl;
+    //out << "Total workloads processed: " << _workloads.size() << std::endl;
 
     // Calculate throughput: packets per cycle
-    if (_current_time > 0) {
-        double throughput = static_cast<double>(estimated_total_packets) / _current_time;
-        out << "Average throughput: " << throughput << " packets/cycle" << std::endl;
-        out << "Average latency per packet: " << (_current_time / estimated_total_packets) << " cycles" << std::endl;
-    } else {
-        out << "No simulation time elapsed, cannot calculate throughput." << std::endl;
-    }
+    //if (time_to_use > 0) {
+    //    double throughput = static_cast<double>(estimated_total_packets) / time_to_use;
+    //    out << "Average throughput: " << throughput << " packets/cycle" << std::endl;
+    //    out << "Average latency per packet: " << (time_to_use / estimated_total_packets) << " cycles" << std::endl;
+    //} else {
+        //out << "No simulation time elapsed, cannot calculate throughput." << std::endl;
+    //}
 }
