@@ -87,7 +87,8 @@ void AnalyticalLogger::clear() {
 
 AnalyticalModel::AnalyticalModel()
     : _current_time(0.0), _nodes(0), _logger(nullptr), _output_file(&std::cout), _last_generated_processed(0), _debug_output(false) {
-    _logger = new AnalyticalLogger();
+    // _logger = new AnalyticalLogger();  // Disable logger for now
+    _logger = nullptr;
 }
 
 AnalyticalModel::~AnalyticalModel() {
@@ -624,16 +625,16 @@ void AnalyticalModel::inject_ready_packets() {
                 }
 
                 // Log injection
-                if (_logger) {
-                    _logger->log_event(_current_time, "INJECT", packet->id, packet->src,
-                                    "Packet injected to destination " + std::to_string(packet->dst));
-                }
+                // if (_logger) {
+                //     _logger->log_event(_current_time, "INJECT", packet->id, packet->src,
+                //                     "Packet injected to destination " + std::to_string(packet->dst));
+                // }
 
                 // Log completion at destination
-                if (_logger) {
-                    _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
-                                    "Packet completed with latency " + std::to_string(latency));
-                }
+                // if (_logger) {
+                //     _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
+                //                     "Packet completed with latency " + std::to_string(latency));
+                // }
 
                 // Calculate actual processing completion time
                 int temp_pt_required = (packet->type == WRITE_REQ) ? 1 : packet->pt_required;
@@ -687,10 +688,10 @@ void AnalyticalModel::process_workloads() {
                         << " has been processed at time " << static_cast<int>(_current_time) << std::endl;
 
             // Log completion
-            if (_logger) {
-                _logger->log_event(_current_time, "WORKLOAD_COMPLETE", completed_workload->id, node,
-                                "Workload processing completed");
-            }
+            // if (_logger) {
+            //     _logger->log_event(_current_time, "WORKLOAD_COMPLETE", completed_workload->id, node,
+            //                     "Workload processing completed");
+            // }
 
             // Event-driven reordering: mark workload end event
             mark_workload_event(node);
@@ -729,10 +730,10 @@ void AnalyticalModel::process_workloads() {
                                 << " has started processing at time " << static_cast<int>(_current_time) << std::endl;
 
                     // Log start
-                    if (_logger) {
-                        _logger->log_event(_current_time, "WORKLOAD_START", workload->id, node,
-                                        "Started processing workload");
-                    }
+                    // if (_logger) {
+                    //     _logger->log_event(_current_time, "WORKLOAD_START", workload->id, node,
+                    //                     "Started processing workload");
+                    // }
 
                     // Event-driven reordering: mark workload start event
                     mark_workload_event(node);
@@ -830,10 +831,10 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
             new_packet.dep.push_back(received_packet->data_dep);
         }
 
-        if (_logger) {
-            _logger->log_event(_current_time, "GENERATE_WRITE", new_packet.id, dest,
-                            "Generated WRITE packet in response to READ_REQ");
-        }
+        //if (_logger) {
+        //    _logger->log_event(_current_time, "GENERATE_WRITE", new_packet.id, dest,
+        //                    "Generated WRITE packet in response to READ_REQ");
+        //}
     } else {
         // WRITE_REQ -> READ_REQ packet from dst to src
         new_packet.type = READ_REQ;
@@ -844,10 +845,10 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
         new_packet.bulk_data = received_packet->bulk_data;
         new_packet.bulk_pt_required = received_packet->bulk_pt_required;
 
-        if (_logger) {
-            _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
-                            "Generated READ_REQ packet in response to WRITE_REQ");
-        }
+        //if (_logger) {
+        //    _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
+        //                    "Generated READ_REQ packet in response to WRITE_REQ");
+        //}
     }
 
     // Set injection time to be 1 cycle after generation (BookSim2 behavior)
@@ -892,10 +893,10 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
         _generated_packets.push_back(reply_packet);
         // Don't add to waiting queue immediately - let next iteration find it
 
-        if (_logger) {
-            _logger->log_event(reply_time, "GENERATE_REPLY", reply_packet.id, reply_packet.src,
-                            "Generated " + commTypeToString(reply_packet.type) + " reply");
-        }
+        //if (_logger) {
+        //   _logger->log_event(reply_time, "GENERATE_REPLY", reply_packet.id, reply_packet.src,
+        //                    "Generated " + commTypeToString(reply_packet.type) + " reply");
+        //}
 
         *_output_file << "Generated " << commTypeToString(reply_packet.type)
                     << " reply (id: " << reply_packet.id << ") at time: " << static_cast<int>(reply_time)

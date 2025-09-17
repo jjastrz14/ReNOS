@@ -3,7 +3,7 @@
 File: simulator_stub.py
 Project: simopty
 File Created: Tuesday, 10th December 2024
-Author: Edoardo Cabiati (edoardo.cabiati@mail.polimi.it)
+Author: Jakub Jastrzebski, Edoardo Cabiati (jakubandrzej.jastrzebski@polimi.it)
 Under the supervision of: Politecnico di Milano
 ==================================================
 '''

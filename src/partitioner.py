@@ -25,18 +25,18 @@ from utils.partitioner_utils import *
 from utils.plotting_utils import *
 import mapper as ma
 import simulator_stub as ss
-import simulator_stub_analytical_model as ssam
+import analytical_simulator_stub as ssam
 from visualizer import plot_timeline
 from utils.ani_utils import visualize_simulation
 import time
 
 
 if __name__ == '__main__':
-    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
+    model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
 
     x_of_grid = 4
@@ -96,6 +96,7 @@ if __name__ == '__main__':
     mapper.mapping_to_json("../data/partitioner_data/mapping.json", file_to_append="./config_files/arch.json")
 
     # Measure Booksim2 simulation time
+    print("Booksim2 simulation...")
     stub = ss.SimulatorStub()
     start_time = time.time()
     result, logger = stub.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
@@ -103,7 +104,8 @@ if __name__ == '__main__':
     print(f"Booksim2 result: {result}")
 
     # Measure Analytical Model simulation time
-    stub_anal = ssam.SimulatorStubAnalyticalModel()
+    print("Analytical model simulation...")
+    stub_anal = ssam.AnalyticalSimulatorStub()
     start_time = time.time()
     result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
     analytical_time = time.time() - start_time
@@ -119,7 +121,7 @@ if __name__ == '__main__':
     time_ratio = booksim_time / analytical_time
     print(f"Time gain: {time_ratio:.4f}x")
 
-    visualise = True
+    visualise = False
     if visualise:
         plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
         # Visualize analytical model simulation

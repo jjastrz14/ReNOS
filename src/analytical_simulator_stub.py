@@ -56,11 +56,11 @@ def dangerwrap(func, *args):
 
     return q.get()
 
-def run_analytical_simulation(path_to_config_file):
+def run_analytical_simulation(path_to_config_file, output_file=""):
     """Run analytical simulation with the given config file"""
     if analytical_nocsim is None:
         raise RuntimeError("Analytical simulator module not available")
-    return analytical_nocsim.simulate_analytical(path_to_config_file, "")
+    return analytical_nocsim.simulate_analytical(path_to_config_file, output_file)
 
 
 class AnalyticalSimulatorStub:
@@ -105,11 +105,11 @@ class AnalyticalSimulatorStub:
             print("Running analytical simulation with configuration file: " + path_to_config_file)
 
         start = time.time()
-        # Run analytical simulation (much faster than BookSim2)
+        # Run analytical simulation
         if dwrap:
-            results, logger = dangerwrap(run_analytical_simulation, path_to_config_file)
+            results, logger = dangerwrap(run_analytical_simulation, path_to_config_file, "")
         else:
-            results, logger = run_analytical_simulation(path_to_config_file)
+            results, logger = run_analytical_simulation(path_to_config_file, "")
         end = time.time()
 
         if verbose:
@@ -143,7 +143,7 @@ class AnalyticalSimulatorStub:
             print("Note: Processor affinity is not applicable for analytical simulation.")
 
         start = time.time()
-        results, logger = run_analytical_simulation(path_to_config_file)
+        results, logger = run_analytical_simulation(path_to_config_file, "")
         end = time.time()
 
         if verbose:
@@ -184,7 +184,7 @@ class AnalyticalSimulatorStub:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for config_file in config_files:
-                futures.append(executor.submit(self.run_simulation, config_file, False, False))
+                futures.append(executor.submit(self.run_simulation, config_file, "", False, False))
             results_loggers = [future.result() for future in futures]  # Wait for all futures to complete
 
         end = time.time()

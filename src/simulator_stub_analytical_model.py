@@ -4,6 +4,10 @@ from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 import math
 
+"""
+Legacy analytical NoC simulator replacement to be deleted later
+"""
+    
 @dataclass
 class ArchConfig:
     """Architecture configuration parsed from JSON"""

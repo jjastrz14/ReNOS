@@ -15,18 +15,32 @@
 #include <sstream>
 #include <stdexcept>
 #include <sys/time.h>
+#include <pybind11/pybind11.h>
 
 std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
                                                      const std::string& output_file) {
+    // Static storage for model and logger to ensure they persist
+    static std::unique_ptr<AnalyticalModel> static_model;
+
     try {
+        // Release GIL like BookSim2 does
+        pybind11::gil_scoped_release release;
+
         // Create and configure the analytical model
-        auto model = CreateAnalyticalModel(config_file);
+        static_model = CreateAnalyticalModel(config_file);
 
         // Set up output stream
         std::ofstream file_stream;
+        std::ofstream null_stream;  // Create a null stream
         std::ostream* output_stream = &std::cout;
 
-        if (!output_file.empty() && output_file != "-") {
+        if (output_file == "") {
+            // No output - use null stream (like BookSim2's nullStream)
+            null_stream.setstate(std::ios_base::badbit);  // Make stream invalid to discard output
+            output_stream = &null_stream;
+        } else if (output_file == "-") {
+            output_stream = &std::cout;
+        } else {
             file_stream.open(output_file);
             if (!file_stream.is_open()) {
                 throw std::runtime_error("Cannot open output file: " + output_file);
@@ -34,14 +48,14 @@ std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_
             output_stream = &file_stream;
         }
 
-        model->set_output_file(output_stream);
+        static_model->set_output_file(output_stream);
 
         // Measure execution time
         struct timeval start_time, end_time;
         gettimeofday(&start_time, nullptr);
 
         // Run the simulation
-        int result = model->run_simulation();
+        int result = static_model->run_simulation();
 
         gettimeofday(&end_time, nullptr);
         double execution_time = ((double)(end_time.tv_sec) + (double)(end_time.tv_usec) / 1000000.0) -
@@ -49,8 +63,12 @@ std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_
 
         *output_stream << "Analytical simulation execution time: " << execution_time << " seconds" << std::endl;
 
-        // Return results
-        AnalyticalLogger* logger = model->get_logger();
+        // Re-acquire GIL like BookSim2 does
+        pybind11::gil_scoped_acquire acquire;
+
+        // Return the logger pointer directly (it's managed by the static model)
+        // AnalyticalLogger* logger = static_model->get_logger();
+        AnalyticalLogger* logger = nullptr;  // Disable logger for now
 
         return std::make_tuple(result, logger);
 
