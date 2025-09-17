@@ -131,13 +131,13 @@ class DirectoryManager:
         self.ga_dir = os.path.join(DATA_DIR, f"GA_{name_dir_to_use}_{self._shared_timestamp}")
         
         # Set CONFIG_DUMP_DIR and ACO_DIR based on algorithm
-        if input_algo == "ACO":
+        if input_algo == "ACO" or input_algo == "ACO_parallel":
             os.makedirs(self.aco_dir, exist_ok=True)
             print(f"Created ACO_DIR: {self.aco_dir}")
             self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_ACO_{name_dir_to_use}_{self._shared_timestamp}")
             self.log_file_path_aco = os.path.join(self.aco_dir, f"log_ACO_{self._shared_timestamp}.out")
             print(f"Log paths set - ACO: {self.log_file_path_aco}")
-        elif input_algo == "GA":
+        elif input_algo == "GA" or input_algo == "GA_parallel":
             os.makedirs(self.ga_dir, exist_ok=True)
             print(f"Created GA_DIR: {self.ga_dir}")
             self.config_dump_dir = os.path.join(DEFAULT_CONFIG_DUMP_DIR, f"dumps_GA_{name_dir_to_use}_{self._shared_timestamp}")

@@ -50,15 +50,15 @@ GLOBAL_EVENT_COLORS = {
 
 # Global color and alpha configuration for consistent plotting across all classes
 GLOBAL_EVENT_COLORS = {
-    'comp': ('#FF6347', 0.15),           # tomato - Computation
-    'recon': ('#2E8B57', 0.0),          # seagreen - Reconfiguration  
+    'comp': ('#FF6347', 0.9),           # tomato - Computation
+    'recon': ('#2E8B57', 0.9),          # seagreen - Reconfiguration  
     'traf_out': ('#6495ED', 0.7),       # cornflowerblue - Traffic PE out
-    'traf_in': ('#FFA500', 0.1),        # orange - Traffic PE in
-    'traf_between': ('#C0C0C0', 0.0),   # silver - Traffic NoC
-    'reply_out': ('#FFD700', 0.0),      # gold - Reply PE out
-    'reply_in': ('#40E0D0', 0.0),       # turquoise - Reply PE in
-    'process': ('#45B7D1', 0.0),        # existing process color
-    'local_process': ('#98D8C8', 0.0),  # existing local process color
+    'traf_in': ('#FFA500', 0.7),        # orange - Traffic PE in
+    'traf_between': ('#C0C0C0', 0.3),   # silver - Traffic NoC
+    'reply_out': ('#FFD700', 0.5),      # gold - Reply PE out
+    'reply_in': ('#40E0D0', 0.7),       # turquoise - Reply PE in
+    'process': ('#45B7D1', 0.8),        # existing process color
+    'local_process': ('#98D8C8', 0.9),  # existing local process color
 }
 
 def get_event_color_and_alpha(event_type):
@@ -550,7 +550,7 @@ def visualize_simulation(simulator, json_path, timeline_path=None, utilization_p
     
     return total_latency, viz
 
-def plot_timeline(json_path, timeline_path=None, utilization_path=None, verbose=True):
+def plot_timeline_analytical(json_path, timeline_path=None, utilization_path=None, verbose=True):
     """Convenience function to plot timeline from JSON path"""
     from simulator_stub_analytical_model import FastNoCSimulator
     

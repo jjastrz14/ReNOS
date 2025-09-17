@@ -83,7 +83,7 @@ set(analytical_SRC
 
 # Create analytical model library
 add_library(_analytical STATIC ${analytical_SRC})
-target_include_directories(_analytical PUBLIC src/analytical/src src/analytical/include ${nlohmann_json_INCLUDE_DIR})
+target_include_directories(_analytical PUBLIC src/analytical/src src/analytical/include ${nlohmann_json_INCLUDE_DIR} ${pybind11_INCLUDE_DIRS})
 
 # Define the main executables
 add_executable(run_restart src/restart/src/main.cpp)
@@ -95,6 +95,6 @@ pybind11_add_module(analytical_simulator src/analytical/src/simulation_bindings_
 
 # Link libraries
 target_link_libraries(run_restart PUBLIC _restart pybind11::module Python::Python m)
-target_link_libraries(run_analytical PUBLIC _analytical m)
+target_link_libraries(run_analytical PUBLIC _analytical pybind11::module Python::Python m)
 target_link_libraries(nocsim PUBLIC _restart pybind11::module Python::Python m)
 target_link_libraries(analytical_simulator PUBLIC _analytical pybind11::module Python::Python m)

@@ -1,13 +1,12 @@
 import simulator_stub as ss
-from simulator_stub_analytical_model import FastNoCSimulator
-from ani_utils import visualize_simulation, plot_timeline
-
+import analytical_simulator_stub as ssam
+from visualizer import plot_timeline
 """
 Utility functions for simulator comparison and analysis
 """
 
 def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, algorithm_name: str, 
-                                   timestamp: str, verbose: bool = True):
+                                    timestamp: str, verbose: bool = True):
     """
     Compare analytical model vs BookSim2 simulator and create visualizations
     
@@ -30,22 +29,22 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
     if verbose:
         print("Visualizing the best path...\n")
         # Visualize the best path
-        plot_timeline(json_path=best_solution_path, timeline_path=timeline_path, verbose=False)
+        plot_timeline(best_solution_path, timeline_path=timeline_path, verbose=False)
     else: 
         #run just NoC complex simulator and get the latency
         print("Running the NoC simulator on the best path found...\n")
     
     # Run analytical simulator
     print("Running analytical model...")
-    simulator = FastNoCSimulator()
-    total_latency, visualizer = visualize_simulation(simulator, best_solution_path, timeline_path=analytical_timeline_path, utilization_path=utilization_path)
+    stub_anal = ssam.AnalyticalSimulatorStub()
+    total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
     print(f"Analytical model result: {total_latency} cycles")
     results['analytical_latency'] = total_latency
     
     # Run BookSim2 simulator for comparison
     print("Running BookSim2 simulator for comparison...")
     stub = ss.SimulatorStub()
-    booksim_result, logger = stub.run_simulation(best_solution_path, dwrap=True)
+    booksim_result, logger = stub.run_simulation(best_solution_path, dwrap=False)
     print(f"BookSim2 result: {booksim_result} cycles")
     results['booksim_latency'] = booksim_result
     

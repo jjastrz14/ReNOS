@@ -258,10 +258,10 @@ void AnalyticalModel::configure(const std::string& config_file) {
     // Preprocess packets (convert bytes to flits)
     preprocess_packets();
 
-    *_output_file << "Analytical model configured with " << _packets.size()
-                << " packets and " << _workloads.size() << " workloads" << std::endl;
-    *_output_file << "Network: " << _arch.topology << " " << _arch.k << "^" << _arch.n
-                << " (" << _nodes << " nodes)" << std::endl;
+    //*_output_file << "Analytical model configured with " << _packets.size()
+    //            << " packets and " << _workloads.size() << " workloads" << std::endl;
+    //*_output_file << "Network: " << _arch.topology << " " << _arch.k << "^" << _arch.n
+    //            << " (" << _nodes << " nodes)" << std::endl;
 }
 
 int AnalyticalModel::calculate_hop_distance(int src, int dst) const {
@@ -429,7 +429,7 @@ void AnalyticalModel::preprocess_packets() {
         packet.size_flits = calculate_num_flits(packet.size);
     }
 
-    *_output_file << "Preprocessed " << _packets.size() << " packets (converted sizes to flits)" << std::endl;
+    //*_output_file << "Preprocessed " << _packets.size() << " packets (converted sizes to flits)" << std::endl;
 }
 
 int AnalyticalModel::run_simulation() {
@@ -992,6 +992,8 @@ void AnalyticalModel::mark_packet_injection_event(int node) {
         _node_needs_packet_reorder[n] = true;
         _node_needs_workload_reorder[n] = true;
     }
+    //_node_needs_packet_reorder[node] = true;
+    //_node_needs_workload_reorder[node] = true;
 }
 
 void AnalyticalModel::print_statistics(std::ostream& out, double final_time) const {

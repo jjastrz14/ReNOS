@@ -34,11 +34,10 @@ import time
 if __name__ == '__main__':
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
-    #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
+    model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
+    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
-
     x_of_grid = 4
     source = 0
     drain = 15
@@ -51,7 +50,7 @@ if __name__ == '__main__':
         # Explore all partitioning combinations
         spatial, output, input_split = search_space_split_factors(
             layer, 
-            factor=3,  # Max splitting factor
+            factor=4,  # Max splitting factor
             FLOP_threshold=3e6,
             size_of_grid = x_of_grid**2,
             return_best_valid=True,

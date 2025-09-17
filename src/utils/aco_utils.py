@@ -18,7 +18,7 @@ import numpy as np
 import random
 import time
 import simulator_stub as ss
-import simulator_stub_analytical_model as ssam
+import analytical_simulator_stub as ssam
 import mapper as mp
 from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE
 from utils.partitioner_utils import PE
@@ -137,7 +137,7 @@ class Ant:
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=self.ARCH_FILE)
         
         if self.analytical_model:
-            stub = ssam.SimulatorStubAnalyticalModel()
+            stub = ssam.AnalyticalSimulatorStub()
             result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
         else:
             stub = ss.SimulatorStub()

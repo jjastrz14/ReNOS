@@ -27,15 +27,12 @@ from utils.plotting_utils import *
 from utils.ga_utils import *
 from utils.partitioner_utils import *
 from utils.ani_utils import *
-from utils.simulator_utils import compare_simulators_and_visualize
+from utils.simulator_utils import *
 from graph import TaskGraph
 from visualizer import plot_timeline, plot_convergence
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
-from simulator_stub_analytical_model import FastNoCSimulator
-from visualiser_analytical_noc_model import visualize_simulation  
-
 from models import *
 
 
@@ -43,7 +40,7 @@ if __name__ == "__main__":
     
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Select optimization algorithm and name of the resulting directory.")
-    parser.add_argument("-algo", choices=["ACO", "GA"], required=True, help="Choose 'ACO' for Ant Colony Optimization or 'GA' for Genetic Algorithm.")
+    parser.add_argument("-algo", choices=["ACO", "GA", "ACO_parallel", "GA_parallel"], required=True, help="Choose 'ACO' for Ant Colony Optimization or 'GA' for Genetic Algorithm.")
     parser.add_argument("-name", type=str, default="_run_", required=True, help="Choose name of the resulting directory (default: '_run_').")
     args = parser.parse_args()
     
@@ -51,14 +48,14 @@ if __name__ == "__main__":
     initialize_globals(args.algo, args.name)
 
     # Set flags based on the argument
-    if args.algo == "ACO":
+    if args.algo == "ACO" or args.algo == "ACO_parallel":
         ACO = True
         GA = False
         # Redirect stdout to the Logger
         log_path = get_aco_log_path()
         sys.stdout = Logger(log_path)
         
-    elif args.algo == "GA":
+    elif args.algo == "GA" or args.algo == "GA_parallel":
         ACO = False
         GA = True
         # Redirect stdout to the Logger
@@ -74,7 +71,7 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    #model = LeNet4((28, 28, 1), verbose=True)
+    model = LeNet4((28, 28, 1), verbose=True)
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     # model = Resnet9s((32, 32, 3), verbose=True)
     # model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
@@ -83,7 +80,7 @@ if __name__ == "__main__":
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
-    model = ResNet_early_blocks((32, 32, 3), verbose=True)
+    #model = ResNet_early_blocks((32, 32, 3), verbose=True)
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
@@ -129,17 +126,21 @@ if __name__ == "__main__":
             n_ants = 10,
             rho = 0.05, #evaporation rate
             n_best = 5,
-            n_iterations = 1,
+            n_iterations = 10,
             alpha = 1.,
             beta = 1.2,
-            is_analytical = True, #use analytical model instead of cycle-accurate simulator
+            is_analytical = False, #use analytical model instead of cycle-accurate simulator
         )
         n_procs = 10
         
-        print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
-        #opt = op.AntColony( params, grid, task_graph, seed = None)
-        opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
-        
+        if args.algo == "ACO_parallel":
+            print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+            opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
+        else:
+            print(f"Creating the Ant Colony Optimization instance with ants: {params.n_ants} for {params.n_iterations} iterations.")
+            opt = op.AntColony( params, grid, task_graph, seed = None)
+
+
         shortest = opt.run(once_every=1, show_traces= False)
         print("The best path found is: ")
         print(shortest)
@@ -152,7 +153,7 @@ if __name__ == "__main__":
             output_dir=get_ACO_DIR(),
             algorithm_name="ACO",
             timestamp=get_timestamp(),
-            verbose=verbose
+            verbose=True
         )
             
         end = time.time()
@@ -171,7 +172,7 @@ if __name__ == "__main__":
         n_parents_mating= 10, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 1, #800,
+        n_generations = 10, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
@@ -179,10 +180,12 @@ if __name__ == "__main__":
         
         n_procs = 10
         
-        print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
-        
-        #opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
-        opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        if args.algo == "GA_parallel":
+            print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
+            opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
+        else:
+            print(f"Creating the Genetic Algorithm instance with, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
+            opt = op.GeneticAlgorithm(params, grid, task_graph, seed = None)
                 
         shortest = opt.run()
         #opt.ga_instance.plot_fitness()

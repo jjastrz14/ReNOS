@@ -20,7 +20,7 @@ import numpy as np
 import random
 from numpy.random import seed
 import simulator_stub as ss
-import simulator_stub_analytical_model as ssam
+import analytical_simulator_stub as ssam
 import mapper as ma
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -184,14 +184,14 @@ class AntColony(BaseOpt):
         mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", file_to_append=self.ARCH_FILE)
 
         # Run the simulation for normalization
-        #if self.analytical_model:
-            #import simulator_stub_analytical_model as ssam
-            #stub = ssam.SimulatorStubAnalyticalModel()
-            #result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json")
-        #else:
-        import simulator_stub as ss
-        stub = ss.SimulatorStub()
-        result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
+        if self.analytical_model:
+            import analytical_simulator_stub as ssam
+            stub = ssam.AnalyticalSimulatorStub()
+            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json")
+        else:
+            import simulator_stub as ss
+            stub = ss.SimulatorStub()
+            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
         
         print(f"Initial fitness norm result: {result_to_norm}")
         
@@ -520,7 +520,7 @@ class AntColony(BaseOpt):
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         if self.analytical_model: 
-            stub = ssam.SimulatorStubAnalyticalModel()
+            stub = ssam.AnalyticalSimulatorStub()
             result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
             #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
             return result, _
@@ -1006,7 +1006,7 @@ class GeneticAlgorithm(BaseOpt):
 
         # 3. run the simulation
         if self.analytical_model:
-            stub = ssam.SimulatorStubAnalyticalModel()
+            stub = ssam.AnalyticalSimulatorStub()
             result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json")
         else:
             stub = ss.SimulatorStub()
@@ -1155,7 +1155,7 @@ class ParallelGA(GeneticAlgorithm):
 
         # 3. run the simulation
         if self.analytical_model:
-            stub = ssam.SimulatorStubAnalyticalModel()
+            stub = ssam.AnalyticalSimulatorStub()
             result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
         else:
             stub = ss.SimulatorStub()

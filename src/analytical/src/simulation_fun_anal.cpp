@@ -17,6 +17,17 @@
 #include <sys/time.h>
 #include <pybind11/pybind11.h>
 
+// Null stream class that discards all output
+class NullStream : public std::ostream {
+    class NullBuf : public std::streambuf {
+    public:
+        int overflow(int c) override { return c; }
+    };
+    NullBuf m_null_buf;
+public:
+    NullStream() : std::ostream(&m_null_buf) {}
+};
+
 std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
                                                      const std::string& output_file) {
     // Static storage for model and logger to ensure they persist
@@ -31,12 +42,11 @@ std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_
 
         // Set up output stream
         std::ofstream file_stream;
-        std::ofstream null_stream;  // Create a null stream
+        static NullStream null_stream;  // Create a proper null stream (static to persist)
         std::ostream* output_stream = &std::cout;
 
         if (output_file == "") {
             // No output - use null stream (like BookSim2's nullStream)
-            null_stream.setstate(std::ios_base::badbit);  // Make stream invalid to discard output
             output_stream = &null_stream;
         } else if (output_file == "-") {
             output_stream = &std::cout;
