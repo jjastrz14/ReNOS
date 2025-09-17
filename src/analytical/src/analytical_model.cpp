@@ -113,6 +113,9 @@ void AnalyticalModel::configure(const std::string& config_file) {
         if (arch.contains("topology")) _arch.topology = arch["topology"];
         if (arch.contains("k")) _arch.k = arch["k"];
         if (arch.contains("n")) _arch.n = arch["n"];
+        if (arch.contains("output_delay")) _arch.output_delay = arch["output_delay"];
+        if (arch.contains("credit_delay")) _arch.credit_delay = arch["credit_delay"];
+        if (arch.contains("speculative")) _arch.speculative = arch["speculative"];
         if (arch.contains("routing_delay")) _arch.routing_delay = arch["routing_delay"];
         if (arch.contains("vc_alloc_delay")) _arch.vc_alloc_delay = arch["vc_alloc_delay"];
         if (arch.contains("sw_alloc_delay")) _arch.sw_alloc_delay = arch["sw_alloc_delay"];
@@ -159,12 +162,7 @@ void AnalyticalModel::configure(const std::string& config_file) {
 
                 // Parse dependencies
                 if (item_json.contains("dep")) {
-                    if (item_json["dep"].is_number()) {
-                        int dep_val = item_json["dep"];
-                        if (dep_val != -1) {
-                            workload.dep.push_back(dep_val);
-                        }
-                    } else if (item_json["dep"].is_array()) {
+                    if (item_json["dep"].is_array()) {
                         for (const auto& dep_val : item_json["dep"]) {
                             if (dep_val != -1) {
                                 workload.dep.push_back(dep_val);
@@ -172,36 +170,28 @@ void AnalyticalModel::configure(const std::string& config_file) {
                         }
                     }
                 }
+                else {
+                    //throw error
+                    throw std::runtime_error("No dependencies found for workload: " + type_str);
+                }
 
                 _workloads.push_back(workload);
 
-            } else if (type_str == "WRITE" || type_str == "WRITE_REQ") {
-                // This is a network packet
+            } else if (type_str == "WRITE") {
+                // This is a network packet with only WRITE_ACK generation
                 AnalyticalPacket packet;
+                packet.type = WRITE;
                 packet.id = item_json["id"];
                 packet.src = item_json["src"];
                 packet.dst = item_json["dst"];
                 packet.size = item_json["size"];
-                packet.cl = item_json.value("cl", 0);
                 packet.pt_required = item_json.value("pt_required", 0);
-
-                // Set packet type
-                if (type_str == "WRITE") packet.type = WRITE;
-                else if (type_str == "WRITE_REQ") packet.type = WRITE_REQ;
-
                 packet.data_size = item_json.value("data_size", packet.size);
-                packet.data_ptime_expected = item_json.value("data_ptime_expected", packet.pt_required);
                 packet.data_dep = item_json.value("data_dep", -1);
-                packet.rpid = item_json.value("rpid", packet.id);
 
                 // Parse dependencies
                 if (item_json.contains("dep")) {
-                    if (item_json["dep"].is_number()) {
-                        int dep_val = item_json["dep"];
-                        if (dep_val != -1) {
-                            packet.dep.push_back(dep_val);
-                        }
-                    } else if (item_json["dep"].is_array()) {
+                    if (item_json["dep"].is_array()) {
                         for (const auto& dep_val : item_json["dep"]) {
                             if (dep_val != -1) {
                                 packet.dep.push_back(dep_val);
@@ -209,8 +199,52 @@ void AnalyticalModel::configure(const std::string& config_file) {
                         }
                     }
                 }
+                else {
+                    //throw error
+                    throw std::runtime_error("No dependencies found for workload: " + type_str);
+                }
 
                 _packets.push_back(packet);
+            } else if (type_str == "WRITE_REQ"){
+                // this creates a WRITE_REQ packet that will trigger a handshake protocol
+                /*  1. WRITE_REQ from src -> dst
+                    2. READ_REQ from dst -> src
+                    3. WRITE (actuall bulk data) from src -> dst
+                    4. WRITE_ACK from dst -> src 
+                */
+                AnalyticalPacket packet;
+                packet.type = WRITE_REQ;
+                packet.id = item_json["id"];
+                packet.src = item_json["src"];
+                packet.dst = item_json["dst"];
+                packet.size = item_json["size"];
+                packet.pt_required = item_json.value("pt_required", 0);
+                packet.data_size = item_json.value("data_size", packet.size);
+                packet.data_dep = item_json.value("data_dep", -1);
+
+                //for handshake protocol:
+                packet.bulk_data = item_json["size"];
+                packet.bulk_pt_required = item_json.value("pt_required", 0);
+
+
+                if (item_json.contains("dep")) {
+                    if (item_json["dep"].is_array()) {
+                        for (const auto& dep_val : item_json["dep"]) {
+                            if (dep_val != -1) {
+                                packet.dep.push_back(dep_val);
+                            }
+                        }
+                    }
+                _packets.push_back(packet);
+                }
+                else {
+                    //throw error
+                    throw std::runtime_error("No dependencies found for workload: " + type_str);
+                }
+
+            } else {
+                // unknown type packet
+                throw std::runtime_error("Unknown workload type: " + type_str);
             }
         }
 
@@ -251,6 +285,8 @@ int AnalyticalModel::calculate_hop_distance(int src, int dst) const {
     }
 
     // Default: Manhattan distance for unknown topologies
+    *_output_file << "Warning: Unknown topology '" << _arch.topology
+                << "', using Manhattan distance as default." << std::endl;
     return std::abs(src - dst);
 }
 
@@ -262,17 +298,20 @@ double AnalyticalModel::calculate_message_latency(int src, int dst, int size_fli
     int n_flits = size_flits;
 
     // Link traversal time (assumed 1 cycle)
-    int t_link = 1;
+    int t_link = _arch.topology == "mesh" ? 1 : 2; // mesh has 1 cycle link delay, torus has 2 cycles this is implemented in the BookSim2 simulator
+
+    // account for speculative routing in IQ router (like in BookSim2, look: IQRouter::AddOutputChannel 203)
+    int alloc_delay = _arch.speculative ? std::max(_arch.vc_alloc_delay, _arch.sw_alloc_delay) : (_arch.vc_alloc_delay + _arch.sw_alloc_delay);
 
     // Head flit processing time per hop
-    int t_head_hop = _arch.routing_delay + _arch.vc_alloc_delay + _arch.sw_alloc_delay +
+    int t_head_hop = _arch.routing_delay + alloc_delay +
                     _arch.st_prepare_delay + _arch.st_final_delay;
 
     // Body flit processing time per hop
     int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
 
     // Queuing delay (not modeled for now)
-    int queuing_delay = 0;
+    int queuing_delay = 1; // Assume 1 cycle queuing delay per hop for simplicity
 
     // Total packet latency: head + body term
     double T_packet = n_routers * (t_head_hop + t_link + queuing_delay) +
@@ -286,7 +325,7 @@ double AnalyticalModel::calculate_message_latency(int src, int dst, int size_fli
 int AnalyticalModel::calculate_num_flits(int size_bytes) const {
     if (size_bytes <= 0) return 1;
 
-    // Convert bytes to flits based on flit size
+    // Convert bytes to flits based on flit size assuming that field size is in Bytes!
     double scaling = 8.0 / _arch.flit_size;
     int flits = static_cast<int>(std::ceil(size_bytes * scaling));
 
@@ -309,15 +348,20 @@ bool AnalyticalModel::check_dependencies_satisfied(const AnalyticalWorkload* wor
         bool found = false;
 
         // Search for executed packets at this node with matching ID and type = WRITE (6)
+        // AND ensure the completion time has already passed
         for (const auto& executed : _executed[node]) {
             if (std::get<0>(executed) == dep_id && std::get<1>(executed) == WRITE) {
-                found = true;
-                break;
+                double completion_time = std::get<2>(executed);
+                // Only consider dependency satisfied if the packet has actually completed processing
+                if (completion_time <= _current_time) {
+                    found = true;
+                    break;
+                }
             }
         }
 
         if (!found) {
-            return false;  // Dependency not satisfied (no WRITE packet with this ID)
+            return false;  // Dependency not satisfied (no WRITE packet with this ID completed yet)
         }
     }
 
@@ -334,10 +378,15 @@ bool AnalyticalModel::check_dependencies_helper(const std::vector<int>& deps, in
         bool found = false;
 
         // Search in executed packets/workloads at this node
+        // AND ensure the completion time has already passed
         for (const auto& executed : _executed[node]) {
             if (std::get<0>(executed) == dep_id) {
-                found = true;
-                break;
+                double completion_time = std::get<2>(executed);
+                // Only consider dependency satisfied if the packet/workload has actually completed
+                if (completion_time <= _current_time) {
+                    found = true;
+                    break;
+                }
             }
         }
 
@@ -359,7 +408,8 @@ double AnalyticalModel::get_dependency_completion_time(const std::vector<int>& d
     for (int dep_id : deps) {
         for (const auto& executed : _executed[node]) {
             if (std::get<0>(executed) == dep_id) {
-                max_time = std::max(max_time, std::get<2>(executed));
+                double completion_time = std::get<2>(executed);
+                max_time = std::max(max_time, completion_time);
                 break;
             }
         }
@@ -402,15 +452,8 @@ int AnalyticalModel::run_simulation() {
     }
 
     // Main simulation loop
-    //int loop_counter = 0;
     while (true) {
         bool activity = false;
-        //loop_counter++;
-
-        //if (loop_counter > 10000) {
-        //    *_output_file << "ERROR: Simulation loop exceeded 1000 iterations, breaking to prevent infinite loop" << std::endl;
-        //    break;
-        //}
 
         // Process packets and workloads
         inject_ready_packets();
@@ -515,81 +558,93 @@ void AnalyticalModel::inject_ready_packets() {
                         // Don't generate handshake packets for local communications
                         continue;
                     }
+                
+                double latency = 0.0; 
+                int temp_write_req = 1;  // 1 flit   
+                //change locally the size of WRITE_REQ packet for handshake protocol
+                if (packet->type == WRITE_REQ) {
+                    latency = calculate_message_latency(packet->src, packet->dst, temp_write_req);
+                }
+                else {
+                    // Calculate latency for network packets
+                    latency = calculate_message_latency(packet->src, packet->dst, packet->size_flits);
+                }
 
-                    // Handle network packets (src != dst)
-                    double latency = calculate_message_latency(packet->src, packet->dst, packet->size_flits);
-                    double completion_time = _current_time + latency;
+                // Handle network packets (src != dst)
+                double completion_time = _current_time + latency;
+                
+                // debugging outputs
+                *_output_file << "Packet with ID:" << packet->id << " and type " << static_cast<int>(packet->type)
+                            << " at node " << packet->src << " has been injected at time "
+                            << static_cast<int>(_current_time) << std::endl;
 
-                    *_output_file << "Packet with ID:" << packet->id << " and type " << static_cast<int>(packet->type)
-                                << " at node " << packet->src << " has been injected at time "
-                                << static_cast<int>(_current_time) << std::endl;
+                if (packet->type == WRITE) {
+                    // Log arrival at destination
+                    *_output_file << " Bulk packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                    *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                }
+                else if (packet->type == READ_REQ) {
+                    // Log arrival at destination
+                    *_output_file << " READ_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                    *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                }
+                else if (packet->type == WRITE_REQ) {
+                    // Log arrival at destination
+                    *_output_file << " WRITE_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                << " from node: " << packet->src << ", size: " << temp_write_req<< std::endl;
+                    *_output_file << "Processing time: " << 1 << std::endl;
+                }
+                else if (packet->type == WRITE_ACK) {
+                    // Log arrival at destination
+                    *_output_file << " WRITE_ACK packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
+                                << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
+                                << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
+                    *_output_file << "Processing time: " << packet->pt_required << std::endl;
+                }
+                else {
+                    // Unknown packet type
+                    *_output_file << "Packet with ID:" << packet->id << " has unknown type "
+                                << static_cast<int>(packet->type) << " at node " << packet->src << std::endl;
+                }
 
-                    if (packet->type == WRITE) {
-                        // Log arrival at destination
-                        *_output_file << " Bulk packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
-                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
-                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
-                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
-                    }
-                    else if (packet->type == READ_REQ) {
-                        // Log arrival at destination
-                        *_output_file << " READ_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
-                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
-                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
-                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
-                    }
-                    else if (packet->type == WRITE_REQ) {
-                        // Log arrival at destination
-                        *_output_file << " WRITE_REQ with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
-                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
-                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
-                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
-                    }
-                    else if (packet->type == WRITE_ACK) {
-                        // Log arrival at destination
-                        *_output_file << " WRITE_ACK packet with id: " << packet->id << " and type: " << static_cast<int>(packet->type)
-                                    << " arrived at: " << packet->dst << " at time: " << static_cast<int>(completion_time)
-                                    << " from node: " << packet->src << ", size: " << packet->size_flits << std::endl;
-                        *_output_file << "Processing time: " << packet->pt_required << std::endl;
-                    }
-                    else {
-                        // Unknown packet type
-                        *_output_file << "Packet with ID:" << packet->id << " has unknown type "
-                                    << static_cast<int>(packet->type) << " at node " << packet->src << std::endl;
-                    }
+                // Log injection
+                if (_logger) {
+                    _logger->log_event(_current_time, "INJECT", packet->id, packet->src,
+                                    "Packet injected to destination " + std::to_string(packet->dst));
+                }
 
-                    // Log injection
-                    if (_logger) {
-                        _logger->log_event(_current_time, "INJECT", packet->id, packet->src,
-                                        "Packet injected to destination " + std::to_string(packet->dst));
-                    }
+                // Log completion at destination
+                if (_logger) {
+                    _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
+                                    "Packet completed with latency " + std::to_string(latency));
+                }
 
-                    // Log completion at destination
-                    if (_logger) {
-                        _logger->log_event(completion_time, "COMPLETE", packet->id, packet->dst,
-                                        "Packet completed with latency " + std::to_string(latency));
-                    }
+                // Calculate actual processing completion time
+                int temp_pt_required = (packet->type == WRITE_REQ) ? 1 : packet->pt_required;
+                double processing_completion_time = completion_time + temp_pt_required;
 
-                    // Calculate actual processing completion time
-                    double processing_completion_time = completion_time + packet->pt_required;
+                // Mark packet as executed at destination
+                // All packets get marked as executed for tracking, but dependency satisfaction
+                // is determined by the dependency checking logic
+                _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, processing_completion_time));
 
-                    // Mark packet as executed at destination
-                    // All packets get marked as executed for tracking, but dependency satisfaction
-                    // is determined by the dependency checking logic
-                    _executed[packet->dst].insert(std::make_tuple(packet->id, packet->type, processing_completion_time));
+                // Generate handshake packets based on received packet type (only for network packets)
+                if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
+                    generate_handshake_packets(packet, processing_completion_time);
+                } else if (packet->type == READ || packet->type == WRITE) {
+                    generate_reply_packet(packet, processing_completion_time);
+                }
 
-                    // Generate handshake packets based on received packet type (only for network packets)
-                    if (packet->type == WRITE_REQ || packet->type == READ_REQ) {
-                        generate_handshake_packets(packet, completion_time);
-                    } else if (packet->type == READ || packet->type == WRITE) {
-                        generate_reply_packet(packet, processing_completion_time);
-                    }
+                // Track future completion time (including processing time)
+                next_time = std::max(next_time, processing_completion_time);
 
-                    // Track future completion time (including processing time)
-                    next_time = std::max(next_time, processing_completion_time);
-
-                    // Remove from waiting queue and advance iterator
-                    it = waiting.erase(it);
+                // Remove from waiting queue and advance iterator
+                it = waiting.erase(it);
             } else {
                 // Packet not ready, move to next packet
                 ++it;
@@ -726,7 +781,6 @@ void AnalyticalModel::advance_time() {
     _current_time = next_time;
 }
 
-// this function needs some fixes and improvements!
 void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* received_packet, double arrival_time) {
     // Based on restart/trafficmanager.cpp:905-925
     // AUTOMATIC GENERATION OF READ_REQ AND WRITEs AFTER RECEIVED MESSAGES
@@ -737,20 +791,9 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
     // Create new packet based on handshake protocol
     AnalyticalPacket new_packet;
 
-    new_packet.id = received_packet->rpid;  // Use request packet ID
+    new_packet.id = received_packet->id;  // Use same ID for simplicity
     new_packet.src = dest;  // Reverse direction: dst becomes src
     new_packet.dst = src;   // src becomes dst
-    // Set size based on packet type - control packets are 1 byte, data packets use original size
-    if (received_packet->type == WRITE_REQ) {
-        // READ_REQ -> WRITE: use the original packet size for bulk data transfer
-        new_packet.size = received_packet->size;  // Use original packet size for bulk data
-    } else {
-        // WRITE_REQ -> READ_REQ: control packet
-        new_packet.size = 1;  // Will be overridden below
-    }
-    new_packet.cl = received_packet->cl;
-    new_packet.pt_required = received_packet->data_ptime_expected;
-    new_packet.rpid = received_packet->rpid;
     new_packet.data_dep = received_packet->data_dep;
     new_packet.auto_generated = true;
 
@@ -759,7 +802,8 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
         // READ_REQ -> WRITE packet from dst to src
         new_packet.type = WRITE;
         // Size already in flits for generated packets
-        new_packet.size_flits = calculate_num_flits(new_packet.size);
+        new_packet.size_flits = calculate_num_flits(received_packet->bulk_data);
+        new_packet.pt_required = received_packet->bulk_pt_required;
         new_packet.dep.clear();
         if (received_packet->data_dep != -1) {
             new_packet.dep.push_back(received_packet->data_dep);
@@ -774,7 +818,10 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
         new_packet.type = READ_REQ;
         new_packet.size = 1;  // READ_REQ packets are typically small (1 byte)
         new_packet.size_flits = 1;  // 1 flit for control packets
+        new_packet.pt_required = 1;  // 1 cycle of processing at destination
         new_packet.dep.clear();  // No dependencies
+        new_packet.bulk_data = received_packet->bulk_data;
+        new_packet.bulk_pt_required = received_packet->bulk_pt_required;
 
         if (_logger) {
             _logger->log_event(_current_time, "GENERATE_READ_REQ", new_packet.id, dest,
@@ -797,18 +844,16 @@ void AnalyticalModel::generate_handshake_packets(const AnalyticalPacket* receive
 void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_packet, double reply_time) {
     // Generate automatic reply packets (READ/WRITE -> READ_ACK/WRITE_ACK)
 
-    if (request_packet->type == READ || request_packet->type == WRITE) {
+    if (request_packet->type == WRITE || request_packet->type == READ) {
         AnalyticalPacket reply_packet;
 
-        reply_packet.id = request_packet->rpid;  // Use request packet ID
+        reply_packet.id = request_packet->id;  // Use same ID for simplicity
         reply_packet.src = request_packet->dst;  // Reply from destination
         reply_packet.dst = request_packet->src;  // Reply to source
         reply_packet.size = 1;  // Reply packets are typically small (1 byte)
         reply_packet.size_flits = 1;  // 1 flit for control packets
-        reply_packet.cl = request_packet->cl;
         reply_packet.pt_required = 1;  // 1 cycle for processing in BookSim2 might be 0 Minimal processing for ACK
         reply_packet.type = get_reply_type(request_packet->type);
-        reply_packet.rpid = request_packet->rpid;
         reply_packet.auto_generated = true;
         reply_packet.dep.clear();  // No dependencies for replies
 
@@ -834,6 +879,9 @@ void AnalyticalModel::generate_reply_packet(const AnalyticalPacket* request_pack
         *_output_file << "Generated " << commTypeToString(reply_packet.type)
                     << " reply (id: " << reply_packet.id << ") at time: " << static_cast<int>(reply_time)
                     << " from node: " << reply_packet.src << " to node: " << reply_packet.dst << std::endl;
+    }
+    else {
+        throw std::runtime_error("Attempted to generate reply for non-request packet type");
     }
 }
 

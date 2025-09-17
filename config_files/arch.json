@@ -21,6 +21,7 @@
             "read_reply_end_vc" : 13,
             "write_reply_begin_vc" : 10,
             "write_reply_end_vc" : 15,
+            "use_noc_latency": 1,
             "output_delay": 0,
             "credit_delay": 0,
             "speculative": 1,

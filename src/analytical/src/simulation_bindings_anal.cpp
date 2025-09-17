@@ -86,13 +86,10 @@ PYBIND11_MODULE(analytical_simulator, m) {
         .def_readwrite("dst", &AnalyticalPacket::dst)
         .def_readwrite("size", &AnalyticalPacket::size)
         .def_readwrite("dep", &AnalyticalPacket::dep)
-        .def_readwrite("cl", &AnalyticalPacket::cl)
         .def_readwrite("type", &AnalyticalPacket::type)
         .def_readwrite("pt_required", &AnalyticalPacket::pt_required)
         .def_readwrite("data_size", &AnalyticalPacket::data_size)
-        .def_readwrite("data_ptime_expected", &AnalyticalPacket::data_ptime_expected)
         .def_readwrite("data_dep", &AnalyticalPacket::data_dep)
-        .def_readwrite("rpid", &AnalyticalPacket::rpid)
         .def_readwrite("size_flits", &AnalyticalPacket::size_flits)
         .def_readwrite("injection_time", &AnalyticalPacket::injection_time)
         .def_readwrite("completion_time", &AnalyticalPacket::completion_time)
@@ -112,89 +109,11 @@ PYBIND11_MODULE(analytical_simulator, m) {
         .def_readwrite("dep", &AnalyticalWorkload::dep)
         .def_readwrite("cycles_required", &AnalyticalWorkload::cycles_required)
         .def_readwrite("size", &AnalyticalWorkload::size);
-
-    // AnalyticalModel class
-    /*
-    py::class_<AnalyticalModel>(m, "AnalyticalModel")
-        .def(py::init<>())
-        .def("configure", &AnalyticalModel::configure,
-             "Configure the model from a JSON configuration file",
-             py::arg("config_file"))
-        .def("run_simulation", &AnalyticalModel::run_simulation,
-             "Run the analytical simulation and return total simulation time")
-        .def("calculate_hop_distance", &AnalyticalModel::calculate_hop_distance,
-             "Calculate hop distance between two nodes",
-             py::arg("src"), py::arg("dst"))
-        .def("calculate_message_latency", &AnalyticalModel::calculate_message_latency,
-             "Calculate latency for a message using analytical formula",
-             py::arg("src"), py::arg("dst"), py::arg("size"), py::arg("is_reply") = false)
-        .def("calculate_num_flits", &AnalyticalModel::calculate_num_flits,
-             "Calculate number of flits for a given message size in bytes",
-             py::arg("size_bytes"))
-        .def("get_simulation_time", &AnalyticalModel::get_simulation_time,
-             "Get current simulation time")
-        .def("get_total_packets", &AnalyticalModel::get_total_packets,
-             "Get total number of packets")
-        .def("get_logger", &AnalyticalModel::get_logger,
-             "Get the logger instance", py::return_value_policy::reference)
-        .def("print_statistics", [](const AnalyticalModel& model) {
-            std::ostringstream oss;
-            model.print_statistics(oss);
-            return oss.str();
-        }, "Get simulation statistics as a string")
-        .def("set_output_stream", [](AnalyticalModel& model, const std::string& filename) {
-            static std::ofstream file_stream;
-            if (!filename.empty() && filename != "-") {
-                file_stream.open(filename);
-                if (file_stream.is_open()) {
-                    model.set_output_file(&file_stream);
-                } else {
-                    throw std::runtime_error("Cannot open output file: " + filename);
-                }
-            }
-        }, "Set output file for simulation messages", py::arg("filename"));
-    */
    
     // High-level simulation wrapper function
     m.def("simulate_analytical", &SimulateAnalytical,
           "Run analytical simulation with config file and output file",
           py::arg("config_file"), py::arg("output_file") = "");
-
-    // Utility functions for topology calculations
-    m.def("calculate_manhattan_distance", [](int src, int dst, int k, int n) {
-        int hops = 0;
-        int temp_src = src;
-        int temp_dst = dst;
-
-        for (int dim = 0; dim < n; dim++) {
-            int src_coord = temp_src % k;
-            int dst_coord = temp_dst % k;
-            hops += std::abs(src_coord - dst_coord);
-            temp_src /= k;
-            temp_dst /= k;
-        }
-        return hops;
-    }, "Calculate Manhattan distance between nodes",
-       py::arg("src"), py::arg("dst"), py::arg("k"), py::arg("n"));
-
-    m.def("calculate_torus_distance", [](int src, int dst, int k, int n) {
-        int hops = 0;
-        int temp_src = src;
-        int temp_dst = dst;
-
-        for (int dim = 0; dim < n; dim++) {
-            int src_coord = temp_src % k;
-            int dst_coord = temp_dst % k;
-            int distance = std::abs(src_coord - dst_coord);
-            // Consider wraparound for torus
-            distance = std::min(distance, k - distance);
-            hops += distance;
-            temp_src /= k;
-            temp_dst /= k;
-        }
-        return hops;
-    }, "Calculate torus distance between nodes with wraparound",
-       py::arg("src"), py::arg("dst"), py::arg("k"), py::arg("n"));
 
     // Version and model info
     m.attr("__version__") = "1.0.0";
