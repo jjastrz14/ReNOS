@@ -161,6 +161,10 @@ private:
     // Debug flag
     bool _debug_output;  // enable/disable verbose debug output
 
+    // Event-driven reordering optimization
+    std::vector<bool> _node_needs_packet_reorder;   // Track which nodes need packet queue reordering
+    std::vector<bool> _node_needs_workload_reorder; // Track which nodes need workload queue reordering
+
 public:
     AnalyticalModel();
     ~AnalyticalModel();
@@ -189,6 +193,14 @@ public:
     void inject_ready_packets();
     void process_generated_packets();
     void advance_time();
+
+    // Queue management optimizations (BookSim2-style)
+    void reorder_packet_queue(int node);
+    void reorder_workload_queue(int node);
+
+    // Event-driven reordering triggers
+    void mark_workload_event(int node);          // Workload start/end
+    void mark_packet_injection_event(int node);  // WRITE/WRITE_REQ injection
 
     // Handshake protocol methods
     void generate_handshake_packets(const AnalyticalPacket* received_packet, double arrival_time);

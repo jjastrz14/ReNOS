@@ -143,6 +143,10 @@ void AnalyticalModel::configure(const std::string& config_file) {
     _pending_workloads.resize(_nodes, nullptr);
     _npu_free_time.resize(_nodes, 0.0);
 
+    // Initialize event-driven reordering tracking
+    _node_needs_packet_reorder.resize(_nodes, false);
+    _node_needs_workload_reorder.resize(_nodes, false);
+
 
     // Parse workloads (check if "workload" contains packet-like entries or actual workloads)
     if (config.contains("workload")) {
@@ -507,33 +511,40 @@ void AnalyticalModel::inject_ready_packets() {
     bool any_local_processing = false;
     double next_time = _current_time; // Track the next time we should advance to
 
-    // Process all packets that are ready at the current time simultaneously
+    // BookSim2-style optimization: only check front of queue per node per cycle
     for (int node = 0; node < _nodes; node++) {
-        auto& waiting = _waiting_packets[node];
+        // Event-driven reordering: only reorder when something meaningful happened
+        if (_node_needs_packet_reorder[node]) {
+            reorder_packet_queue(node);
+            _node_needs_packet_reorder[node] = false;  // Reset flag
+        }
 
-        // Process all ready packets in the queue, not just the front one
-        auto it = waiting.begin();
-        while (it != waiting.end()) {
-            const AnalyticalPacket* packet = *it;
+        // Skip empty queues
+        if (_waiting_packets[node].empty()) {
+            continue;
+        }
 
-            // Check if packet is ready to inject (either dependency-based or time-based for generated packets)
-            bool ready_to_inject = false;
-            double injection_time;
+        // ONLY check the front packet (BookSim2 approach)
+        const AnalyticalPacket* packet = _waiting_packets[node].front();
 
-            if (packet->auto_generated && packet->injection_time > 0) {
-                // Generated packets with specific injection time
-                injection_time = packet->injection_time;
+        // Check if front packet is ready to inject
+        bool ready_to_inject = false;
+        double injection_time;
+
+        if (packet->auto_generated && packet->injection_time > 0) {
+            // Generated packets with specific injection time
+            injection_time = packet->injection_time;
+            ready_to_inject = (injection_time <= _current_time);
+        } else {
+            // Regular packets - check dependencies
+            if (check_dependencies_satisfied(packet, node)) {
+                double dep_time = get_dependency_completion_time(packet->dep, node);
+                injection_time = std::max(_current_time, dep_time);
                 ready_to_inject = (injection_time <= _current_time);
-            } else {
-                // Regular packets - check dependencies
-                if (check_dependencies_satisfied(packet, node)) {
-                    double dep_time = get_dependency_completion_time(packet->dep, node);
-                    injection_time = std::max(_current_time, dep_time);
-                    ready_to_inject = (injection_time <= _current_time);
-                }
             }
+        }
 
-            if (ready_to_inject) {
+        if (ready_to_inject) {
                 // Handle local packets (src == dst) separately
                 if (packet->src == packet->dst) {
                         // Convert packet type for local processing (like BookSim2)
@@ -552,8 +563,8 @@ void AnalyticalModel::inject_ready_packets() {
                         // Track that we had local processing
                         any_local_processing = true;
 
-                        // Remove from waiting queue and advance iterator
-                        it = waiting.erase(it);
+                        // Remove from front of queue (BookSim2 style)
+                        _waiting_packets[node].pop_front();
 
                         // Don't generate handshake packets for local communications
                         continue;
@@ -639,17 +650,20 @@ void AnalyticalModel::inject_ready_packets() {
                 } else if (packet->type == READ || packet->type == WRITE) {
                     generate_reply_packet(packet, processing_completion_time);
                 }
+                
+                // Event-driven reordering: mark injection events for WRITE and WRITE_REQ packets
+                if (packet->type == WRITE || packet->type == WRITE_REQ) {
+                    mark_packet_injection_event(node);
+                }
 
                 // Track future completion time (including processing time)
                 next_time = std::max(next_time, processing_completion_time);
 
-                // Remove from waiting queue and advance iterator
-                it = waiting.erase(it);
-            } else {
-                // Packet not ready, move to next packet
-                ++it;
-            }
+                // Remove from front of queue (BookSim2 style)
+                _waiting_packets[node].pop_front();
         }
+        // If front packet not ready, we skip this node (BookSim2 behavior)
+        // The packet will be checked again next cycle
     }
 
     // Update time based on packet processing
@@ -678,47 +692,56 @@ void AnalyticalModel::process_workloads() {
                                 "Workload processing completed");
             }
 
+            // Event-driven reordering: mark workload end event
+            mark_workload_event(node);
+
             _pending_workloads[node] = nullptr;
         }
     }
 
-    // Then, start all workloads that can start at current time simultaneously
+    // Then, start workloads that can start at current time - BookSim2 style optimization
     for (int node = 0; node < _nodes; node++) {
-        // Try to start new workload if NPU is free
+        // Event-driven reordering: only reorder when something meaningful happened
+        if (_node_needs_workload_reorder[node]) {
+            reorder_workload_queue(node);
+            _node_needs_workload_reorder[node] = false;  // Reset flag
+        }
+
+        // Try to start new workload if NPU is free and queue not empty
         if (_pending_workloads[node] == nullptr && !_waiting_workloads[node].empty()) {
-            auto& waiting = _waiting_workloads[node];
+            // ONLY check the front workload (BookSim2 approach)
+            const AnalyticalWorkload* workload = _waiting_workloads[node].front();
 
-            for (auto it = waiting.begin(); it != waiting.end(); ++it) {
-                const AnalyticalWorkload* workload = *it;
+            if (check_dependencies_satisfied(workload, node)) {
+                // Check if ready at current time
+                double dep_completion_time = get_dependency_completion_time(workload->dep, node);
+                double start_time = std::max(_current_time, dep_completion_time);
 
-                if (check_dependencies_satisfied(workload, node)) {
-                    // Check if ready at current time
-                    double dep_completion_time = get_dependency_completion_time(workload->dep, node);
-                    double start_time = std::max(_current_time, dep_completion_time);
+                // Only start if ready at current time
+                if (start_time <= _current_time) {
+                    double end_time = _current_time + workload->cycles_required;
 
-                    // Only start if ready at current time
-                    if (start_time <= _current_time) {
-                        double end_time = _current_time + workload->cycles_required;
+                    _npu_free_time[node] = end_time;
+                    _pending_workloads[node] = workload;
 
-                        _npu_free_time[node] = end_time;
-                        _pending_workloads[node] = workload;
+                    // Log workload start in BookSim2 format
+                    *_output_file << "Workload with ID:" << workload->id << " at node " << node
+                                << " has started processing at time " << static_cast<int>(_current_time) << std::endl;
 
-                        // Log workload start in BookSim2 format - all at same time
-                        *_output_file << "Workload with ID:" << workload->id << " at node " << node
-                                    << " has started processing at time " << static_cast<int>(_current_time) << std::endl;
-
-                        // Log start
-                        if (_logger) {
-                            _logger->log_event(_current_time, "WORKLOAD_START", workload->id, node,
-                                            "Started processing workload");
-                        }
-
-                        // Remove from waiting queue
-                        waiting.erase(it);
-                        break;
+                    // Log start
+                    if (_logger) {
+                        _logger->log_event(_current_time, "WORKLOAD_START", workload->id, node,
+                                        "Started processing workload");
                     }
+
+                    // Event-driven reordering: mark workload start event
+                    mark_workload_event(node);
+
+                    // Remove from front of queue (BookSim2 style)
+                    _waiting_workloads[node].pop_front();
                 }
             }
+            // If front workload not ready, we skip this node (BookSim2 behavior)
         }
     }
 }
@@ -730,19 +753,17 @@ void AnalyticalModel::process_generated_packets() {
     for (size_t i = _last_generated_processed; i < _generated_packets.size(); i++) {
         const AnalyticalPacket& packet = _generated_packets[i];
 
-        // Add reply packets (READ_ACK/WRITE_ACK) to the front of the queue since they have no dependencies
-        // and should be processed with higher priority
-        //if (packet.type == READ_ACK || packet.type == WRITE_ACK) {
+        // Add generated packets to waiting queue
         _waiting_packets[packet.src].push_back(&packet);
+
+        // Event-driven reordering: mark that this node has new packets to consider
+        _node_needs_packet_reorder[packet.src] = true;
+
         if (_debug_output) {
             *_output_file << "Added generated packet " << packet.id << " (type " << static_cast<int>(packet.type)
                         << ") to waiting queue at node " << packet.src
                         << " with injection_time " << packet.injection_time << std::endl;
         }
-        //} else {
-            // Regular generated packets (WRITE from READ_REQ, READ_REQ from WRITE_REQ) go to the back
-            //_waiting_packets[packet.src].push_back(&packet);
-        //}
     }
 
     _last_generated_processed = _generated_packets.size();
@@ -895,6 +916,80 @@ commType AnalyticalModel::get_reply_type(commType request_type) {
             return WRITE_ACK;
         default:
             return ANY;  // No reply needed
+    }
+}
+
+void AnalyticalModel::reorder_packet_queue(int node) {
+    // BookSim2-style queue reordering: move ready packets to front
+    if (_waiting_packets[node].size() < 2) {
+        return;  // No need to reorder if less than 2 packets
+    }
+
+    std::vector<const AnalyticalPacket*> ready_packets;
+    std::vector<const AnalyticalPacket*> waiting_packets;
+
+    // Separate ready and waiting packets
+    for (const auto* packet : _waiting_packets[node]) {
+        if (check_dependencies_satisfied(packet, node)) {
+            ready_packets.push_back(packet);
+        } else {
+            waiting_packets.push_back(packet);
+        }
+    }
+
+    // Rebuild queue: ready packets first, then waiting packets
+    _waiting_packets[node].clear();
+    for (const auto* packet : ready_packets) {
+        _waiting_packets[node].push_back(packet);
+    }
+    for (const auto* packet : waiting_packets) {
+        _waiting_packets[node].push_back(packet);
+    }
+}
+
+void AnalyticalModel::reorder_workload_queue(int node) {
+    // BookSim2-style queue reordering: move ready workloads to front
+    if (_waiting_workloads[node].size() < 2) {
+        return;  // No need to reorder if less than 2 workloads
+    }
+
+    std::vector<const AnalyticalWorkload*> ready_workloads;
+    std::vector<const AnalyticalWorkload*> waiting_workloads;
+
+    // Separate ready and waiting workloads
+    for (const auto* workload : _waiting_workloads[node]) {
+        if (check_dependencies_satisfied(workload, node)) {
+            ready_workloads.push_back(workload);
+        } else {
+            waiting_workloads.push_back(workload);
+        }
+    }
+
+    // Rebuild queue: ready workloads first, then waiting workloads
+    _waiting_workloads[node].clear();
+    for (const auto* workload : ready_workloads) {
+        _waiting_workloads[node].push_back(workload);
+    }
+    for (const auto* workload : waiting_workloads) {
+        _waiting_workloads[node].push_back(workload);
+    }
+}
+
+void AnalyticalModel::mark_workload_event(int node) {
+    // When a workload starts or ends, it may satisfy dependencies for:
+    // 1. Other workloads at this node
+    // 2. Packets at this node waiting for workload completion
+    _node_needs_workload_reorder[node] = true;
+    _node_needs_packet_reorder[node] = true;
+}
+
+void AnalyticalModel::mark_packet_injection_event(int node) {
+    // When WRITE/WRITE_REQ packets are injected, they may eventually
+    // complete and satisfy dependencies across the network
+    // For simplicity, mark all nodes since cross-node dependencies are possible
+    for (int n = 0; n < _nodes; n++) {
+        _node_needs_packet_reorder[n] = true;
+        _node_needs_workload_reorder[n] = true;
     }
 }
 
