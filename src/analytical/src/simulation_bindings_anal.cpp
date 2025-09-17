@@ -19,7 +19,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(analytical_simulator, m) {
+PYBIND11_MODULE(analytical_nocsim, m) {
     m.doc() = "Analytical NoC Performance Model - Fast latency estimation";
 
     // commType enum

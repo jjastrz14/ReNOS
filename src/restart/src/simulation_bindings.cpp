@@ -100,6 +100,11 @@ PYBIND11_MODULE(nocsim, m) {
         })
         .def_property_readonly("events", &EventLogger::get_events)
         .def("get_event_info", &EventLogger::get_event_info, py::arg("id"));
+
+    // Version and model info
+    m.attr("__version__") = "2.1.0";
+    m.attr("__model__") = "BookSim2";
+    m.attr("__description__") = "BookSim2-based cycle-accurate NoC simulator with reconfiguration support, supoorting trace-like traffic patterns and JSON inputs";
 }
 
 
