@@ -1913,6 +1913,145 @@ def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
+def split_factor_only_one_strategy(layer, strategy = "spatial", factor=10, path="data" + "/partitioner_data"):
+        """
+        Explores partitioning combinations for a single strategy (spatial, output, or input).
+        Only varies the specified strategy dimension while keeping others at 1.
+        """
+        print("\n====================================================")
+        print(f"Exploring {strategy} partitioning combinations for layer {layer.name}")
+        if strategy == "spatial":
+            print(f"Maximum splitting factors: {factor}x{1}x{1}")
+        elif strategy == "output":
+            print(f"Maximum splitting factors: {0}x{factor}x{1}")
+        elif strategy == "input":
+            print(f"Maximum splitting factors: {0}x{1}x{factor}")
+        print("====================================================\n")
+
+
+        # Configuration
+        max_splitting_factor = factor
+        computational_layers = (layers.Conv2D, layers.Dense, layers.DepthwiseConv2D, layers.SeparableConv2D)
+        auxiliary_layers = (
+            layers.BatchNormalization,
+            layers.MaxPooling2D,
+            layers.AveragePooling2D,
+            layers.GlobalMaxPooling2D,
+            layers.GlobalAveragePooling2D,
+            layers.Dropout,
+            layers.Activation,
+            layers.ReLU,
+            layers.LeakyReLU
+        )
+
+        # Special case: InputLayer
+        if isinstance(layer, layers.InputLayer):
+            print("InputLayer detected - no partitioning needed")
+            return 0, 1, 1
+
+        # Classify layer type
+        is_computational = isinstance(layer, computational_layers)
+        is_auxiliary = isinstance(layer, auxiliary_layers)
+
+        print(f"Layer classification - Computational: {is_computational}, Auxiliary: {is_auxiliary}")
+
+        if not is_computational and not is_auxiliary:
+            print("WARNING: Layer is neither computational nor auxiliary")
+            return 0, 1, 1
+
+        # Data collection structure
+        results = []
+        iteration = 0
+
+        # Define ranges based on strategy - only vary one dimension
+        if strategy == "spatial":
+            spatial_range = range(1, max_splitting_factor + 1)
+            output_range = [1]  # Fixed at 1
+            input_range = [1]   # Fixed at 1
+        elif strategy == "output":
+            spatial_range = [0]  # Fixed at 0
+            output_range = range(1, max_splitting_factor + 1)
+            input_range = [1]    # Fixed at 1
+        elif strategy == "input":
+            spatial_range = [0]  # Fixed at 0
+            output_range = [1]   # Fixed at 1
+            input_range = range(1, max_splitting_factor + 1)
+        else:
+            print(f"Unknown strategy: {strategy}. Using spatial as default.")
+            raise ValueError("Invalid strategy specified.")
+
+        # Iterate through combinations based on strategy
+        for spatial in spatial_range:
+            for output in output_range:
+                for input_split in input_range:
+                    try:
+                        # Build partitions with current splitting factors
+                        partitions = _build_partitions_from_layer(layer, spatial, output, input_split)
+
+                        # Calculate FLOP metrics
+                        max_flops = max([p.FLOPs for p in partitions]) if partitions else 0
+                        avg_flops = sum([p.FLOPs for p in partitions]) / len(partitions) if partitions else 0
+                        #inputs + output + kernels size of the partitions
+                        max_size_partition = max([p.tot_size for p in partitions]) if partitions else 0
+                        avg_size_partition = sum([p.tot_size for p in partitions]) / len(partitions) if partitions else 0
+
+                        # Store results
+                        results.append({
+                            'iteration': iteration,
+                            'max_flops': max_flops,
+                            'avg_flops': avg_flops,
+                            'max_size': max_size_partition,
+                            'avg_size': avg_size_partition,
+                            'spatial': spatial,
+                            'output': output,
+                            'input': input_split,
+                            'valid': True,
+                            'partitions': len(partitions)
+                        })
+
+                        print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | "
+                            f"Max FLOPs: {max_flops:.0f}, Avg: {avg_flops:.0f} | Partitions: {len(partitions)} | Valid: {True}")
+
+                        iteration += 1
+
+                    except ValueError as e:
+                        # Store invalid combinations
+                        results.append({
+                            'iteration': iteration,
+                            'max_flops': 0,
+                            'avg_flops': 0,
+                            'max_size': 0,
+                            'avg_size': 0,
+                            'spatial': spatial,
+                            'output': output,
+                            'input': input_split,
+                            'valid': False,
+                            'error': str(e),
+                            'partitions': 0
+                        })
+                        print(f"Iteration {iteration}: S:{spatial}, O:{output}, I:{input_split} | INVALID: {str(e)}")
+                        iteration += 1
+
+        # Save results to CSV
+        if results:
+            df = pd.DataFrame(results)
+
+            # Create CSV string
+            csv_data = "Iteration,Max_FLOPs,Avg_FLOPs,Max_Size,Avg_Size,Spatial,Output,Kernel,Valid,Partitions\n"
+            for row in results:
+                csv_data += f"{row['iteration']},{row['max_flops']},{row['avg_flops']},{row['max_size']},{row['avg_size']},{row['spatial']},{row['output']},{row['input']},{row['valid']},{row['partitions']}\n"
+
+            # Save to file
+            with open(path + f"/parts_explo_{layer.name}_{strategy}.csv", "w") as f:
+                f.write(csv_data)
+
+            print(f"Saved partitioning exploration results to: {path + f'/parts_explo_{layer.name}_{strategy}.csv'}")
+            
+            return 1, 1, 1
+        else:
+            print("No valid partitioning found, using minimal partitioning (1, 1, 1)")
+            return 1, 1, 1
+
 def search_space_split_factors(layer, factor=10, FLOP_threshold=1e9, size_of_grid = 16, return_best_valid=True, path = "data" + "/partitioner_data"):
     """
     Explores ALL possible partitioning combinations (up to factor x factor x factor)

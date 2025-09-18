@@ -32,9 +32,9 @@ import time
 
 
 if __name__ == '__main__':
-    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
-    model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
     #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
@@ -82,8 +82,9 @@ if __name__ == '__main__':
     #plot_partitions(parts, deps, namefile = 'data/partitioner_data/task_graph.png')
     #print("Done!")
 
+    #instead of optmisation step, just map following a simple path from source to drain
     task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-    path = choose_path_simply(task_graph, grid, ass_factor = 16, verbose = False)
+    path = choose_path_simply(task_graph, grid, ass_factor = x_of_grid**2, verbose = False)
 
     # constuct the mapping form the path
     mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}

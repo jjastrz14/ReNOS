@@ -217,6 +217,20 @@ def single_conv(input_shape, num_classes, verbose = False):
         larq.models.summary(model, print_fn=None, include_macs=True)
     return model
 
+def single_conv_big(input_shape, num_classes, verbose = False):
+    
+    inputs = layers.Input(shape=input_shape)
+    x = layers.Conv2D(256, kernel_size=(3, 3), data_format="channels_last", activation=None) (inputs)
+    #x = layers.Dense(num_classes, activation='softmax')(x)
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    if verbose:
+        summary = model.summary()
+        print(f'shape of model: {x.shape}')
+        larq.models.summary(model, print_fn=None, include_macs=True)
+    return model
+
 def double_conv(input_shape, num_classes, verbose = False):
     
     inputs = layers.Input(shape=input_shape)

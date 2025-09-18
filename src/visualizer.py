@@ -58,27 +58,27 @@ def create_logger(path_to_json = "/test.json", verbose = False):
             print(event)
             print(f"Event ID: {event.id}, Type: {event.type}, Cycle: {event.cycle}, Additional info: {event.additional_info}," 
                     f"Info: {event.info}")
-        #     if event.type == nocsim.EventType.START_COMPUTATION:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"Node ID: {event.info.node} , Add_info Node ID {event.additional_info}")
-        #     elif event.type == nocsim.EventType.END_COMPUTATION:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"Node ID: {event.info.node}, Add_info Node ID {event.additional_info}")
-        #     elif event.type == nocsim.EventType.OUT_TRAFFIC:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"History: {event.info.history}")
-        #     elif event.type == nocsim.EventType.IN_TRAFFIC:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"History: {event.info.history}")
-        #     elif event.type == nocsim.EventType.START_RECONFIGURATION:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"Node ID: {event.additional_info}")
-        #     elif event.type == nocsim.EventType.END_RECONFIGURATION:
-        #         print(f"Type: {event.type}, Event info: {event.info}")
-        #         print(f"Add_info Node ID: {event.additional_info}")
-        #     else:
-        #         pass
-        #         print(f"I don't know how to handle this event: {event.type}")
+            if event.type == nocsim.EventType.START_COMPUTATION:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"Node ID: {event.info.node} , Add_info Node ID {event.additional_info}")
+            elif event.type == nocsim.EventType.END_COMPUTATION:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"Node ID: {event.info.node}, Add_info Node ID {event.additional_info}")
+            elif event.type == nocsim.EventType.OUT_TRAFFIC:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"History: {event.info.history}")
+            elif event.type == nocsim.EventType.IN_TRAFFIC:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"History: {event.info.history}")
+            elif event.type == nocsim.EventType.START_RECONFIGURATION:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"Node ID: {event.additional_info}")
+            elif event.type == nocsim.EventType.END_RECONFIGURATION:
+                print(f"Type: {event.type}, Event info: {event.info}")
+                print(f"Add_info Node ID: {event.additional_info}")
+            else:
+                print(f"I don't know how to handle this event: {event.type}")
+                pass
     
     return logger, path_data
 
@@ -112,6 +112,10 @@ def plot_timeline(path_to_json = "/test.json", timeline_path = "visual/test.png"
     print("Timeline plotting done!")
     
 def plot_timeline_factor_back(path_to_json = "/test.json", timeline_path = "visual/test.png", verbose = False):
+    
+    """
+    Legacy code, to be deleted
+    """
     
     logger, path_data = create_logger(path_to_json)
     
