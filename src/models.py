@@ -1,7 +1,9 @@
+from warnings import filters
 import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.utils import plot_model
 import larq
+
 
 
 def ResNet_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
@@ -21,19 +23,27 @@ def ResNet_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     return model 
 
 def ResNet_late_blocks(input_shape=(8, 8, 256), num_classes=10, verbose=False):
-    
+
     inputs = layers.Input(shape=input_shape)
-    # Last ResBlock (with 64 filters)
-    x = ResBlock(inputs, filters=512)
-    # Global average pooling and output layer
-    x = layers.GlobalAveragePooling2D()(x)
-    outputs = layers.Dense(num_classes, activation='softmax')(x)
-    model = keras.Model(inputs=inputs, outputs=outputs)
+
+    # Sequential ResBlock (first one)
+    x1 = ResBlock(inputs, filters=512)
+    # Two parallel ResBlocks (both taking the same input)
+    x2 = ResBlock(inputs, filters=512)
+    x3 = ResBlock(inputs, filters=512)
+
+    # Create outputs for all branches to ensure they're included in the model
+    output1 = layers.Dense(num_classes, activation='softmax', name='output1')(x1)
+    output2 = layers.Dense(num_classes, activation='softmax', name='output2')(x2)
+    output3 = layers.Dense(num_classes, activation='softmax', name='output3')(x3)
+
+    # Create model with multiple outputs to preserve all branches
+    model = keras.Model(inputs=inputs, outputs=[output1, output2, output3])
     if verbose:
         model.summary()
-        print(f'shape of model: {x.shape}')
+        print(f'shape of model: {x1.shape}')
         larq.models.summary(model, print_fn=None, include_macs=True)
-    
+
     return model 
 
 def VGG_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=False):

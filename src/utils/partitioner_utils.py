@@ -1336,9 +1336,16 @@ def _group_partitions(partitions_layer1 : List[PartitionInfo], partitions_layer2
 
     # build the dependencies between the partitions of the two layers
     temp_deps = _build_partitions_deps(partitions_layer1, partitions_layer2, layer_to_layer_set)
+
+    # Check if there are actual dependencies between these layers
+    if (name_layer1, name_layer2) not in temp_deps:
+        # No dependencies between these layers (they are parallel), skip grouping
+        print(f"No dependencies found between {name_layer1} and {name_layer2} - skipping grouping (parallel layers)")
+        return
+
     # create the connectivity matrix for clearer dependencies visualization
     connectivity_matrix = np.zeros((len(partitions_layer1), len(partitions_layer2)))
-    
+
     for p1,p2 in temp_deps[(name_layer1, name_layer2)]:
         connectivity_matrix[partitions1_map_to_int[p1], partitions2_map_to_int[p2]] += 1 if temp_deps[(name_layer1, name_layer2)][p1,p2] > 0 else 0
 
@@ -1841,17 +1848,15 @@ def build_partitions_splitting_input_for_many__tuples(model: keras.Model, grid, 
 
     return partitions, partitions_deps
 
-def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
+def row_wise_mapping(task_graph, domain, verbose = False):
         """
-        Generate a path in a simple way.
+        Generate a path in a X direction on the grid of PEs.
         
         The path consists of tuples (task_id, current_node, next_node) representing:
         - The task being processed
         - The node where the task starts
         - The node where the task will be executed
-        
-        The ant starts from a source node and ends at a drain node defined in the task graph.
-        The first entry has current_node=-1 and next_node=source_node.
+    
         
         Returns:
             list: A path represented as a list of (task_id, current_node, next_node) tuples
@@ -1889,7 +1894,7 @@ def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
             elif task_id == "end": #case to connect last to "end"
                 next_node = drain_node 
             else:
-                next_node = task_id % ass_factor
+                next_node = task_id % domain.size
                 #print(f"Task id: {task_id} and next node {next_node}")
                 #np.random.choice(range(domain.size), 1)[0]
             
@@ -1905,7 +1910,131 @@ def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
             print("proposed path is:", path)
         return path
 
+def column_wise_mapping(task_graph, domain, verbose = False):
+        """
+        Generate a path in a Y direction on the grid of PEs.
 
+        The path consists of tuples (task_id, current_node, next_node) representing:
+        - The task being processed
+        - The node where the task starts
+        - The node where the task will be executed
+    
+        
+        Returns:
+            list: A path represented as a list of (task_id, current_node, next_node) tuples
+            
+        """
+        
+        tasks = [task["id"] for task in task_graph.get_nodes()] 
+        
+        #initilaize the path and resource tracking
+        # No need to specify the start node, all the ants start from the "start" node
+        path = []
+        # A list of the available resources for each PE
+        resources = [PE() for _ in range(domain.size)]
+        # the last node is decalred as drain point and the starting point is source point
+        source_node = task_graph.SOURCE_POINT
+        drain_node = task_graph.DRAIN_POINT
+        
+        #start with previous node as -1 (no previous node yet)
+        prev_node = -1
+    
+        for task_id in tasks:
+            current_node = prev_node
+            
+            #determine resources requirmnets for this task
+            if task_id not in ("start", "end"):
+                task_size = task_graph.get_node(task_id)["size"]
+            else:
+                task_size = 0
+            
+            #Handle special case for start and end tasks
+            if task_id == "start":
+                next_node = source_node
+            #case to map last on the drain node
+            
+            elif task_id == "end": #case to connect last to "end"
+                next_node = drain_node 
+            else:
+                #K is the number of PEs in one dimension, size is the K * N (which N is the number of dimensions)
+                next_node = (task_id * domain.K) % domain.size
+                #print(f"Task id: {task_id} and next node {next_node}")
+                #np.random.choice(range(domain.size), 1)[0]
+            
+            # udpate the resources
+            if task_id != "start" and task_id != "end":
+                resources[next_node].mem_used += task_size
+            
+            #normal case
+            path.append((task_id, current_node, next_node))
+            prev_node = next_node
+
+        if verbose:
+            print("proposed path is:", path)
+        return path
+    
+def random_mapping(task_graph, domain, verbose = False):
+        """
+        Generate a random path on the grid of PEs.
+        
+        The path consists of tuples (task_id, current_node, next_node) representing:
+        - The task being processed
+        - The node where the task starts
+        - The node where the task will be executed
+    
+        
+        Returns:
+            list: A path represented as a list of (task_id, current_node, next_node) tuples
+            
+        """
+        
+        tasks = [task["id"] for task in task_graph.get_nodes()] 
+        
+        #initilaize the path and resource tracking
+        # No need to specify the start node, all the ants start from the "start" node
+        path = []
+        # A list of the available resources for each PE
+        resources = [PE() for _ in range(domain.size)]
+        # the last node is decalred as drain point and the starting point is source point
+        source_node = task_graph.SOURCE_POINT
+        drain_node = task_graph.DRAIN_POINT
+        
+        #start with previous node as -1 (no previous node yet)
+        prev_node = -1
+    
+        for task_id in tasks:
+            current_node = prev_node
+            
+            #determine resources requirmnets for this task
+            if task_id not in ("start", "end"):
+                task_size = task_graph.get_node(task_id)["size"]
+            else:
+                task_size = 0
+            
+            #Handle special case for start and end tasks
+            if task_id == "start":
+                next_node = source_node
+            #case to map last on the drain node
+            
+            elif task_id == "end": #case to connect last to "end"
+                next_node = drain_node 
+            else:
+                #choose a random PE from the domain
+                next_node = np.random.choice(range(domain.size))
+                #print(f"Task id: {task_id} and next node {next_node}")
+                #np.random.choice(range(domain.size), 1)[0]
+            
+            # udpate the resources
+            if task_id != "start" and task_id != "end":
+                resources[next_node].mem_used += task_size
+            
+            #normal case
+            path.append((task_id, current_node, next_node))
+            prev_node = next_node
+
+        if verbose:
+            print("proposed path is:", path)
+        return path
 
 """
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
@@ -1913,7 +2042,7 @@ def choose_path_simply(task_graph, domain, ass_factor, verbose = False):
 * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = * = *
 """
 
-def split_factor_only_one_strategy(layer, strategy = "spatial", factor=10, path="data" + "/partitioner_data"):
+def split_factor_only_one_strategy(layer, strategy = "spatial", factor=10, path="data" + "/partitioner_data", model_name = "test"):
         """
         Explores partitioning combinations for a single strategy (spatial, output, or input).
         Only varies the specified strategy dimension while keeping others at 1.
@@ -2036,16 +2165,29 @@ def split_factor_only_one_strategy(layer, strategy = "spatial", factor=10, path=
         if results:
             df = pd.DataFrame(results)
 
-            # Create CSV string
-            csv_data = "Iteration,Max_FLOPs,Avg_FLOPs,Max_Size,Avg_Size,Spatial,Output,Kernel,Valid,Partitions\n"
-            for row in results:
-                csv_data += f"{row['iteration']},{row['max_flops']},{row['avg_flops']},{row['max_size']},{row['avg_size']},{row['spatial']},{row['output']},{row['input']},{row['valid']},{row['partitions']}\n"
+            # Define the combined CSV filename
+            csv_filename = f"{path}/{model_name}_parts_explo_all_layers_{strategy}.csv"
 
-            # Save to file
-            with open(path + f"/parts_explo_{layer.name}_{strategy}.csv", "w") as f:
+            # Check if file exists to determine if header is needed
+            file_exists = os.path.exists(csv_filename)
+
+            # Create CSV data with layer name column
+            if not file_exists:
+                # Write header if file doesn't exist
+                csv_data = "Layer_Name,Iteration,Max_FLOPs,Avg_FLOPs,Max_Size,Avg_Size,Spatial,Output,Input,Valid,Partitions\n"
+            else:
+                csv_data = ""
+
+            # Add data rows with layer name
+            for row in results:
+                csv_data += f"{layer.name},{row['iteration']},{row['max_flops']},{row['avg_flops']},{row['max_size']},{row['avg_size']},{row['spatial']},{row['output']},{row['input']},{row['valid']},{row['partitions']}\n"
+
+            # Append to file (or create if doesn't exist)
+            mode = "a" if file_exists else "w"
+            with open(csv_filename, mode) as f:
                 f.write(csv_data)
 
-            print(f"Saved partitioning exploration results to: {path + f'/parts_explo_{layer.name}_{strategy}.csv'}")
+            print(f"Appended partitioning results for layer {layer.name} to: {csv_filename}")
             
             return 1, 1, 1
         else:

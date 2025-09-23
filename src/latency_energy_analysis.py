@@ -62,11 +62,18 @@ def analyze_logger_events(logger) -> Dict:
     # Print detailed timing analysis
     print_timing_analysis(df, packet_latencies, computation_times)
 
+    # Get timing analysis as DataFrames
+    packets_df, computations_df = get_timing_analysis_dataframes(df, packet_latencies, computation_times)
+    
+    df = analyze_parallel_execution_time(packets_df,computations_df, df['cycle'].max())
+    
+    print_parallel_execution_analysis(df)
+
     # Analyze energy consumption
-    energy_df, total_energy = estimate_energy_from_data({
-        'packet_latencies': packet_latencies,
-        'computation_times': computation_times
-    })
+    #energy_df, total_energy = estimate_energy_from_data({
+        #  'packet_latencies': packet_latencies,
+        #  'computation_times': computation_times
+    #})
 
     # Print energy analysis
     #print_energy_analysis(energy_df, total_energy)
@@ -74,15 +81,7 @@ def analyze_logger_events(logger) -> Dict:
     # Calculate energy efficiency metrics
     #efficiency_metrics = analyze_energy_efficiency(energy_df, packet_latencies, total_energy)
 
-    #return {
-    #    'events': df,
-    #    'packet_latencies': packet_latencies,
-    #    'computation_times': computation_times,
-    #    'energy_breakdown': energy_df,
-    #    'total_energy_J': total_energy,
-    #    'efficiency_metrics': efficiency_metrics,
-    #    'total_simulation_time': df['cycle'].max() if not df.empty else 0
-    #}
+    return packets_df, computations_df, df
 
 
 def communication_type_to_string(ctype: int) -> str:
@@ -209,6 +208,185 @@ def analyze_computation_times(logger) -> List[Dict]:
     return computation_times
 
 
+def get_timing_analysis_dataframes(df: pd.DataFrame, packet_latencies: List[Dict], computation_times: List[Dict]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Get timing analysis as DataFrames for packets and computations
+
+    Returns:
+    --------
+    Tuple[pd.DataFrame, pd.DataFrame]
+        packets_df: DataFrame with packet timing information
+        computations_df: DataFrame with computation timing information
+    """
+    # Create packets DataFrame
+    if packet_latencies:
+        packets_data = []
+        for packet in packet_latencies:
+            packets_data.append({
+                'Packet ID': packet['packet_id'],
+                'Type': packet['communication_type'],
+                'Start': packet['start_cycle'],
+                'End': packet['end_cycle'],
+                'Latency': packet['latency']
+            })
+        packets_df = pd.DataFrame(packets_data)
+    else:
+        packets_df = pd.DataFrame(columns=['Packet ID', 'Type', 'Start', 'End', 'Latency'])
+
+    # Create computations DataFrame
+    if computation_times:
+        computations_data = []
+        for comp in computation_times:
+            computations_data.append({
+                'Comp ID': comp['computation_id'],
+                'Start': comp['start_cycle'],
+                'End': comp['end_cycle'],
+                'Duration': comp['duration']
+            })
+        computations_df = pd.DataFrame(computations_data)
+    else:
+        computations_df = pd.DataFrame(columns=['Comp ID', 'Start', 'End', 'Duration'])
+
+    return packets_df, computations_df
+
+
+def analyze_parallel_execution_time(packets_df: pd.DataFrame, computations_df: pd.DataFrame, total_simulation_cycles: int) -> Dict:
+    """
+    Analyze actual time spent on computations and data flow considering parallel execution.
+
+    Parameters:
+    -----------
+    packets_df : pd.DataFrame
+        DataFrame with packet timing information (columns: Packet ID, Type, Start, End, Latency)
+    computations_df : pd.DataFrame
+        DataFrame with computation timing information (columns: Comp ID, Start, End, Duration)
+        Note: Should include 'node' column if available for proper parallelism analysis
+    total_simulation_cycles : int
+        Total simulation time in cycles
+
+    Returns:
+    --------
+    Dict with timing analysis considering parallel execution
+    """
+
+    # Create timeline arrays to track what's happening at each cycle
+    comp_timeline = np.zeros(total_simulation_cycles + 1, dtype=bool)
+    packet_timeline = np.zeros(total_simulation_cycles + 1, dtype=bool)
+
+    # For computation parallelism analysis
+    comp_parallel_count = np.zeros(total_simulation_cycles + 1, dtype=int)
+
+    # Mark computation periods and count parallel computations
+    for _, row in computations_df.iterrows():
+        start, end = int(row['Start']), int(row['End'])
+        comp_timeline[start:end+1] = True
+        comp_parallel_count[start:end+1] += 1
+
+    # Mark packet transmission periods
+    for _, row in packets_df.iterrows():
+        start, end = int(row['Start']), int(row['End'])
+        packet_timeline[start:end+1] = True
+
+    # Calculate actual occupied time
+    comp_occupied_cycles = np.sum(comp_timeline)
+    packet_occupied_cycles = np.sum(packet_timeline)
+
+    # Calculate overlap between computations and packets
+    overlap_cycles = np.sum(comp_timeline & packet_timeline)
+
+    # Calculate total active cycles (computation OR packet activity)
+    total_active_cycles = np.sum(comp_timeline | packet_timeline)
+
+    # Calculate idle time
+    idle_cycles = total_simulation_cycles - total_active_cycles
+
+    # Analyze computation parallelism
+    max_parallel_comps = np.max(comp_parallel_count)
+    avg_parallel_comps = np.mean(comp_parallel_count[comp_timeline]) if comp_occupied_cycles > 0 else 0
+
+    # Calculate serial vs parallel computation time
+    serial_comp_cycles = np.sum(comp_parallel_count == 1)
+    parallel_comp_cycles = np.sum(comp_parallel_count > 1)
+
+    # Total computation work (sum of all individual computation durations)
+    total_comp_work = computations_df['Duration'].sum()
+
+    # Parallelism efficiency
+    parallelism_efficiency = total_comp_work / comp_occupied_cycles if comp_occupied_cycles > 0 else 0
+
+    # Calculate percentages
+    comp_percentage = (comp_occupied_cycles / total_simulation_cycles) * 100
+    packet_percentage = (packet_occupied_cycles / total_simulation_cycles) * 100
+    overlap_percentage = (overlap_cycles / total_simulation_cycles) * 100
+    active_percentage = (total_active_cycles / total_simulation_cycles) * 100
+    idle_percentage = (idle_cycles / total_simulation_cycles) * 100
+    serial_comp_percentage = (serial_comp_cycles / total_simulation_cycles) * 100
+    parallel_comp_percentage = (parallel_comp_cycles / total_simulation_cycles) * 100
+
+    return {
+        'total_simulation_cycles': total_simulation_cycles,
+        'computation_occupied_cycles': comp_occupied_cycles,
+        'packet_occupied_cycles': packet_occupied_cycles,
+        'overlap_cycles': overlap_cycles,
+        'total_active_cycles': total_active_cycles,
+        'idle_cycles': idle_cycles,
+        'computation_percentage': comp_percentage,
+        'packet_percentage': packet_percentage,
+        'overlap_percentage': overlap_percentage,
+        'active_percentage': active_percentage,
+        'idle_percentage': idle_percentage,
+        'computation_efficiency': comp_occupied_cycles / total_active_cycles * 100 if total_active_cycles > 0 else 0,
+        'packet_efficiency': packet_occupied_cycles / total_active_cycles * 100 if total_active_cycles > 0 else 0,
+        # Computation parallelism metrics
+        'max_parallel_computations': max_parallel_comps,
+        'avg_parallel_computations': avg_parallel_comps,
+        'serial_computation_cycles': serial_comp_cycles,
+        'parallel_computation_cycles': parallel_comp_cycles,
+        'serial_comp_percentage': serial_comp_percentage,
+        'parallel_comp_percentage': parallel_comp_percentage,
+        'total_computation_work': total_comp_work,
+        'parallelism_efficiency': parallelism_efficiency,
+        'parallelism_speedup': parallelism_efficiency,  # Same as efficiency in this context
+        'computation_utilization': avg_parallel_comps / max_parallel_comps * 100 if max_parallel_comps > 0 else 0
+    }
+
+
+def print_parallel_execution_analysis(analysis: Dict):
+    """Print detailed parallel execution analysis"""
+    print("\n" + "="*60)
+    print("PARALLEL EXECUTION TIME ANALYSIS")
+    print("="*60)
+
+    print(f"\nTime Distribution:")
+    print(f"Total simulation cycles: {analysis['total_simulation_cycles']}")
+    print(f"Computation occupied time: {analysis['computation_occupied_cycles']} cycles ({analysis['computation_percentage']:.1f}%)")
+    print(f"Packet transmission time: {analysis['packet_occupied_cycles']} cycles ({analysis['packet_percentage']:.1f}%)")
+    print(f"Overlap (comp + packet) time: {analysis['overlap_cycles']} cycles ({analysis['overlap_percentage']:.1f}%)")
+    print(f"Total active time: {analysis['total_active_cycles']} cycles ({analysis['active_percentage']:.1f}%)")
+    print(f"Idle time: {analysis['idle_cycles']} cycles ({analysis['idle_percentage']:.1f}%)")
+
+    print(f"\nComputation Parallelism Analysis:")
+    print(f"Total computation work: {analysis['total_computation_work']} cycles (if serial)")
+    print(f"Actual computation time: {analysis['computation_occupied_cycles']} cycles")
+    print(f"Parallelism speedup: {analysis['parallelism_speedup']:.2f}x")
+    print(f"Max parallel computations: {analysis['max_parallel_computations']}")
+    print(f"Avg parallel computations: {analysis['avg_parallel_computations']:.2f}")
+    print(f"Computation utilization: {analysis['computation_utilization']:.1f}%")
+
+    print(f"\nComputation Time Breakdown:")
+    print(f"Serial computation time: {analysis['serial_computation_cycles']} cycles ({analysis['serial_comp_percentage']:.1f}%)")
+    print(f"Parallel computation time: {analysis['parallel_computation_cycles']} cycles ({analysis['parallel_comp_percentage']:.1f}%)")
+
+    print(f"\nEfficiency Metrics:")
+    print(f"Computation efficiency: {analysis['computation_efficiency']:.1f}% (of active time)")
+    print(f"Packet efficiency: {analysis['packet_efficiency']:.1f}% (of active time)")
+
+    if analysis['overlap_cycles'] > 0:
+        print(f"\nComp-Packet Parallelism:")
+        print(f"Computation + packet overlap: {analysis['overlap_cycles']} cycles")
+        print(f"Overlap utilization: {analysis['overlap_percentage']:.1f}% of total time")
+
+
 def print_timing_analysis(df: pd.DataFrame, packet_latencies: List[Dict], computation_times: List[Dict]):
     """
     Print detailed timing analysis
@@ -233,21 +411,21 @@ def print_timing_analysis(df: pd.DataFrame, packet_latencies: List[Dict], comput
     print(f"\nPacket Latency Analysis:")
     print(f"Total packets analyzed: {len(packet_latencies)}")
 
-    if packet_latencies:
-        latencies = [p['latency'] for p in packet_latencies]
-        print(f"Average packet latency: {np.mean(latencies):.2f} cycles")
-        print(f"Min packet latency: {np.min(latencies)} cycles")
-        print(f"Max packet latency: {np.max(latencies)} cycles")
-        print(f"Std dev packet latency: {np.std(latencies):.2f} cycles")
+    #if packet_latencies:
+    #    latencies = [p['latency'] for p in packet_latencies]
+    #    print(f"Average packet latency: {np.mean(latencies):.2f} cycles")
+    #    print(f"Min packet latency: {np.min(latencies)} cycles")
+    #    print(f"Max packet latency: {np.max(latencies)} cycles")
+    #    print(f"Std dev packet latency: {np.std(latencies):.2f} cycles")
 
-        print(f"\nDetailed Packet Timing:")
-        print(f"{'Packet ID':<10} {'Type':<12} {'Start':<8} {'End':<8} {'Latency':<8}")
-        print("-" * 40)
-        for packet in sorted(packet_latencies, key=lambda x: x['start_cycle'])[:10]:  # Show first 10
-            print(f"{packet['packet_id']:<10} {packet['communication_type']:<12} {packet['start_cycle']:<8} {packet['end_cycle']:<8} {packet['latency']:<8}")
+    #    print(f"\nDetailed Packet Timing:")
+    #    print(f"{'Packet ID':<10} {'Type':<12} {'Start':<8} {'End':<8} {'Latency':<8}")
+    #    print("-" * 40)
+    #    for packet in sorted(packet_latencies, key=lambda x: x['start_cycle'])[:10]:  # Show first 10
+    #        print(f"{packet['packet_id']:<10} {packet['communication_type']:<12} {packet['start_cycle']:<8} {packet['end_cycle']:<8} {packet['latency']:<8}")
 
-        if len(packet_latencies) > 10:
-            print(f"... and {len(packet_latencies) - 10} more packets")
+    #    if len(packet_latencies) > 10:
+    #        print(f"... and {len(packet_latencies) - 10} more packets")
 
     # Computation time analysis
     print(f"\nComputation Time Analysis:")
@@ -260,9 +438,9 @@ def print_timing_analysis(df: pd.DataFrame, packet_latencies: List[Dict], comput
         print(f"Max computation time: {np.max(durations)} cycles")
         print(f"Std dev computation time: {np.std(durations):.2f} cycles")
 
-        print(f"\nDetailed Computation Timing:")
-        print(f"{'Comp ID':<10} {'Start':<8} {'End':<8} {'Duration':<8}")
-        print("-" * 40)
+        #print(f"\nDetailed Computation Timing:")
+        #print(f"{'Comp ID':<10} {'Start':<8} {'End':<8} {'Duration':<8}")
+        #print("-" * 40)
         for comp in sorted(computation_times, key=lambda x: x['start_cycle'])[:10]:  # Show first 10
             print(f"{comp['computation_id']:<10} {comp['start_cycle']:<8} {comp['end_cycle']:<8} {comp['duration']:<8}")
 
@@ -613,6 +791,209 @@ def plot_timing_analysis(analysis_results: Dict, output_path: Optional[str] = No
     plt.show()
 
 
+def plot_parallel_execution_comparison(results_list, partition_counts: List[int],
+                                    overlap_strategy: str = 'three_part',
+                                    output_path: Optional[str] = None):
+    """
+    Create bar plot comparing parallel execution across different partition counts.
+
+    Parameters:
+    -----------
+    results_list : List[Dict] or List[pd.DataFrame]
+        List of analysis results from analyze_parallel_execution_time() (Dict)
+        or DataFrames from parallel_analysis_to_dataframe()
+    partition_counts : List[int]
+        List of partition counts corresponding to each result
+    overlap_strategy : str
+        How to handle overlap in visualization:
+        - 'three_part': Computation, Overlap, Packets (most accurate)
+        - 'subtract_from_comp': Subtract overlap from computation
+        - 'subtract_from_packet': Subtract overlap from packet transmission
+        - 'ignore_overlap': Simple two-part (will exceed 100%)
+    output_path : str, optional
+        Path to save the plot
+    """
+
+    if len(results_list) != len(partition_counts):
+        raise ValueError("results_list and partition_counts must have same length")
+
+    # Prepare data for plotting
+    comp_data = []
+    packet_data = []
+    overlap_data = []
+    idle_data = []
+    total_cycles = []
+
+    for result in results_list:
+        # Handle both DataFrame and Dict inputs
+        if isinstance(result, pd.DataFrame):
+            # Extract values from DataFrame (assuming single row)
+            row = result.iloc[0]
+            total = row['total_simulation_cycles']
+            comp_cycles = row['computation_occupied_cycles']
+            packet_cycles = row['packet_occupied_cycles']
+            overlap_cycles = row['overlap_cycles']
+            idle_cycles = row['idle_cycles']
+        else:
+            # Handle Dict input (original format)
+            total = result['total_simulation_cycles']
+            comp_cycles = result['computation_occupied_cycles']
+            packet_cycles = result['packet_occupied_cycles']
+            overlap_cycles = result['overlap_cycles']
+            idle_cycles = result['idle_cycles']
+
+        total_cycles.append(total)
+
+        if overlap_strategy == 'three_part':
+            # Pure computation, overlap, pure packet, idle
+            pure_comp = comp_cycles - overlap_cycles
+            pure_packet = packet_cycles - overlap_cycles
+            comp_data.append(pure_comp)
+            packet_data.append(pure_packet)
+            overlap_data.append(overlap_cycles)
+            idle_data.append(idle_cycles)
+
+        elif overlap_strategy == 'subtract_from_comp':
+            # Subtract overlap from computation
+            comp_data.append(comp_cycles - overlap_cycles)
+            packet_data.append(packet_cycles)
+            overlap_data.append(0)
+            idle_data.append(idle_cycles + overlap_cycles)
+
+        elif overlap_strategy == 'subtract_from_packet':
+            # Subtract overlap from packet
+            comp_data.append(comp_cycles)
+            packet_data.append(packet_cycles - overlap_cycles)
+            overlap_data.append(0)
+            idle_data.append(idle_cycles + overlap_cycles)
+
+        else:  # ignore_overlap
+            comp_data.append(comp_cycles)
+            packet_data.append(packet_cycles)
+            overlap_data.append(0)
+            idle_data.append(idle_cycles)
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    x = np.arange(len(partition_counts))
+    width = 0.6
+
+    # Create stacked bars
+    if overlap_strategy == 'three_part':
+        p1 = ax.bar(x, comp_data, width, label='Pure Computation', color='#2E86AB', alpha=0.8)
+        p2 = ax.bar(x, overlap_data, width, bottom=comp_data, label='Computation + Packet Overlap', color='#A23B72', alpha=0.8)
+        p3 = ax.bar(x, packet_data, width, bottom=np.array(comp_data) + np.array(overlap_data),
+                   label='Pure Packet Transmission', color='#F18F01', alpha=0.8)
+        p4 = ax.bar(x, idle_data, width,
+                   bottom=np.array(comp_data) + np.array(overlap_data) + np.array(packet_data),
+                   label='Idle', color='#C73E1D', alpha=0.3)
+    else:
+        p1 = ax.bar(x, comp_data, width, label='Computation', color='#2E86AB', alpha=0.8)
+        p2 = ax.bar(x, packet_data, width, bottom=comp_data, label='Packet Transmission', color='#F18F01', alpha=0.8)
+        p3 = ax.bar(x, idle_data, width, bottom=np.array(comp_data) + np.array(packet_data),
+                   label='Idle/Other', color='#C73E1D', alpha=0.3)
+
+    # Customize the plot
+    ax.set_xlabel('Number of Partitions', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Simulation Cycles', fontsize=12, fontweight='bold')
+    ax.set_title('Parallel Execution Time Distribution by Partition Count', fontsize=14, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(partition_counts)
+    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
+
+    # Add percentage labels on bars
+    for i, (partitions, total) in enumerate(zip(partition_counts, total_cycles)):
+        comp_pct = (comp_data[i] / total) * 100
+        packet_pct = (packet_data[i] / total) * 100
+
+        # Add text on computation part
+        if comp_data[i] > total * 0.05:  # Only if segment is large enough
+            ax.text(i, comp_data[i]/2, f'{comp_pct:.1f}%',
+                   ha='center', va='center', fontweight='bold', color='white')
+
+        # Add text on packet part
+        if packet_data[i] > total * 0.05:
+            y_pos = comp_data[i] + (overlap_data[i] if overlap_strategy == 'three_part' else 0) + packet_data[i]/2
+            ax.text(i, y_pos, f'{packet_pct:.1f}%',
+                   ha='center', va='center', fontweight='bold', color='white')
+
+    # Add grid for better readability
+    ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+    ax.set_axisbelow(True)
+
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to: {output_path}")
+
+    plt.show()
+
+    # Print summary table
+    print("\n" + "="*80)
+    print("PARALLEL EXECUTION COMPARISON SUMMARY")
+    print("="*80)
+    print(f"{'Partitions':<10} {'Total':<8} {'Comp':<8} {'Packet':<8} {'Overlap':<8} {'Idle':<6} {'Speedup':<8}")
+    print("-" * 80)
+
+    for i, (partitions, result) in enumerate(zip(partition_counts, results_list)):
+        total = result['total_simulation_cycles']
+        comp_pct = (result['computation_occupied_cycles'] / total) * 100
+        packet_pct = (result['packet_occupied_cycles'] / total) * 100
+        overlap_pct = (result['overlap_cycles'] / total) * 100
+        idle_pct = (result['idle_cycles'] / total) * 100
+        speedup = result['parallelism_speedup']
+
+        print(f"{partitions:<10} {total:<8} {comp_pct:<7.1f}% {packet_pct:<7.1f}% {overlap_pct:<7.1f}% {idle_pct:<5.1f}% {speedup:<7.2f}x")
+
+
+def parallel_analysis_to_dataframe(parallel_analysis: Dict, strategy_name: str = None) -> pd.DataFrame:
+    """
+    Convert parallel execution analysis dictionary to DataFrame for CSV export.
+
+    Parameters:
+    -----------
+    parallel_analysis : Dict
+        Result from analyze_parallel_execution_time()
+    strategy_name : str, optional
+        Name of the strategy/configuration being analyzed
+
+    Returns:
+    --------
+    pd.DataFrame with parallel execution metrics
+    """
+
+    data = {
+        'strategy': [strategy_name] if strategy_name else ['default'],
+        'total_simulation_cycles': [parallel_analysis['total_simulation_cycles']],
+        'computation_occupied_cycles': [parallel_analysis['computation_occupied_cycles']],
+        'packet_occupied_cycles': [parallel_analysis['packet_occupied_cycles']],
+        'overlap_cycles': [parallel_analysis['overlap_cycles']],
+        'total_active_cycles': [parallel_analysis['total_active_cycles']],
+        'idle_cycles': [parallel_analysis['idle_cycles']],
+        'computation_percentage': [parallel_analysis['computation_percentage']],
+        'packet_percentage': [parallel_analysis['packet_percentage']],
+        'overlap_percentage': [parallel_analysis['overlap_percentage']],
+        'active_percentage': [parallel_analysis['active_percentage']],
+        'idle_percentage': [parallel_analysis['idle_percentage']],
+        'computation_efficiency': [parallel_analysis['computation_efficiency']],
+        'packet_efficiency': [parallel_analysis['packet_efficiency']],
+        'max_parallel_computations': [parallel_analysis['max_parallel_computations']],
+        'avg_parallel_computations': [parallel_analysis['avg_parallel_computations']],
+        'serial_computation_cycles': [parallel_analysis['serial_computation_cycles']],
+        'parallel_computation_cycles': [parallel_analysis['parallel_computation_cycles']],
+        'serial_comp_percentage': [parallel_analysis['serial_comp_percentage']],
+        'parallel_comp_percentage': [parallel_analysis['parallel_comp_percentage']],
+        'total_computation_work': [parallel_analysis['total_computation_work']],
+        'parallelism_efficiency': [parallel_analysis['parallelism_efficiency']],
+        'parallelism_speedup': [parallel_analysis['parallelism_speedup']],
+        'computation_utilization': [parallel_analysis['computation_utilization']]
+    }
+
+    return pd.DataFrame(data)
+
+
 # Example usage function
 def analyze_simulation_results(config_path: str, output_dir: str = ".", create_plots: bool = True):
     """
@@ -659,13 +1040,13 @@ def analyze_simulation_results(config_path: str, output_dir: str = ".", create_p
     return analysis_results
 
 
-if __name__ == "__main__":
-    # Example usage
-    # Replace with your actual config file path
-    config_file = "./data/partitioner_data/test1.json"
-
-    try:
-        results = analyze_simulation_results(config_file)
-        print("\nAnalysis completed successfully!")
-    except Exception as e:
-        print(f"Error during analysis: {e}")
+#if __name__ == "__main__":
+#    # Example usage
+#    # Replace with your actual config file path
+#    config_file = "./data/partitioner_data/test1.json"
+#
+#    try:
+#       results = analyze_simulation_results(config_file)
+#        print("\nAnalysis completed successfully!")
+#    except Exception as e:
+#        print(f"Error during analysis: {e}")

@@ -85,16 +85,29 @@ set(analytical_SRC
 add_library(_analytical STATIC ${analytical_SRC})
 target_include_directories(_analytical PUBLIC src/analytical/src src/analytical/include ${nlohmann_json_INCLUDE_DIR} ${pybind11_INCLUDE_DIRS})
 
+# Define fast analytical model source files
+set(fast_analytical_SRC
+    src/fast_analytical_model/fast_model.cpp
+)
+
+# Create fast analytical model library
+add_library(_fast_analytical STATIC ${fast_analytical_SRC})
+target_include_directories(_fast_analytical PUBLIC src/fast_analytical_model ${nlohmann_json_INCLUDE_DIR} ${pybind11_INCLUDE_DIRS})
+
 # Define the main executables
 add_executable(run_restart src/restart/src/main.cpp)
 add_executable(run_analytical src/analytical/src/main.cpp)
+add_executable(run_fast_analytical src/fast_analytical_model/main.cpp)
 
 # Define the pybind11 modules
 pybind11_add_module(nocsim src/restart/src/simulation_bindings.cpp)
 pybind11_add_module(analytical_simulator src/analytical/src/simulation_bindings_anal.cpp)
+pybind11_add_module(fast_nocsim src/fast_analytical_model/fast_bindings.cpp)
 
 # Link libraries
 target_link_libraries(run_restart PUBLIC _restart pybind11::module Python::Python m)
 target_link_libraries(run_analytical PUBLIC _analytical pybind11::module Python::Python m)
+target_link_libraries(run_fast_analytical PUBLIC _fast_analytical pybind11::module Python::Python m)
 target_link_libraries(nocsim PUBLIC _restart pybind11::module Python::Python m)
 target_link_libraries(analytical_simulator PUBLIC _analytical pybind11::module Python::Python m)
+target_link_libraries(fast_nocsim PUBLIC _fast_analytical pybind11::module Python::Python m)

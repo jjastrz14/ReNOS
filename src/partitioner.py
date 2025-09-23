@@ -32,11 +32,11 @@ import time
 
 
 if __name__ == '__main__':
-    model = single_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
+    model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
     x_of_grid = 4
     source = 0
@@ -45,20 +45,22 @@ if __name__ == '__main__':
     grid = dm.Grid()
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
 
-    partitioner_tuples = []
-    for layer in model.layers:
-        # Explore all partitioning combinations
-        spatial, output, input_split = search_space_split_factors(
-            layer, 
-            factor=4,  # Max splitting factor
-            FLOP_threshold=3e6,
-            size_of_grid = x_of_grid**2,
-            return_best_valid=True,
-            path = "data/partitioner_data"
-        )
-        print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
-        partitioner_tuples.append((spatial, output, input_split))
+    #partitioner_tuples = []
+    #for layer in model.layers:
+    #    # Explore all partitioning combinations
+    #    spatial, output, input_split = search_space_split_factors(
+    #        layer, 
+    #        factor=4,  # Max splitting factor
+    #        FLOP_threshold=3e6,
+    #        size_of_grid = x_of_grid**2,
+    #        return_best_valid=True,
+    #        path = "data/partitioner_data"
+    #    )
+    #    print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
+    #    partitioner_tuples.append((spatial, output, input_split))
 
+
+    partitioner_tuples = [(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]
     #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
 
     #partitioner_tuple = (spatial, output, input_split)
@@ -84,7 +86,7 @@ if __name__ == '__main__':
 
     #instead of optmisation step, just map following a simple path from source to drain
     task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-    path = choose_path_simply(task_graph, grid, ass_factor = x_of_grid**2, verbose = False)
+    path = row_wise_mapping(task_graph, grid, verbose = False)
 
     # constuct the mapping form the path
     mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
@@ -121,11 +123,11 @@ if __name__ == '__main__':
     time_ratio = booksim_time / analytical_time
     print(f"Time gain: {time_ratio:.4f}x")
 
-    visualise = False
+    visualise = True
     if visualise:
         plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
         # Visualize analytical model simulation
-        total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
+        #total_latency, visualizer = visualize_simulation(stub_anal.fast_sim, "./data/partitioner_data/mapping.json", timeline_path="./data/partitioner_data/timeline_analytical.png", utilization_path="./data/partitioner_data/utilization.png")
         
     print("Partitioner Done!")
 

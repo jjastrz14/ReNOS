@@ -71,7 +71,7 @@ if __name__ == "__main__":
     
     #measute time of the optmiization
     start = time.time()
-    model = LeNet4((28, 28, 1), verbose=True)
+    #model = LeNet4((28, 28, 1), verbose=True)
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     # model = Resnet9s((32, 32, 3), verbose=True)
     # model = test_conv((28, 28, 1), num_classes = 2, verbose=True)
@@ -80,14 +80,14 @@ if __name__ == "__main__":
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
-    #model = ResNet_early_blocks((32, 32, 3), verbose=True)
+    model = ResNet_early_blocks((32,32,3), verbose=True)
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
     # grid is: number of processor x number of processors (size_of_grid x size_of_grid)
-    size_of_grid = 4
+    size_of_grid = 12
     source = 0
-    drain = 15
+    drain = 143
 
     grid = dm.Grid()
     grid.init(size_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
@@ -100,8 +100,13 @@ if __name__ == "__main__":
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
     #spatial, output, input
-    parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
-    
+    #parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
+    partitioner_tuples=[(0,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]
+    num_partitions = 2**partitioner_tuples[1][0]*partitioner_tuples[1][1]*partitioner_tuples[1][2]
+        
+    dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
+    #spatial, output, input
+    parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
     #print partitions and dependencies in a table format
     print("")
     print("Analysis of the partitions...") 
@@ -123,15 +128,15 @@ if __name__ == "__main__":
         print("\n ...Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 10,
+            n_ants = 25,
             rho = 0.05, #evaporation rate
             n_best = 5,
-            n_iterations = 10,
+            n_iterations = 100,
             alpha = 1.,
             beta = 1.2,
             is_analytical = False, #use analytical model instead of cycle-accurate simulator
         )
-        n_procs = 10
+        n_procs = 5
         
         if args.algo == "ACO_parallel":
             print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
@@ -168,17 +173,17 @@ if __name__ == "__main__":
         print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 30, #30,
+        sol_per_pop = 25, #30,
         n_parents_mating= 10, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 10, #800,
+        n_generations = 100, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
-        is_analytical = True, #use analytical model instead of cycle-accurate simulator
+        is_analytical = False, #use analytical model instead of cycle-accurate simulator
         )
         
-        n_procs = 10
+        n_procs = 5
         
         if args.algo == "GA_parallel":
             print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")

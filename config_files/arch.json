@@ -39,8 +39,8 @@
             "reconf_batch_size": 0,
             "reconf_cycles":  2.0,
             "ANY_comp_cycles": 0.25,
-            "max_pe_mem": 100000000,
-            "threshold_pe_mem": 80000000,
+            "max_pe_mem": 10000000000000,
+            "threshold_pe_mem": 80000000000000,
             "watch_out" : "-",
             "sim_power": 1,
             "tech_file": "src/restart/src/power/techfile.json"
