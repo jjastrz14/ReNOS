@@ -198,6 +198,23 @@ double FastAnalyticalModel::get_max_dependency_completion_time(const std::vector
     return max_time;
 }
 
+double FastAnalyticalModel::calculate_task_start_time(const FastTask& task) const {
+    // Start time is the maximum of:
+    // 1. All dependency completion times
+    // 2. Node availability (for COMP_OP tasks that need the computation unit)
+
+    double dep_time = get_max_dependency_completion_time(task.dependencies);
+
+    // For COMP_OP tasks, also wait for the node to be available
+    if (task.type == "COMP_OP") {
+        double node_time = _node_available_times.at(task.node);
+        return std::max(dep_time, node_time);
+    }
+
+    // For communication tasks, just wait for dependencies
+    return dep_time;
+}
+
 double FastAnalyticalModel::calculate_task_completion(const FastTask& task, double start_time) const {
     if (task.type == "COMP_OP") {
         return calculate_comp_op_completion(task, start_time);
@@ -316,7 +333,7 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
     int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
 
     // Queuing delay (simplified)
-    int queuing_delay = 2; // Assume 1 cycle queuing delay per hop
+    int queuing_delay = 1; // Assume 1 cycle queuing delay per hop
 
     // Total packet latency
     double T_packet = n_routers * (t_head_hop + t_link + queuing_delay) +

@@ -35,9 +35,9 @@ import time
 
 if __name__ == '__main__':
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
-    model = double_conv((10, 10, 4), num_classes=1, verbose=True)
+    #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
-    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    model = ResNet_early_blocks((16, 16, 3), verbose=True)
     #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
     x_of_grid = 4
@@ -61,10 +61,9 @@ if __name__ == '__main__':
     #    print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
     #    partitioner_tuples.append((spatial, output, input_split))
 
-    partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)]
-    num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in partitioner_tuples]
-    print(f"number of partitions per layer: {num_partitions_per_layer}")
-    #partitioner_tuples = [(0, 1, 1), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4)]
+    #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)]
+    
+    partitioner_tuples = [(0, 1, 1), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4)]
     #for lenet: 
     #[(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]]
     #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
@@ -72,7 +71,8 @@ if __name__ == '__main__':
     #partitioner_tuple = (spatial, output, input_split)
 
     #### Model analysis and partitioning ####
-
+    num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in partitioner_tuples]
+    print(f"number of partitions per layer: {num_partitions_per_layer}")
     print("")
     #print("Analysis of the model...")
     #analyze_ops(model, incl_info = True)
@@ -114,13 +114,13 @@ if __name__ == '__main__':
     print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
     
     # Measure Analytical Model simulation time
-    print("Analytical model simulation...")
-    stub_anal = ssam.AnalyticalSimulatorStub()
-    start_time = time.time()
-    result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
-    analytical_time = time.time() - start_time
-    print(f"Analytical model result: {result_anal}")
-    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
+    #print("Analytical model simulation...")
+    #stub_anal = ssam.AnalyticalSimulatorStub()
+    #start_time = time.time()
+    #result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
+    #analytical_time = time.time() - start_time
+    #print(f"Analytical model result: {result_anal}")
+    #print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
 
     # Measure Booksim2 simulation time
     print("Booksim2 simulation...")
@@ -132,18 +132,18 @@ if __name__ == '__main__':
     print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
 
     
-    percentage_diff_anal = abs(result_anal - result) / result * 100
+    #percentage_diff_anal = abs(result_anal - result) / result * 100
     percentage_diff_fast_anal = abs(result_fast_anal - result) / result * 100
     print("\nComparison of results:")
-    print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff_anal:.2f}%)")
+    #print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff_anal:.2f}%)")
     print(f"Difference fast analytical: {abs(result_fast_anal - result)} cycles ({percentage_diff_fast_anal:.2f}%)")
     print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
-    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
+    #print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
     print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
     
     # Compare simulation times
-    time_ratio_anal = booksim_time / analytical_time
-    print(f"Time gain: {time_ratio_anal:.4f}x")
+    #time_ratio_anal = booksim_time / analytical_time
+    #print(f"Time gain: {time_ratio_anal:.4f}x")
     print(f"Time gain fast analytical: {booksim_time / fast_analytical_time:.4f}x")
     
 
