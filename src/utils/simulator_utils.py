@@ -1,5 +1,5 @@
 import simulator_stub as ss
-import analytical_simulator_stub as ssam
+import fast_analytical_simulator_stub as ssam
 from visualizer import plot_timeline
 """
 Utility functions for simulator comparison and analysis

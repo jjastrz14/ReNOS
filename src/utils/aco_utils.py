@@ -18,7 +18,7 @@ import numpy as np
 import random
 import time
 import simulator_stub as ss
-import analytical_simulator_stub as ssam
+import fast_analytical_simulator_stub as ssam
 import mapper as mp
 from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE
 from utils.partitioner_utils import PE

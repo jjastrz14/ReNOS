@@ -25,7 +25,6 @@ from utils.partitioner_utils import *
 from utils.plotting_utils import *
 import mapper as ma
 import simulator_stub as ss
-import analytical_simulator_stub as ssam
 import fast_analytical_simulator_stub as ssfam
 from visualizer import plot_timeline
 from utils.ani_utils import visualize_simulation
@@ -112,15 +111,6 @@ if __name__ == '__main__':
     fast_analytical_time = time.time() - start_time
     print(f"Fast Analytical model result: {result_fast_anal}")
     print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
-    
-    # Measure Analytical Model simulation time
-    #print("Analytical model simulation...")
-    #stub_anal = ssam.AnalyticalSimulatorStub()
-    #start_time = time.time()
-    #result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
-    #analytical_time = time.time() - start_time
-    #print(f"Analytical model result: {result_anal}")
-    #print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
 
     # Measure Booksim2 simulation time
     print("Booksim2 simulation...")
@@ -132,18 +122,13 @@ if __name__ == '__main__':
     print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
 
     
-    #percentage_diff_anal = abs(result_anal - result) / result * 100
     percentage_diff_fast_anal = abs(result_fast_anal - result) / result * 100
     print("\nComparison of results:")
-    #print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff_anal:.2f}%)")
     print(f"Difference fast analytical: {abs(result_fast_anal - result)} cycles ({percentage_diff_fast_anal:.2f}%)")
     print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
-    #print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
     print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
     
     # Compare simulation times
-    #time_ratio_anal = booksim_time / analytical_time
-    #print(f"Time gain: {time_ratio_anal:.4f}x")
     print(f"Time gain fast analytical: {booksim_time / fast_analytical_time:.4f}x")
     
 

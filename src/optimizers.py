@@ -20,7 +20,7 @@ import numpy as np
 import random
 from numpy.random import seed
 import simulator_stub as ss
-import analytical_simulator_stub as ssam
+import fast_analytical_simulator_stub as ssam
 import mapper as ma
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
