@@ -50,7 +50,7 @@ GLOBAL_EVENT_COLORS = {
 
 # Global color and alpha configuration for consistent plotting across all classes
 GLOBAL_EVENT_COLORS = {
-    'comp': ('#FF6347', 0.9),           # tomato - Computation
+    'comp': ('#FF6347', 0.7),           # tomato - Computation
     'recon': ('#2E8B57', 0.9),          # seagreen - Reconfiguration  
     'traf_out': ('#6495ED', 0.7),       # cornflowerblue - Traffic PE out
     'traf_in': ('#FFA500', 0.7),        # orange - Traffic PE in
@@ -1250,7 +1250,6 @@ class NoCTimelinePlotter(NoCPlotter):
                 continue
             else:
                 raise TypeError(f"Unknown event type: {event.type}") 
-                        
     
     def _print_node_events(self):
         """Print event data for debugging."""

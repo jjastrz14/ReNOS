@@ -23,6 +23,14 @@ analytical_include_dirs = ['src/analytical/include', 'src/analytical/src', pybin
 for root, dirs, files in os.walk('src/analytical/src'):
     analytical_include_dirs.append(root)
 
+# Fast analytical simulator extension
+fast_analytical_cpp_files = [
+    f for f in glob.glob('src/fast_analytical_model/**/*.cpp', recursive=True)
+    if not os.path.basename(f) == 'main.cpp'
+]
+
+fast_analytical_include_dirs = ['src/fast_analytical_model', 'src/restart/include', pybind11.get_include()]
+
 ext_modules = [
     # Original BookSim2 simulator
     Extension(
@@ -39,13 +47,21 @@ ext_modules = [
         include_dirs=analytical_include_dirs + ['/opt/homebrew/Cellar/nlohmann-json/3.11.3/include'],
         language='c++',
         extra_compile_args=['-std=c++17'],
+    ),
+    # Fast analytical simulator
+    Extension(
+        'fast_nocsim',
+        sources=fast_analytical_cpp_files,
+        include_dirs=fast_analytical_include_dirs + ['/opt/homebrew/Cellar/nlohmann-json/3.11.3/include'],
+        language='c++',
+        extra_compile_args=['-std=c++17'],
     )
 ]
 
 setup(
     name='renos-simulators',
-    version='1.2.0',
-    description='ReNOS: NoC simulators with both cycle-accurate (BookSim2 extended) and analytical models',
+    version='1.3.0',
+    description='ReNOS: NoC simulators with cycle-accurate (BookSim2), analytical, and fast analytical models',
     ext_modules=ext_modules,
     setup_requires=['pybind11>=2.6'],
     install_requires=['pybind11>=2.6'],

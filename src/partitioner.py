@@ -26,17 +26,19 @@ from utils.plotting_utils import *
 import mapper as ma
 import simulator_stub as ss
 import analytical_simulator_stub as ssam
+import fast_analytical_simulator_stub as ssfam
 from visualizer import plot_timeline
 from utils.ani_utils import visualize_simulation
 import time
 
 
+
 if __name__ == '__main__':
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
-    #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
+    model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
+    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
     x_of_grid = 4
     source = 0
@@ -59,8 +61,12 @@ if __name__ == '__main__':
     #    print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
     #    partitioner_tuples.append((spatial, output, input_split))
 
-
-    partitioner_tuples = [(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]
+    partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)]
+    num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in partitioner_tuples]
+    print(f"number of partitions per layer: {num_partitions_per_layer}")
+    #partitioner_tuples = [(0, 1, 1), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4), (1,4,4)]
+    #for lenet: 
+    #[(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]]
     #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
 
     #partitioner_tuple = (spatial, output, input_split)
@@ -96,6 +102,25 @@ if __name__ == '__main__':
     mapper.init(task_graph, grid)
     mapper.set_mapping(mapping)
     mapper.mapping_to_json("../data/partitioner_data/mapping.json", file_to_append="./config_files/arch.json")
+    
+    print("Fast Analytical model simulation...")
+    # Create the stub
+    fast_sim = ssfam.FastAnalyticalSimulatorStub()
+    # Run simulation
+    start_time = time.time()
+    result_fast_anal, logger_fast_anal = fast_sim.run_simulation("./data/partitioner_data/mapping.json", verbose=True)
+    fast_analytical_time = time.time() - start_time
+    print(f"Fast Analytical model result: {result_fast_anal}")
+    print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
+    
+    # Measure Analytical Model simulation time
+    print("Analytical model simulation...")
+    stub_anal = ssam.AnalyticalSimulatorStub()
+    start_time = time.time()
+    result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
+    analytical_time = time.time() - start_time
+    print(f"Analytical model result: {result_anal}")
+    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
 
     # Measure Booksim2 simulation time
     print("Booksim2 simulation...")
@@ -104,24 +129,23 @@ if __name__ == '__main__':
     result, logger = stub.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
     booksim_time = time.time() - start_time
     print(f"Booksim2 result: {result}")
-
-    # Measure Analytical Model simulation time
-    print("Analytical model simulation...")
-    stub_anal = ssam.AnalyticalSimulatorStub()
-    start_time = time.time()
-    result_anal, logger_anal = stub_anal.run_simulation("./data/partitioner_data/mapping.json", dwrap=True)
-    analytical_time = time.time() - start_time
-    print(f"Analytical model result: {result_anal}")
-    
-    percentage_diff = abs(result_anal - result) / result * 100
-    ratio = result_anal / result
-    print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff:.2f}%)")
-    #print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
-    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
     print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
+
+    
+    percentage_diff_anal = abs(result_anal - result) / result * 100
+    percentage_diff_fast_anal = abs(result_fast_anal - result) / result * 100
+    print("\nComparison of results:")
+    print(f"\nDifference: {abs(result_anal - result)} cycles ({percentage_diff_anal:.2f}%)")
+    print(f"Difference fast analytical: {abs(result_fast_anal - result)} cycles ({percentage_diff_fast_anal:.2f}%)")
+    print(f"Booksim2 simulation time: {booksim_time:.4f} seconds")
+    print(f"Analytical model simulation time: {analytical_time:.4f} seconds")
+    print(f"Fast Analytical model simulation time: {fast_analytical_time:.4f} seconds")
+    
     # Compare simulation times
-    time_ratio = booksim_time / analytical_time
-    print(f"Time gain: {time_ratio:.4f}x")
+    time_ratio_anal = booksim_time / analytical_time
+    print(f"Time gain: {time_ratio_anal:.4f}x")
+    print(f"Time gain fast analytical: {booksim_time / fast_analytical_time:.4f}x")
+    
 
     visualise = True
     if visualise:
