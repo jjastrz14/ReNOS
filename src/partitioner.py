@@ -132,7 +132,7 @@ if __name__ == '__main__':
     print(f"Time gain fast analytical: {booksim_time / fast_analytical_time:.4f}x")
     
 
-    visualise = True
+    visualise = False
     if visualise:
         plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
         # Visualize analytical model simulation

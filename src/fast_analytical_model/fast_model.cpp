@@ -52,6 +52,8 @@ void FastAnalyticalModel::configure_from_json(const json& config) {
     if (arch.contains("st_final_delay")) _arch.st_final_delay = arch["st_final_delay"];
     if (arch.contains("speculative")) _arch.speculative = arch["speculative"];
     if (arch.contains("ANY_comp_cycles")) _arch.ANY_comp_cycles = arch["ANY_comp_cycles"];
+    if (arch.contains("C_S")) _arch.C_S = arch["C_S"];
+    if (arch.contains("traffic_burstiness_k")) _arch.traffic_burstiness_k = arch["traffic_burstiness_k"];
 
     calculate_total_nodes();
 
@@ -61,6 +63,9 @@ void FastAnalyticalModel::configure_from_json(const json& config) {
     }
 
     parse_tasks_from_json(config["workload"]);
+
+    // Calculate traffic parameters for queuing model
+    calculate_traffic_parameters();
 }
 
 void FastAnalyticalModel::calculate_total_nodes() {
@@ -284,6 +289,140 @@ double FastAnalyticalModel::calculate_write_req_completion(const FastTask& task,
             step4_latency + step4_processing;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Routing Helper Functions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+std::pair<int, int> FastAnalyticalModel::node_to_coords(int node_id) const {
+    // Convert node ID to (x, y) coordinates
+    // Assumes row-major ordering: node_id = y * k + x
+    int x = node_id % _arch.k;
+    int y = node_id / _arch.k;
+    return {x, y};
+}
+
+int FastAnalyticalModel::coords_to_node(int x, int y) const {
+    // Convert (x, y) coordinates to node ID
+    return y * _arch.k + x;
+}
+
+int FastAnalyticalModel::get_opposite_port(int port) const {
+    // Return the opposite direction port
+    switch (port) {
+        case PORT_NORTH: return PORT_SOUTH;
+        case PORT_SOUTH: return PORT_NORTH;
+        case PORT_EAST:  return PORT_WEST;
+        case PORT_WEST:  return PORT_EAST;
+        case PORT_LOCAL: return PORT_LOCAL;
+        default: return PORT_LOCAL;
+    }
+}
+
+// Here we implement dimension-order routing for 2D torus/mesh networks (XY routing)
+// as the preliminary study is okay, but feel free to extend for other routing algorithms / topologies
+std::vector<Hop> FastAnalyticalModel::trace_routing_path(int src, int dst) const {
+    std::vector<Hop> path;
+
+    if (src == dst) {
+        // Local communication - no hops through network
+        return path;
+    }
+
+    // Only support 2D torus/mesh for now
+    if (_arch.n != 2) {
+        throw std::runtime_error("Routing only implemented for 2D networks (n=2)");
+    }
+
+    auto [src_x, src_y] = node_to_coords(src);
+    auto [dst_x, dst_y] = node_to_coords(dst);
+
+    int current_node = src;
+    int current_x = src_x;
+    int current_y = src_y;
+    int input_port = PORT_LOCAL;  // Start from injection port
+
+    // Dimension-order routing: X dimension first, then Y dimension
+
+    // Route in X dimension
+    while (current_x != dst_x) {
+        int output_port;
+        int next_x = current_x;
+
+        if (_arch.topology == "torus") {
+            // For torus, choose shortest path (may wrap around)
+            int dist_east = (dst_x - current_x + _arch.k) % _arch.k;
+            int dist_west = (current_x - dst_x + _arch.k) % _arch.k;
+
+            if (dist_east <= dist_west) {
+                output_port = PORT_EAST;
+                next_x = (current_x + 1) % _arch.k;
+            } else {
+                output_port = PORT_WEST;
+                next_x = (current_x - 1 + _arch.k) % _arch.k;
+            }
+        } else {
+            // For mesh, simple comparison
+            if (dst_x > current_x) {
+                output_port = PORT_EAST;
+                next_x = current_x + 1;
+            } else {
+                output_port = PORT_WEST;
+                next_x = current_x - 1;
+            }
+        }
+
+        // Add hop
+        path.push_back(Hop(current_node, input_port, output_port));
+
+        // Move to next node
+        current_x = next_x;
+        current_node = coords_to_node(current_x, current_y);
+        input_port = get_opposite_port(output_port);
+    }
+
+    // Route in Y dimension
+    while (current_y != dst_y) {
+        int output_port;
+        int next_y = current_y;
+
+        if (_arch.topology == "torus") {
+            // For torus, choose shortest path (may wrap around)
+            int dist_north = (dst_y - current_y + _arch.k) % _arch.k;
+            int dist_south = (current_y - dst_y + _arch.k) % _arch.k;
+
+            if (dist_north <= dist_south) {
+                output_port = PORT_NORTH;
+                next_y = (current_y + 1) % _arch.k;
+            } else {
+                output_port = PORT_SOUTH;
+                next_y = (current_y - 1 + _arch.k) % _arch.k;
+            }
+        } else {
+            // For mesh, simple comparison
+            if (dst_y > current_y) {
+                output_port = PORT_NORTH;
+                next_y = current_y + 1;
+            } else {
+                output_port = PORT_SOUTH;
+                next_y = current_y - 1;
+            }
+        }
+
+        // Add hop
+        path.push_back(Hop(current_node, input_port, output_port));
+
+        // Move to next node
+        current_y = next_y;
+        current_node = coords_to_node(current_x, current_y);
+        input_port = get_opposite_port(output_port);
+    }
+
+    // Final hop: enter destination node and eject
+    path.push_back(Hop(current_node, input_port, PORT_LOCAL));
+
+    return path;
+}
+
 int FastAnalyticalModel::calculate_hop_distance(int src, int dst) const {
     if (_arch.topology == "torus" || _arch.topology == "mesh") {
         int hops = 0;
@@ -314,8 +453,17 @@ int FastAnalyticalModel::calculate_hop_distance(int src, int dst) const {
 }
 
 double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size_flits) const {
-    // Number of hops
-    int n_routers = calculate_hop_distance(src, dst);
+    // Local communication - no network hops
+    if (src == dst) {
+        return 0.0;
+    }
+
+    // Trace the routing path
+    std::vector<Hop> path = trace_routing_path(src, dst);
+
+    if (path.empty()) {
+        return 0.0;  // No hops (shouldn't happen if src != dst)
+    }
 
     // Link traversal time
     int t_link = (_arch.topology == "mesh") ? 1 : 2;
@@ -325,19 +473,75 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
         std::max(_arch.vc_alloc_delay, _arch.sw_alloc_delay) :
         (_arch.vc_alloc_delay + _arch.sw_alloc_delay);
 
-    // Head flit processing time per hop
-    int t_head_hop = _arch.routing_delay + alloc_delay +
-                    _arch.st_prepare_delay + _arch.st_final_delay;
-
-    // Body flit processing time per hop
+    // Router delays
+    int t_r = _arch.routing_delay;
+    int t_s = alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
     int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
 
-    // Queuing delay (simplified)
-    int queuing_delay = 1; // Assume 1 cycle queuing delay per hop
+    // Head flit latency calculation (equation 5 from paper)
+    // L_h = t_inj + Σ(t_r + W^N_{i→j} + t_s + t_w) + t_ej
+
+    double L_h = 0.0;
+
+    // Injection delay (first hop uses LOCAL port as input)
+    // No waiting time for injection
+    L_h += t_r + t_s;
+
+    // For each hop along the path
+    for (const auto& hop : path) {
+        // Calculate waiting time W^N_{i→j} using equation (13) + (12)
+        // W^N_{i→j} = [ρ^N_j * (C²_A + C²_S)] / [2(μ^N_j - λ^N_{i→j})]
+
+        double W = 0.0;  // Default no waiting
+
+        ChannelKey ch_key{hop.router_id, hop.input_port, hop.output_port};
+        OutputChannelKey out_key{hop.router_id, hop.output_port};
+
+        // Look up pre-computed traffic parameters
+        auto lambda_it = _lambda_ic_oc.find(ch_key);
+        auto rho_it = _rho_total.find(out_key);
+
+        if (lambda_it != _lambda_ic_oc.end() && rho_it != _rho_total.end()) {
+            double lambda_ij = lambda_it->second;
+            double rho_j = rho_it->second;
+
+            // Check if channel is not saturated
+            double denominator = _mu_service_rate - lambda_ij;
+
+            if (denominator > 0.0001 && rho_j < 0.99) {
+                // Apply waiting time formula (equation 13 for i=1)
+                // W^N_{i→j} = [ρ^N_j * (C²_A + C²_S)] / [2(μ - λ_{i→j})]
+                double numerator = rho_j * (_C_A * _C_A + _arch.C_S * _arch.C_S);
+                W = numerator / (2.0 * denominator);
+                //std::cout << "DEBUG: Channel at router " << hop.router_id
+                //        << " port " << hop.output_port
+                //        << " λ=" << lambda_ij
+                //        << " ρ=" << rho_j
+                //        << " W=" << W << std::endl;
+            } else {
+                // Channel saturated - use large delay
+                std::cout << "WARN: Channel saturated at router " << hop.router_id
+                        << " port " << hop.output_port << ", setting high waiting time." << std::endl;
+                W = 100.0;
+            }
+        }
+
+        // Add hop delay: routing + waiting + switch + wire
+        if (hop.output_port == PORT_LOCAL) {
+            // Last hop - ejection, no wire delay
+            L_h += t_r + W + t_s;
+        } else {
+            // Regular hop
+            L_h += t_r + W + t_s + t_link;
+        }
+    }
+
+    // Body flit latency (equation 6 from paper)
+    // L_b = (m - 1) × max(t_s, t_w)
+    double L_b = (size_flits - 1) * std::max(t_body_hop, t_link);
 
     // Total packet latency
-    double T_packet = n_routers * (t_head_hop + t_link + queuing_delay) +
-                      (size_flits - 1) * std::max(t_body_hop, t_link);
+    double T_packet = L_h + L_b;
 
     return T_packet;
 }
@@ -352,6 +556,96 @@ int FastAnalyticalModel::calculate_num_flits(int size_bytes) const {
     return std::max(1, flits);  // At least 1 flit
 }
 
+double FastAnalyticalModel::calculate_C_A_mmpp(int k_param) const {
+    // MMPP-based C_A calculation using Table II from the paper
+    // k = lambda_1 / lambda_0 (ratio of high to low arrival rates)
+    // This table maps k values to C_A (coefficient of variation of interarrival time)
+
+    // Table II from paper: MMPP parameters and resulting C_A values
+    // Format: {k, C_A}
+    static const std::vector<std::pair<int, double>> ca_table = {
+        {1, 1.0},    // k=1: Poisson (exponential interarrival) -> C_A = 1.0
+        {5, 1.16},  // k=5
+        {10, 1.55},  // k=10
+        {15, 1.882},  // k=15
+        {20, 2.04},  // k=20
+        {25, 2.357},  // k=25
+        {30, 2.554}, // k=30
+        {35, 2.734}, // k=35
+        {40, 2.899},  // k=40
+        {45, 3.054},  // k=45
+        {50, 3.08},  // k=50
+        {55, 3.336}, // k=55
+        {60, 3.466},  // k=60
+        {65, 3.591},  // k=65
+        {70, 3.710},  // k=70
+        {75, 3.824},  // k=75
+        {80, 3.934},  // k=80
+        {85, 4.041},  // k=85
+        {90, 4.144},  // k=90
+        {95, 4.244},  // k=95
+        {100, 4.28},  // k=100
+        {105, 4.435},  // k=105
+        {110, 4.527},  // k=110
+        {115, 4.616},  // k=115
+        {120, 4.704},  // k=120
+        {125, 4.789},  // k=125
+        {130, 4.873},  // k=130
+        {135, 4.954},  // k=135
+        {140, 5.034},  // k=140
+        {145, 5.113},  // k=145
+        {150, 5.190},  // k=150
+        {155, 5.265},  // k=155
+        {160, 5.339},  // k=160
+        {165, 5.412},  // k=165
+        {170, 5.484},  // k=170
+        {175, 5.554},  // k=175
+        {180, 5.624},  // k=180
+        {185, 5.692},  // k=185
+        {190, 5.759},  // k=190
+        {195, 5.826},  // k=195
+        {200, 6.00}    // k=200
+    };
+
+    // Find closest k value in table
+    if (k_param <= 1) return 1.0;  // Poisson traffic
+
+    // Warning for k > 200
+    if (k_param > 200) {
+        std::cout << "WARN: calculate_C_A_mmpp: k_param = " << k_param
+                << " exceeds table range (max=200), using C_A = 6.00" << std::endl;
+        return 6.00;
+    }
+
+    // Round k_param to nearest multiple of 5 for finer interpolation
+    int k_rounded = ((k_param + 2) / 5) * 5;
+    if (k_rounded < 1) k_rounded = 1;
+    if (k_rounded > 200) k_rounded = 200;
+
+    // Find the bounding entries in the table
+    for (size_t i = 0; i < ca_table.size() - 1; i++) {
+        if (k_rounded >= ca_table[i].first && k_rounded <= ca_table[i+1].first) {
+            // Linear interpolation between table entries
+            double k1 = ca_table[i].first;
+            double k2 = ca_table[i+1].first;
+            double ca1 = ca_table[i].second;
+            double ca2 = ca_table[i+1].second;
+
+            double t = (k_rounded - k1) / (k2 - k1);
+            return ca1 + t * (ca2 - ca1);
+        }
+    }
+
+    // Exact match case (k_rounded == 1, 10, 20, 50, 100, or 200)
+    for (const auto& entry : ca_table) {
+        if (k_rounded == entry.first) {
+            return entry.second;
+        }
+    }
+
+    return 1.0;  // Default to Poisson
+}
+
 int FastAnalyticalModel::get_total_simulation_time() const {
     if (_completion_times.empty()) {
         return 0;
@@ -363,6 +657,262 @@ int FastAnalyticalModel::get_total_simulation_time() const {
     }
 
     return static_cast<int>(std::ceil(max_time));
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Traffic Parameter Calculation
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void FastAnalyticalModel::calculate_traffic_parameters() {
+    // Estimate k from dependency graph if not explicitly set
+    int k_param = _arch.traffic_burstiness_k;
+
+    // If k is set to a special value (e.g., -1 or 0), estimate from graph
+    if (k_param <= 0) {
+        k_param = estimate_k_from_dependency_graph();
+        std::cout << "Estimated k from dependency graph: " << k_param << std::endl;
+    }
+
+    // Pre-compute C_A from MMPP
+    _C_A = calculate_C_A_mmpp(k_param);
+
+    // Calculate average service rate μ
+    double avg_packet_flits = calculate_average_packet_size_flits();
+    int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
+    int t_link = (_arch.topology == "mesh") ? 1 : 2;
+    double avg_service_time = avg_packet_flits * std::max(t_body_hop, t_link);
+
+    if (avg_service_time > 0) {
+        _mu_service_rate = 1.0 / avg_service_time;
+    } else {
+        _mu_service_rate = 1.0;  // Default
+    }
+
+    // Calculate arrival rates λ^N_{i→j}
+    calculate_arrival_rates();
+
+    // Calculate total utilizations ρ^N_j
+    calculate_utilizations();
+
+    std::cout << "Traffic parameters calculated:" << std::endl;
+    std::cout << "  C_A = " << _C_A << std::endl;
+    std::cout << "  C_S = " << _arch.C_S << std::endl;
+    std::cout << "  μ (service rate) = " << _mu_service_rate << " packets/cycle" << std::endl;
+    std::cout << "  Average packet size = " << avg_packet_flits << " flits" << std::endl;
+    std::cout << "  Number of IC→OC channels with traffic = " << _lambda_ic_oc.size() << std::endl;
+}
+
+double FastAnalyticalModel::calculate_average_packet_size_flits() const {
+    double total_flits = 0.0;
+    int num_comm_tasks = 0;
+
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if (task.type == "WRITE" || task.type == "WRITE_REQ") {
+            int flits = calculate_num_flits(task.size);
+            total_flits += flits;
+            num_comm_tasks++;
+        }
+    }
+
+    if (num_comm_tasks > 0) {
+        return total_flits / num_comm_tasks;
+    }
+
+    return 1.0;  // Default to 1 flit if no communication tasks
+}
+
+void FastAnalyticalModel::calculate_arrival_rates() {
+    _lambda_ic_oc.clear();
+
+    // Count communication tasks
+    int num_comm_tasks = 0;
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if ((task.type == "WRITE" || task.type == "WRITE_REQ") && task.src != task.dst) {
+            num_comm_tasks++;
+        }
+    }
+
+    if (num_comm_tasks == 0) {
+        return;  // No network communication
+    }
+
+    // For each communication task, trace its path and accumulate relative traffic
+    std::map<ChannelKey, double> relative_traffic;
+
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if (task.type == "WRITE" || task.type == "WRITE_REQ") {
+            if (task.src == task.dst) {
+                // Local communication - no network hops
+                continue;
+            }
+
+            // Trace routing path
+            std::vector<Hop> path = trace_routing_path(task.src, task.dst);
+
+            // Each task contributes 1 unit of traffic
+            for (const auto& hop : path) {
+                ChannelKey key{hop.router_id, hop.input_port, hop.output_port};
+                relative_traffic[key] += 1.0;
+            }
+
+            // WRITE_REQ has additional reply packets (ACKs)
+            if (task.type == "WRITE_REQ") {
+                // Account for reverse path traffic (4 packets: WRITE_REQ, READ_REQ, WRITE, ACK)
+                std::vector<Hop> reverse_path = trace_routing_path(task.dst, task.src);
+
+                for (const auto& hop : reverse_path) {
+                    ChannelKey key{hop.router_id, hop.input_port, hop.output_port};
+                    relative_traffic[key] += 3.0;  // 3 reverse packets per WRITE_REQ
+                }
+            }
+        }
+    }
+
+    // Find max traffic to normalize
+    double max_traffic = 0.0;
+    for (const auto& [key, traffic] : relative_traffic) {
+        max_traffic = std::max(max_traffic, traffic);
+    }
+
+    // Scale so that max utilization is reasonable (target ~0.5)
+    // This is a heuristic - in reality we'd need execution frequency from profile/simulation
+    double target_max_utilization = 0.5;
+    double scaling_factor = (target_max_utilization * _mu_service_rate) / max_traffic;
+
+    // Convert relative traffic to arrival rates
+    for (const auto& [key, traffic] : relative_traffic) {
+        _lambda_ic_oc[key] = traffic * scaling_factor;
+    }
+}
+
+void FastAnalyticalModel::calculate_utilizations() {
+    _rho_total.clear();
+
+    // For each output channel, sum arrival rates from all input channels
+    for (const auto& [channel_key, lambda_ij] : _lambda_ic_oc) {
+        OutputChannelKey out_key{channel_key.router, channel_key.output_port};
+        _rho_total[out_key] += lambda_ij;
+    }
+
+    // Convert total arrival rate to utilization (ρ = λ / μ)
+    for (auto& [out_key, lambda_total] : _rho_total) {
+        lambda_total = lambda_total / _mu_service_rate;
+
+        // Cap utilization at 0.99 to avoid division by zero
+        if (lambda_total >= 0.99) {
+            std::cout << "WARN: High utilization (" << lambda_total
+                        << ") at router " << out_key.router
+                        << " port " << out_key.output_port << std::endl;
+            lambda_total = 0.99;
+        }
+    }
+}
+
+int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
+    // Estimate k (burstiness parameter) from dependency graph structure
+    // k = λ₁/λ₀ represents ratio of high vs low arrival rates in MMPP
+
+    if (_tasks_by_id.empty()) {
+        return 10;  // Default moderate burstiness
+    }
+
+    // Metric 1: Calculate parallelism variance
+    // - High parallelism → many tasks at same depth → bursty traffic
+    // - Low parallelism → sequential tasks → smooth traffic
+
+    std::unordered_map<int, int> depth_map;  // task_id → depth
+    std::unordered_map<int, int> depth_count; // depth → num_tasks
+
+    // Calculate depth for each task (longest path from root)
+    std::function<int(int)> get_depth = [&](int task_id) -> int {
+        if (depth_map.count(task_id)) {
+            return depth_map[task_id];
+        }
+
+        const auto& task = _tasks_by_id.at(task_id);
+        int max_dep_depth = 0;
+
+        for (int dep_id : task.dependencies) {
+            if (_tasks_by_id.count(dep_id)) {
+                max_dep_depth = std::max(max_dep_depth, get_depth(dep_id) + 1);
+            }
+        }
+
+        depth_map[task_id] = max_dep_depth;
+        return max_dep_depth;
+    };
+
+    // Calculate depth for all tasks
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        int depth = get_depth(task_id);
+        depth_count[depth]++;
+    }
+
+    // Calculate parallelism statistics
+    if (depth_count.empty()) {
+        return 10;
+    }
+
+    int max_parallelism = 0;
+    int min_parallelism = INT_MAX;
+    double avg_parallelism = 0.0;
+
+    for (const auto& [depth, count] : depth_count) {
+        max_parallelism = std::max(max_parallelism, count);
+        min_parallelism = std::min(min_parallelism, count);
+        avg_parallelism += count;
+    }
+    avg_parallelism /= depth_count.size();
+
+    // Metric 2: Communication pattern variance
+    // Count messages per source node
+    std::unordered_map<int, int> msgs_per_src;
+    int total_comm_tasks = 0;
+
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if ((task.type == "WRITE" || task.type == "WRITE_REQ") && task.src != task.dst) {
+            msgs_per_src[task.src]++;
+            total_comm_tasks++;
+        }
+    }
+
+    double comm_variance = 0.0;
+    if (total_comm_tasks > 0 && !msgs_per_src.empty()) {
+        double avg_msgs = static_cast<double>(total_comm_tasks) / msgs_per_src.size();
+
+        for (const auto& [src, count] : msgs_per_src) {
+            double diff = count - avg_msgs;
+            comm_variance += diff * diff;
+        }
+        comm_variance /= msgs_per_src.size();
+    }
+
+    // Estimate k based on metrics
+    // Higher parallelism variation → higher k
+    // Higher communication variance → higher k
+
+    double parallelism_ratio = (min_parallelism > 0) ?
+        static_cast<double>(max_parallelism) / min_parallelism : 1.0;
+
+    double comm_cv = (avg_parallelism > 0) ?
+        std::sqrt(comm_variance) / avg_parallelism : 0.0;
+
+    // Continuous mapping to k values (can be any value, interpolated in lookup table)
+    // Combine both metrics with weights
+    // 0.6 because parallelism is more indicative of burstiness
+    // 0.4 because communication pattern also contributes
+    // Scaling factor needed because comm_cv ∈ [0, 1] while parallelism_ratio ∈ [2, 100+]. Without scaling, comm_cv would have negligible impact on the combined score.
+    double burstiness_score = 0.6 * parallelism_ratio + 0.4 * (comm_cv * 10.0);
+
+    int estimated_k = static_cast<int>(burstiness_score);
+
+    std::cout << "  Parallelism ratio (max/min): " << parallelism_ratio << std::endl;
+    std::cout << "  Communication CV: " << comm_cv << std::endl;
+    std::cout << "  Max parallelism at depth: " << max_parallelism << std::endl;
+    std::cout << "  Burstiness score: " << burstiness_score << std::endl;
+    std::cout << "  Estimated k: " << estimated_k << std::endl;
+    
+    return estimated_k;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////

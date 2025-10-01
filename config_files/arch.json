@@ -41,6 +41,8 @@
             "ANY_comp_cycles": 0.25,
             "max_pe_mem": 10000000000000,
             "threshold_pe_mem": 80000000000000,
+            "C_S": 0.2,
+            "traffic_burstiness_k": -1,
             "watch_out" : "-",
             "sim_power": 1,
             "tech_file": "src/restart/src/power/techfile.json"
