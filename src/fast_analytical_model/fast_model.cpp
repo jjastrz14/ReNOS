@@ -696,6 +696,9 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
     // Calculate total utilizations ρ^N_j
     calculate_utilizations();
 
+    // C_S is channel service time variability coefficient from config
+    // C_A is interarrival time variability coefficient from MMPP
+
     std::cout << "Traffic parameters calculated:" << std::endl;
     std::cout << "  C_A = " << _C_A << std::endl;
     std::cout << "  C_S = " << _arch.C_S << std::endl;
@@ -723,6 +726,66 @@ double FastAnalyticalModel::calculate_average_packet_size_flits() const {
     return 1.0;  // Default to 1 flit if no communication tasks
 }
 
+double FastAnalyticalModel::calculate_critical_path_time() const {
+    // Calculate earliest start and finish times for each task
+    // considering dependency graph and parallel execution
+    std::map<int, double> earliest_start;
+    std::map<int, double> earliest_finish;
+
+    // Process tasks in dependency order (topological sort implicit through iteration)
+    // We may need multiple passes to resolve all dependencies
+    bool changed = true;
+    int max_iterations = _tasks_by_id.size() + 10;  // Safety limit
+    int iteration = 0;
+
+    while (changed && iteration < max_iterations) {
+        changed = false;
+        iteration++;
+
+        for (const auto& [task_id, task] : _tasks_by_id) {
+            double start_time = 0.0;
+
+            // Task can't start until all dependencies finish
+            for (int dep_id : task.dependencies) {
+                if (dep_id >= 0 && earliest_finish.count(dep_id) > 0) {
+                    start_time = std::max(start_time, earliest_finish[dep_id]);
+                }
+            }
+
+            // Update if changed
+            if (earliest_start.count(task_id) == 0 || earliest_start[task_id] != start_time) {
+                earliest_start[task_id] = start_time;
+
+                // Calculate finish time based on task type
+                double exec_time = task.ct_required;  // Computation time
+
+                // Communication tasks also have transmission time
+                if (task.type == "WRITE" || task.type == "WRITE_REQ") {
+                    // Use pt_required if available, otherwise estimate
+                    exec_time += (task.pt_required > 0) ? task.pt_required : task.size;
+                }
+
+                earliest_finish[task_id] = start_time + exec_time;
+                changed = true;
+            }
+        }
+    }
+
+    // Critical path is the maximum finish time across all tasks
+    double critical_path = 0.0;
+    for (const auto& [task_id, finish_time] : earliest_finish) {
+        critical_path = std::max(critical_path, finish_time);
+    }
+
+    // Ensure non-zero critical path
+    if (critical_path <= 0.0) {
+        std::cout << "WARN: calculate_critical_path_time: critical path is zero or negative, using default=1000.0" << std::endl;
+        return 1000.0;
+    }
+
+    return critical_path;
+}
+
 void FastAnalyticalModel::calculate_arrival_rates() {
     _lambda_ic_oc.clear();
 
@@ -738,8 +801,14 @@ void FastAnalyticalModel::calculate_arrival_rates() {
         return;  // No network communication
     }
 
-    // For each communication task, trace its path and accumulate relative traffic
-    std::map<ChannelKey, double> relative_traffic;
+    // Calculate total execution time (critical path through dependency graph)
+    double critical_path_time = calculate_critical_path_time();
+
+    std::cout << "INFO: Critical path time = " << critical_path_time << " cycles" << std::endl;
+
+    // Step 1: Accumulate relative traffic (packet counts) per channel
+    std::map<ChannelKey, double> packet_counts;
+    double total_packets = 0.0;
 
     for (const auto& [task_id, task] : _tasks_by_id) {
         if (task.type == "WRITE" || task.type == "WRITE_REQ") {
@@ -751,10 +820,11 @@ void FastAnalyticalModel::calculate_arrival_rates() {
             // Trace routing path
             std::vector<Hop> path = trace_routing_path(task.src, task.dst);
 
-            // Each task contributes 1 unit of traffic
+            // Count packets on each channel
             for (const auto& hop : path) {
                 ChannelKey key{hop.router_id, hop.input_port, hop.output_port};
-                relative_traffic[key] += 1.0;
+                packet_counts[key] += 1.0;
+                total_packets += 1.0;
             }
 
             // WRITE_REQ has additional reply packets (ACKs)
@@ -764,26 +834,44 @@ void FastAnalyticalModel::calculate_arrival_rates() {
 
                 for (const auto& hop : reverse_path) {
                     ChannelKey key{hop.router_id, hop.input_port, hop.output_port};
-                    relative_traffic[key] += 3.0;  // 3 reverse packets per WRITE_REQ
+                    packet_counts[key] += 3.0;  // 3 reverse packets per WRITE_REQ
+                    total_packets += 3.0;
                 }
             }
         }
     }
 
-    // Find max traffic to normalize
-    double max_traffic = 0.0;
-    for (const auto& [key, traffic] : relative_traffic) {
-        max_traffic = std::max(max_traffic, traffic);
+    // Step 2: Convert packet counts to arrival rates using critical path time
+    // λ = (number of packets) / (critical path time - without contention)
+    // Higher traffic will naturally lead to higher λ and thus higher waiting times
+    for (const auto& [key, count] : packet_counts) {
+        _lambda_ic_oc[key] = count / critical_path_time;
     }
 
-    // Scale so that max utilization is reasonable (target ~0.5)
-    // This is a heuristic - in reality we'd need execution frequency from profile/simulation
-    double target_max_utilization = 0.4;
-    double scaling_factor = (target_max_utilization * _mu_service_rate) / max_traffic;
+    // Step 4: Check if any OUTPUT CHANNEL would saturate (sum of all input flows)
+    std::map<OutputChannelKey, double> total_lambda_per_output;
+    for (const auto& [key, lambda] : _lambda_ic_oc) {
+        OutputChannelKey out_key{key.router, key.output_port};
+        total_lambda_per_output[out_key] += lambda;
+    }
 
-    // Convert relative traffic to arrival rates
-    for (const auto& [key, traffic] : relative_traffic) {
-        _lambda_ic_oc[key] = traffic * scaling_factor;
+    double max_utilization = 0.0;
+    for (const auto& [out_key, total_lambda] : total_lambda_per_output) {
+        double util = total_lambda / _mu_service_rate;
+        max_utilization = std::max(max_utilization, util);
+    }
+
+    std::cout << "INFO: Max utilization (before scaling) = " << max_utilization << std::endl;
+
+    // Only scale if extremely high to prevent numerical instability
+    // Higher threshold (0.98 vs 0.85) allows queueing formula to capture more contention
+    if (max_utilization > 0.98) {
+        double scale_factor = 0.98 / max_utilization;
+        std::cout << "INFO: Scaling arrival rates by " << scale_factor
+                << " for numerical stability (max_util was " << max_utilization << ")" << std::endl;
+        for (auto& [key, lambda] : _lambda_ic_oc) {
+            lambda *= scale_factor;
+        }
     }
 }
 
@@ -901,10 +989,10 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
 
     // Continuous mapping to k values (can be any value, interpolated in lookup table)
     // Combine both metrics with weights
-    // 0.6 because parallelism is more indicative of burstiness
-    // 0.4 because communication pattern also contributes
+    // 0.8 because parallelism is more indicative of burstiness
+    // 0.2 because communication pattern also contributes
     // Scaling factor needed because comm_cv ∈ [0, 1] while parallelism_ratio ∈ [2, 100+]. Without scaling, comm_cv would have negligible impact on the combined score.
-    double burstiness_score = 0.5 * parallelism_ratio + 0.5 * (comm_cv * 10.0);
+    double burstiness_score = 0.8 * parallelism_ratio + 0.2 * (comm_cv * 10.0);
 
     int estimated_k = static_cast<int>(burstiness_score);
 

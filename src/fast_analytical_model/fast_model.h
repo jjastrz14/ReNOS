@@ -166,6 +166,7 @@ private:
     // Traffic parameter calculation
     void calculate_traffic_parameters();
     double calculate_average_packet_size_flits() const;
+    double calculate_critical_path_time() const;
     void calculate_arrival_rates();
     void calculate_utilizations();
     int estimate_k_from_dependency_graph() const;

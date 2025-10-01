@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
     #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)]
     
-    partitioner_tuples = [(0, 1, 1), (4,2,4), (2,3,4), (2,3,4), (4,3,3), (2,4,4), (2,4,3), (4,3,3)]
+    partitioner_tuples = [(0, 1, 1), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3)]
     #for lenet: 
     #[(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]]
     #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
