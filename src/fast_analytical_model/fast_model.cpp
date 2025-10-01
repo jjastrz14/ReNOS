@@ -511,6 +511,7 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
             if (denominator > 0.0001 && rho_j < 0.99) {
                 // Apply waiting time formula (equation 13 for i=1)
                 // W^N_{i→j} = [ρ^N_j * (C²_A + C²_S)] / [2(μ - λ_{i→j})]
+                // C_A from MMPP, C_S from config. C_A influences more than C_S
                 double numerator = rho_j * (_C_A * _C_A + _arch.C_S * _arch.C_S);
                 W = numerator / (2.0 * denominator);
                 //std::cout << "DEBUG: Channel at router " << hop.router_id
@@ -562,6 +563,7 @@ double FastAnalyticalModel::calculate_C_A_mmpp(int k_param) const {
     // This table maps k values to C_A (coefficient of variation of interarrival time)
 
     // Table II from paper: MMPP parameters and resulting C_A values
+    // additional values estimated for finer granularity via fitting a power function
     // Format: {k, C_A}
     static const std::vector<std::pair<int, double>> ca_table = {
         {1, 1.0},    // k=1: Poisson (exponential interarrival) -> C_A = 1.0
@@ -776,7 +778,7 @@ void FastAnalyticalModel::calculate_arrival_rates() {
 
     // Scale so that max utilization is reasonable (target ~0.5)
     // This is a heuristic - in reality we'd need execution frequency from profile/simulation
-    double target_max_utilization = 0.5;
+    double target_max_utilization = 0.4;
     double scaling_factor = (target_max_utilization * _mu_service_rate) / max_traffic;
 
     // Convert relative traffic to arrival rates
@@ -902,7 +904,7 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
     // 0.6 because parallelism is more indicative of burstiness
     // 0.4 because communication pattern also contributes
     // Scaling factor needed because comm_cv ∈ [0, 1] while parallelism_ratio ∈ [2, 100+]. Without scaling, comm_cv would have negligible impact on the combined score.
-    double burstiness_score = 0.6 * parallelism_ratio + 0.4 * (comm_cv * 10.0);
+    double burstiness_score = 0.5 * parallelism_ratio + 0.5 * (comm_cv * 10.0);
 
     int estimated_k = static_cast<int>(burstiness_score);
 
