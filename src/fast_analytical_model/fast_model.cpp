@@ -4,7 +4,10 @@
 //  Description: Implementation of fast analytical NoC performance model
 //  Created by:  Jakub Jastrzebski
 //  Date:  23/09/2025
-//
+//  all references to Paper refer to:
+//  "Abbas Eslami Kiasari, Zhonghai Lu, Member, and Axel Jantsch 
+//  An Analytical Latency Model for Networks-on-Chip 
+//  10.1109/TVLSI.2011.2178620"
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "fast_model.h"
@@ -45,6 +48,7 @@ void FastAnalyticalModel::configure_from_json(const json& config) {
     if (arch.contains("k")) _arch.k = arch["k"];
     if (arch.contains("n")) _arch.n = arch["n"];
     if (arch.contains("flit_size")) _arch.flit_size = arch["flit_size"];
+    if (arch.contains("vc_buf_size")) _arch.vc_buf_size = arch["vc_buf_size"];
     if (arch.contains("routing_delay")) _arch.routing_delay = arch["routing_delay"];
     if (arch.contains("vc_alloc_delay")) _arch.vc_alloc_delay = arch["vc_alloc_delay"];
     if (arch.contains("sw_alloc_delay")) _arch.sw_alloc_delay = arch["sw_alloc_delay"];
@@ -511,8 +515,20 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
             if (denominator > 0.0001 && rho_j < 0.99) {
                 // Apply waiting time formula (equation 13 for i=1)
                 // W^N_{i→j} = [ρ^N_j * (C²_A + C²_S)] / [2(μ - λ_{i→j})]
-                // C_A from MMPP, C_S from config. C_A influences more than C_S
-                double numerator = rho_j * (_C_A * _C_A + _arch.C_S * _arch.C_S);
+                // C_A from MMPP, C_S from per-channel calculation (paper's equations 16-19)
+
+                // Get channel-specific C_S (if available, otherwise fallback to config default)
+                double C_S_channel = _arch.C_S;  // Default fallback
+                auto cs_it = _service_time_C_S.find(out_key);
+                if (cs_it != _service_time_C_S.end()) {
+                    C_S_channel = cs_it->second;  // Use dynamically calculated C_S
+                }
+                else {
+                    std::cout << "DEBUG: Using default C_S for channel at router " << hop.router_id
+                    << " port " << hop.output_port << std::endl;
+                }
+
+                double numerator = rho_j * (_C_A * _C_A + C_S_channel * C_S_channel);
                 W = numerator / (2.0 * denominator);
                 //std::cout << "DEBUG: Channel at router " << hop.router_id
                 //        << " port " << hop.output_port
@@ -610,13 +626,27 @@ double FastAnalyticalModel::calculate_C_A_mmpp(int k_param) const {
     };
 
     // Find closest k value in table
-    if (k_param <= 1) return 1.0;  // Poisson traffic
-
-    // Warning for k > 200
-    if (k_param > 200) {
+    if (k_param <= 1) {
+        return 1.0;  // Poisson traffic
+    }
+    // For k > 300, use linear scaling to handle network congestion
+    else if (k_param > 300) {
+        // Linear model: C_A = 1.44982296 + 0.034281 * k
+        double C_A_linear = 1.44982296 + 0.0325 * k_param;
         std::cout << "WARN: calculate_C_A_mmpp: k_param = " << k_param
-                << " exceeds table range (max=200), using C_A = 6.00" << std::endl;
-        return 6.00;
+                << " indicates severe network congestion. Using linear C_A scaling (C_A = "
+                << C_A_linear << ") as artificial workaround. "
+                << "This solution should NOT be used for accurate modeling." << std::endl;
+        return C_A_linear;
+    }
+    // For 200 < k <= 300, use power law fit from curve fitting
+    else if (k_param > 200) {
+        // Power law model: C_A = 0.57092083 * k^0.44049964
+        double C_A_extrapolated = 0.57092083 * pow(k_param, 0.44049964);
+        std::cout << "INFO: calculate_C_A_mmpp: k_param = " << k_param
+                << " exceeds table range (max=200), using power law extrapolation: C_A = "
+                << C_A_extrapolated << std::endl;
+        return C_A_extrapolated;
     }
 
     // Round k_param to nearest multiple of 5 for finer interpolation
@@ -696,12 +726,17 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
     // Calculate total utilizations ρ^N_j
     calculate_utilizations();
 
-    // C_S is channel service time variability coefficient from config
+    // Calculate per-channel service times and C_S using paper's method
+    calculate_channel_indices();
+    initialize_ejection_channels();
+    calculate_service_times_and_C_S();
+
     // C_A is interarrival time variability coefficient from MMPP
+    // C_S is now calculated per-channel based on paper's equations 16-19
 
     std::cout << "Traffic parameters calculated:" << std::endl;
     std::cout << "  C_A = " << _C_A << std::endl;
-    std::cout << "  C_S = " << _arch.C_S << std::endl;
+    std::cout << "  C_S from arch.json = " << _arch.C_S << std::endl;
     std::cout << "  μ (service rate) = " << _mu_service_rate << " packets/cycle" << std::endl;
     std::cout << "  Average packet size = " << avg_packet_flits << " flits" << std::endl;
     std::cout << "  Number of IC→OC channels with traffic = " << _lambda_ic_oc.size() << std::endl;
@@ -861,7 +896,7 @@ void FastAnalyticalModel::calculate_arrival_rates() {
         max_utilization = std::max(max_utilization, util);
     }
 
-    std::cout << "INFO: Max utilization (before scaling) = " << max_utilization << std::endl;
+    std::cout << "INFO: Max utilization = " << max_utilization << std::endl;
 
     // Only scale if extremely high to prevent numerical instability
     // Higher threshold (0.98 vs 0.85) allows queueing formula to capture more contention
@@ -992,7 +1027,7 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
     // 0.8 because parallelism is more indicative of burstiness
     // 0.2 because communication pattern also contributes
     // Scaling factor needed because comm_cv ∈ [0, 1] while parallelism_ratio ∈ [2, 100+]. Without scaling, comm_cv would have negligible impact on the combined score.
-    double burstiness_score = 0.8 * parallelism_ratio + 0.2 * (comm_cv * 10.0);
+    double burstiness_score = 2.0 * parallelism_ratio + 1.0 * (comm_cv * 100.0);
 
     int estimated_k = static_cast<int>(burstiness_score);
 
@@ -1003,6 +1038,359 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
     std::cout << "  Estimated k: " << estimated_k << std::endl;
     
     return estimated_k;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Per-Channel Service Time Calculation (Paper's Method - Section D)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int FastAnalyticalModel::get_max_distance_from_channel(int router, int port) const {
+    // For ejection channel (local port), distance is 0
+    if (port == PORT_LOCAL) {
+        return 0;
+    }
+
+    // For routing channels, calculate max distance to any reachable destination
+    // Using dimension-order routing, determine which nodes are reachable via this port
+
+    int k = _arch.k;  // Network radix
+    int my_x = router % k;
+    int my_y = router / k;
+
+    int max_dist = 0;
+
+    // Check all possible destination nodes
+    for (int dest = 0; dest < k * k; dest++) {
+        if (dest == router) continue;  // Skip self
+
+        int dest_x = dest % k;
+        int dest_y = dest / k;
+
+        // Trace dimension-order (XY) routing from this router
+        std::vector<Hop> path = trace_routing_path(router, dest);
+
+        // Check if this path uses the given output port as first hop
+        if (!path.empty() && path[0].output_port == port) {
+            // This destination is reachable via this port
+            // Calculate distance (number of hops)
+            int dist = path.size();
+            max_dist = std::max(max_dist, dist);
+        }
+    }
+
+    return max_dist;
+}
+
+void FastAnalyticalModel::calculate_channel_indices() {
+    _channel_index.clear();
+
+    int num_routers = _arch.k * _arch.k;
+
+    // For each router and output port, calculate its index (distance group)
+    for (int router = 0; router < num_routers; router++) {
+        for (int port = 0; port < 5; port++) {  // 5 ports: N, E, S, W, Local
+            OutputChannelKey key{router, port};
+
+            int index = get_max_distance_from_channel(router, port);
+            _channel_index[key] = index;
+        }
+    }
+
+    std::cout << "Channel indexing complete" << std::endl;
+}
+
+void FastAnalyticalModel::initialize_ejection_channels() {
+    // Initialize Group 0 (ejection channels) with simple service time model
+    // Equation (12) from paper
+
+    int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
+    int t_link = (_arch.topology == "mesh") ? 1 : 2;
+    int t_body = std::max(t_body_hop, t_link);
+
+    // Calculate packet size statistics
+    double avg_packet_flits = calculate_average_packet_size_flits();
+
+    // Calculate variance of packet sizes
+    double total_size_sq = 0.0;
+    int count = 0;
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if (task.type == "WRITE" || task.type == "WRITE_REQ") {
+            double size_bytes = task.size;
+            double scaling = 8.0 / _arch.flit_size;
+            int flits = static_cast<int>(std::ceil(size_bytes * scaling));
+            total_size_sq += flits * flits;
+            count++;
+        }
+    }
+
+    double avg_size_sq = (count > 0) ? (total_size_sq / count) : (avg_packet_flits * avg_packet_flits);
+    double packet_size_variance = avg_size_sq - (avg_packet_flits * avg_packet_flits);
+
+    // For each ejection channel
+    for (const auto& [key, index] : _channel_index) {
+        if (index == 0) {  // Ejection channel
+            // Mean service time: header flit + (avg_size - 1) body flits
+            // Header includes routing and allocation delays
+            double t_header = _arch.routing_delay + _arch.vc_alloc_delay + _arch.sw_alloc_delay;
+            double mu = t_header + (avg_packet_flits - 1) * t_body;
+
+            // Service time variance comes from packet size variance
+            double service_variance = packet_size_variance * (t_body * t_body);
+
+            // C_S = σ / μ
+            double C_S = (mu > 0) ? sqrt(service_variance) / mu : 0.5;
+
+            _service_time_mean[key] = mu;
+            _service_time_C_S[key] = C_S;
+
+            // Calculate initial waiting time for this ejection channel
+            // W = (ρ * (C_A² + C_S²)) / (2 * (μ - λ))
+            double lambda_total = 0.0;
+            for (const auto& [ch_key, lambda] : _lambda_ic_oc) {
+                if (ch_key.router == key.router && ch_key.output_port == key.output_port) {
+                    lambda_total += lambda;
+                }
+            }
+
+            double rho = lambda_total / _mu_service_rate;
+            double denominator = _mu_service_rate - lambda_total;
+
+            if (denominator > 0.0001 && rho < 0.99) {
+                double numerator = rho * (_C_A * _C_A + C_S * C_S);
+                _waiting_time[key] = numerator / (2.0 * denominator);
+            } else {
+                _waiting_time[key] = 0.0;
+            }
+        }
+    }
+
+    std::cout << "Ejection channels initialized (Group 0)" << std::endl;
+}
+
+std::map<OutputChannelKey, double> FastAnalyticalModel::get_routing_probabilities(OutputChannelKey channel) const {
+    // Calculate probability distribution of which downstream channels packets use
+    // Based on actual traffic pattern and routing algorithm
+
+    std::map<OutputChannelKey, double> next_channel_traffic;
+    double total_traffic = 0.0;
+
+    int router = channel.router;
+    int out_port = channel.output_port;
+
+    // For each communication task that passes through this channel
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if (task.type != "WRITE" && task.type != "WRITE_REQ") continue;
+        if (task.src == task.dst) continue;
+
+        // Trace routing path
+        std::vector<Hop> path = trace_routing_path(task.src, task.dst);
+
+        // Find if this channel is used in the path
+        for (size_t i = 0; i < path.size(); i++) {
+            const Hop& hop = path[i];
+
+            if (hop.router_id == router && hop.output_port == out_port) {
+                // This task uses this channel
+                // Determine next channel (if not last hop)
+                if (i + 1 < path.size()) {
+                    const Hop& next_hop = path[i + 1];
+                    OutputChannelKey next_key{next_hop.router_id, next_hop.output_port};
+
+                    // Weight by task traffic (for now, assume each task contributes equally)
+                    double weight = 1.0;
+                    if (task.type == "WRITE_REQ") {
+                        weight = 4.0;  // WRITE_REQ has reverse path traffic too so more weight because of the handshake protocol
+                    }
+
+                    next_channel_traffic[next_key] += weight;
+                    total_traffic += weight;
+                }
+                break;  // Found this channel in path, move to next task
+            }
+        }
+    }
+
+    // Normalize to probabilities
+    std::map<OutputChannelKey, double> probabilities;
+    if (total_traffic > 0.0) {
+        for (const auto& [next_key, traffic] : next_channel_traffic) {
+            probabilities[next_key] = traffic / total_traffic;
+        }
+    }
+
+    return probabilities;
+}
+
+void FastAnalyticalModel::calculate_service_times_and_C_S() {
+    // Iterative calculation of service times and C_S for all routing channels
+    // Following paper's equations 16, 18, 19
+
+    // Find max group index
+    int max_group = 0;
+    for (const auto& [key, index] : _channel_index) {
+        max_group = std::max(max_group, index);
+    }
+
+    std::cout << "Calculating service times for groups 1 to " << max_group << std::endl;
+
+    // Buffer parameters
+    int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
+    int t_link = (_arch.topology == "mesh") ? 1 : 2;
+    int t_body = std::max(t_body_hop, t_link);
+
+    // Buffer delay calculation (from paper's equation 18)
+    // ASSUMPTION: Input-output buffer model where both input and output buffers exist
+    // If changing to input-only buffer model, also update t_body calculation to:
+    //   t_body = (n_flits - 1) * (t_s + t_w)
+    // where t_s is serialization time and t_w is wire delay
+    int buffer_size = _arch.vc_buf_size;  // in flits
+    double buffer_delay = (buffer_size + buffer_size) * t_link;  // (IB + OB) × max(t_s, t_w)
+
+    // Iterate until convergence
+    const int max_iterations = 100;
+    const double epsilon = 0.001;
+
+    // Track which iteration each channel converged at
+    std::map<OutputChannelKey, int> channel_convergence_iter;
+
+    bool converged = false;  // Declare outside loop scope
+
+    for (int iter = 0; iter < max_iterations; iter++) {
+        converged = true;
+
+        // Process each group in ascending order
+        for (int group = 1; group <= max_group; group++) {
+
+            // For each channel in this group
+            for (const auto& [key, index] : _channel_index) {
+                if (index != group) continue;
+
+                // Get routing probabilities to downstream channels
+                std::map<OutputChannelKey, double> next_probs = get_routing_probabilities(key);
+
+                if (next_probs.empty()) {
+                    // No traffic through this channel, use defaults
+                    _service_time_mean[key] = _mu_service_rate > 0 ? (1.0 / _mu_service_rate) : 10.0;
+                    _service_time_C_S[key] = 0.5;
+                    _waiting_time[key] = 0.0;
+                    continue;
+                }
+
+                double old_mu = _service_time_mean[key];
+                double old_C_S = _service_time_C_S[key];
+
+                // Equation (16): Mean service time
+                double mu = 0.0;
+                for (const auto& [next_key, P] : next_probs) {
+                    double mu_next = _service_time_mean[next_key];  // From lower group
+                    double W_next = _waiting_time[next_key];        // From lower group
+
+                    mu += P * (mu_next + W_next - buffer_delay);
+                }
+
+                // Equation (18): Second moment
+                double mu2 = 0.0;
+                for (const auto& [next_key, P] : next_probs) {
+                    double mu_next = _service_time_mean[next_key];
+                    double C_S_next = _service_time_C_S[next_key];
+                    double W_next = _waiting_time[next_key];
+
+                    // Variance = (C_S * μ)²
+                    double variance_next = (C_S_next * mu_next) * (C_S_next * mu_next);
+                    // Second moment E[X²] = Var[X] + E[X]²
+                    double second_moment_next = variance_next + (mu_next * mu_next);
+
+                    double combined = mu_next + W_next - buffer_delay;
+                    mu2 += P * (second_moment_next + combined * combined);
+                }
+
+                // Equation (19): C_S calculation
+                double variance = mu2 - (mu * mu);
+                if (variance < 0) variance = 0;  // Numerical safety
+
+                double C_S = (mu > 0) ? sqrt(variance) / mu : 0.5;
+
+                _service_time_mean[key] = mu;
+                _service_time_C_S[key] = C_S;
+
+                // Update waiting time using Equation (13)
+                double lambda_total = 0.0;
+                for (const auto& [ch_key, lambda] : _lambda_ic_oc) {
+                    if (ch_key.router == key.router && ch_key.output_port == key.output_port) {
+                        lambda_total += lambda;
+                    }
+                }
+
+                double rho = lambda_total / _mu_service_rate;
+                double denominator = _mu_service_rate - lambda_total;
+
+                if (denominator > 0.0001 && rho < 0.99) {
+                    double numerator = rho * (_C_A * _C_A + C_S * C_S);
+                    _waiting_time[key] = numerator / (2.0 * denominator);
+                } else {
+                    _waiting_time[key] = mu * 10.0;  // High waiting time for saturated channels
+                }
+
+                // Check convergence for this channel
+                bool channel_converged = (abs(old_mu - mu) <= epsilon && abs(old_C_S - C_S) <= epsilon);
+
+                if (!channel_converged) {
+                    converged = false;
+                } else if (channel_convergence_iter.find(key) == channel_convergence_iter.end()) {
+                    // First time this channel converged
+                    channel_convergence_iter[key] = iter + 1;
+                }
+            }
+        }
+
+        if (converged) {
+            std::cout << "Service time calculation converged in " << (iter + 1) << " iterations" << std::endl;
+            break;
+        }
+    }
+
+    // Check if loop exited due to max iterations (not convergence)
+    if (!converged) {
+        // Calculate average final C_S
+        double avg_final_C_S = 0.0;
+        int count = 0;
+        for (const auto& [key, C_S] : _service_time_C_S) {
+            avg_final_C_S += C_S;
+            count++;
+        }
+        if (count > 0) avg_final_C_S /= count;
+
+        std::cout << "WARN: Service time calculation did not converge after "
+                  << max_iterations << " iterations. Using last computed values "
+                  << "(average C_S = " << avg_final_C_S << ")" << std::endl;
+    }
+
+    // Print statistics per group
+    std::map<int, double> group_C_S_sum;
+    std::map<int, int> group_counts;
+    std::map<int, double> group_convergence_sum;
+
+    for (const auto& [key, C_S] : _service_time_C_S) {
+        int group = _channel_index[key];
+        group_C_S_sum[group] += C_S;
+        group_counts[group]++;
+
+        // Track convergence iteration
+        auto conv_it = channel_convergence_iter.find(key);
+        if (conv_it != channel_convergence_iter.end()) {
+            group_convergence_sum[group] += conv_it->second;
+        }
+    }
+
+    std::cout << "Per-group C_S statistics:" << std::endl;
+    for (const auto& [group, count] : group_counts) {
+        double avg_C_S = group_C_S_sum[group] / count;
+        double avg_convergence = group_convergence_sum[group] / count;
+        std::cout << "  Group " << group << ": " << count << " channels, "
+            << "average C_S = " << std::fixed << std::setprecision(2) << avg_C_S
+            << ", average convergence iteration = " << std::fixed << std::setprecision(2) << avg_convergence
+            << std::endl;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////

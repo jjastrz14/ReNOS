@@ -23,6 +23,7 @@ struct FastArchConfig {
     int k;  // network radix
     int n;  // network dimensions
     int flit_size;  // in bits
+    int vc_buf_size;  // buffer size in flits
     int routing_delay;
     int vc_alloc_delay;
     int sw_alloc_delay;
@@ -36,7 +37,7 @@ struct FastArchConfig {
     int traffic_burstiness_k;  // MMPP k parameter (λ₁/λ₀) for burstiness modeling
 
     // Defaults
-    FastArchConfig() : topology("torus"), k(4), n(2), flit_size(64),
+    FastArchConfig() : topology("torus"), k(4), n(2), flit_size(64), vc_buf_size(8),
                         routing_delay(1), vc_alloc_delay(1), sw_alloc_delay(1),
                         st_prepare_delay(1), st_final_delay(1), speculative(1),
                         ANY_comp_cycles(0.25), C_S(0.5), traffic_burstiness_k(10) {}
@@ -118,6 +119,12 @@ private:
     std::map<ChannelKey, double> _lambda_ic_oc;           // λ^N_{i→j}: arrival rate per IC→OC
     std::map<OutputChannelKey, double> _rho_total;        // ρ^N_j: total utilization per output channel
 
+    // Per-channel service time parameters (computed dynamically from paper's method)
+    std::map<OutputChannelKey, int> _channel_index;       // Channel group index (0=ejection, 1+=routing)
+    std::map<OutputChannelKey, double> _service_time_mean; // μ: mean service time per channel
+    std::map<OutputChannelKey, double> _service_time_C_S;  // C_S: service time CV per channel
+    std::map<OutputChannelKey, double> _waiting_time;      // W: average waiting time per channel
+
 public:
     FastAnalyticalModel();
     ~FastAnalyticalModel() = default;
@@ -170,6 +177,14 @@ private:
     void calculate_arrival_rates();
     void calculate_utilizations();
     int estimate_k_from_dependency_graph() const;
+
+    // Per-channel service time calculation (paper's method)
+    void calculate_channel_indices();
+    void calculate_service_times_and_C_S();
+    void initialize_ejection_channels();
+    void calculate_group_service_times(int group_index);
+    int get_max_distance_from_channel(int router, int port) const;
+    std::map<OutputChannelKey, double> get_routing_probabilities(OutputChannelKey channel) const;
 };
 
 // High-level simulation function
