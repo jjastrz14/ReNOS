@@ -35,9 +35,10 @@
 #include "booksim_config.hpp"
 #include "trafficmanager.hpp"
 #include "batchtrafficmanager.hpp"
-#include "random_utils.hpp" 
+#include "random_utils.hpp"
 #include "vc.hpp"
 #include "packet_reply_info.hpp"
+#include "logger.hpp"
 
 TrafficManager * TrafficManager::New(Configuration const & config,
                                      vector<Network *> const & net,
@@ -2515,7 +2516,47 @@ void TrafficManager::DisplayStats(ostream & os) const {
         *(_context->gDumpFile) << "Total in-flight flits = " << _total_in_flight_flits[c].size()
              << " (" << _measured_in_flight_flits[c].size() << " measured)"
              << endl;
-    
+
+        // Store statistics in logger if enabled (for Class 0 only, as it's the most common)
+        if (_context->logger != nullptr && c == 0) {
+            StatsSummary stats_summary;
+            stats_summary.packet_latency_avg = _plat_stats[c]->Average();
+            stats_summary.packet_latency_min = (int)_plat_stats[c]->Min();
+            stats_summary.packet_latency_max = (int)_plat_stats[c]->Max();
+            stats_summary.network_latency_avg = _nlat_stats[c]->Average();
+            stats_summary.network_latency_min = (int)_nlat_stats[c]->Min();
+            stats_summary.network_latency_max = (int)_nlat_stats[c]->Max();
+            stats_summary.flit_latency_avg = _flat_stats[c]->Average();
+            stats_summary.flit_latency_min = (int)_flat_stats[c]->Min();
+            stats_summary.flit_latency_max = (int)_flat_stats[c]->Max();
+            stats_summary.fragmentation_avg = _frag_stats[c]->Average();
+            stats_summary.fragmentation_min = (int)_frag_stats[c]->Min();
+            stats_summary.fragmentation_max = (int)_frag_stats[c]->Max();
+
+            // Compute packet rates
+            double time_delta_stats = (double)(_clock.time() - _reset_time);
+            int count_sum_stats, count_min_stats, count_max_stats, min_pos_stats, max_pos_stats;
+
+            _ComputeStats(_sent_packets[c], &count_sum_stats, &count_min_stats, &count_max_stats, &min_pos_stats, &max_pos_stats);
+            stats_summary.injected_packet_rate_avg = (double)count_sum_stats / time_delta_stats / (double)_nodes;
+
+            _ComputeStats(_accepted_packets[c], &count_sum_stats, &count_min_stats, &count_max_stats, &min_pos_stats, &max_pos_stats);
+            stats_summary.accepted_packet_rate_avg = (double)count_sum_stats / time_delta_stats / (double)_nodes;
+
+            _ComputeStats(_sent_flits[c], &count_sum_stats, &count_min_stats, &count_max_stats, &min_pos_stats, &max_pos_stats);
+            stats_summary.injected_flit_rate_avg = (double)count_sum_stats / time_delta_stats / (double)_nodes;
+
+            _ComputeStats(_accepted_flits[c], &count_sum_stats, &count_min_stats, &count_max_stats, &min_pos_stats, &max_pos_stats);
+            stats_summary.accepted_flit_rate_avg = (double)count_sum_stats / time_delta_stats / (double)_nodes;
+
+            stats_summary.injected_packet_length_avg = (double)sent_flits / (double)sent_packets;
+            stats_summary.accepted_packet_length_avg = (double)accepted_flits / (double)accepted_packets;
+            stats_summary.total_in_flight_flits = (int)_total_in_flight_flits[c].size();
+            stats_summary.time_elapsed_cycles = _clock.time();
+
+            _context->logger->set_stats_summary(stats_summary);
+        }
+
 #ifdef TRACK_STALLS
         _ComputeStats(_buffer_busy_stalls[c], &count_sum);
         rate_sum = (double)count_sum / time_delta;

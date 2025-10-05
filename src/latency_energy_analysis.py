@@ -12,7 +12,7 @@ import json
 from collections import defaultdict
 
 
-def analyze_logger_events(logger) -> Dict:
+def analyze_logger_events(logger, config_data=None) -> Dict:
     """
     Analyze BookSim2 logger events to extract latency and timing information
 
@@ -20,14 +20,85 @@ def analyze_logger_events(logger) -> Dict:
     -----------
     logger : BookSim2 EventLogger object
         Logger object containing simulation events
+    config_data : dict or str, optional
+        Configuration data (dict) or path to JSON config file (str).
+        Used to extract 'k' parameter for number of nodes (num_nodes = k * k)
 
     Returns:
     --------
-    Dict containing analysis results
+    Dict containing analysis results including updated energy parameters
     """
     if logger is None:
         print("Warning: Logger is None, no analysis possible")
         return {}
+
+    # Load config data if it's a path
+    if isinstance(config_data, str):
+        config_data = load_workload_json(config_data)
+
+    # Check for power summary and calculate NoC energy per byte
+    print("\n" + "="*60)
+    print("POWER SUMMARY CHECK")
+    print("="*60)
+
+    noc_energy_result = None
+    updated_energy_params = None
+
+    if logger.has_power_summary:
+        ps = logger.power_summary
+        print(f"✓ Power summary available!")
+        print(f"  Total Power: {ps.total_power:.6f} W")
+        print(f"  Clock Frequency: {ps.fclk:.3e} Hz")
+        print(f"  Completion Time: {ps.completion_time_cycles} cycles")
+        print(f"  Flit Width: {ps.flit_width_bits} bits")
+        print(f"  Vdd: {ps.vdd} V")
+
+        # Calculate total energy
+        total_energy_J = ps.total_power * ps.completion_time_cycles / ps.fclk
+        print(f"  Total Energy: {total_energy_J:.6e} J ({total_energy_J*1e6:.3f} µJ)")
+
+        # Calculate actual NoC energy per byte if stats summary is also available
+        if logger.has_stats_summary and packet_latencies:
+            print("\n" + "="*60)
+            print("NOC ENERGY CALCULATION (PER-PACKET METHOD)")
+            print("="*60)
+            try:
+                # Use per-packet energy calculation (more accurate)
+                noc_energy_result = calculate_noc_energy_per_byte_per_packet(logger, packet_latencies, config_data)
+                updated_energy_params, _ = get_updated_energy_params(logger, packet_latencies=packet_latencies, config_data=config_data, use_per_packet=True)
+
+                print(f"✓ Calculated per-packet NoC energy using {noc_energy_result['total_packets_analyzed']} packets")
+                print(f"  Average packet size: {noc_energy_result['avg_packet_size_bytes']:.1f} bytes ({noc_energy_result['avg_packet_length_flits']:.1f} flits)")
+                print(f"\n  Energy per Byte by Communication Type:")
+
+                for comm_type in ['WRITE', 'WRITE_REQ', 'REPLY', 'READ', 'READ_REQ']:
+                    count = noc_energy_result.get(f'{comm_type}_packet_count', 0)
+                    if count > 0:
+                        energy_pJ = noc_energy_result.get(f'{comm_type}_energy_per_byte_pJ', 0)
+                        std_pJ = noc_energy_result.get(f'{comm_type}_energy_per_byte_std_pJ', 0)
+                        print(f"    {comm_type:10s}: {energy_pJ:8.3f} ± {std_pJ:6.3f} pJ/byte  ({count} packets)")
+
+                print(f"\n  Overall average: {noc_energy_result.get('overall_energy_per_byte_pJ', 0):.3f} pJ/byte")
+
+                print(f"\n  Updated Energy Parameters:")
+                print(f"    WRITE:     {updated_energy_params['WRITE']['energy_per_byte']*1e12:.3f} pJ/byte (from per-packet analysis)")
+                print(f"    WRITE_REQ: {updated_energy_params['WRITE_REQ']['energy_per_byte']*1e12:.3f} pJ/byte (from per-packet analysis)")
+                print(f"    REPLY:     {updated_energy_params['REPLY']['energy_per_byte']*1e12:.3f} pJ/byte (from per-packet analysis)")
+
+                print(f"\n  Comparison with defaults:")
+                default_noc = DEFAULT_ENERGY_PARAMS['WRITE']['energy_per_byte']
+                actual_noc = updated_energy_params['WRITE']['energy_per_byte']
+                ratio = actual_noc / default_noc
+                print(f"    Default: {default_noc*1e12:.3f} pJ/byte")
+                print(f"    Actual:  {actual_noc*1e12:.3f} pJ/byte")
+                print(f"    Ratio:   {ratio:.2f}x")
+            except Exception as e:
+                print(f"✗ Could not calculate NoC energy per byte: {e}")
+                import traceback
+                traceback.print_exc()
+    else:
+        print("✗ No power summary available")
+        print("  Make sure 'sim_power': 1 is set in your config file")
 
     # Extract events from logger
     events = logger.events
@@ -50,7 +121,7 @@ def analyze_logger_events(logger) -> Dict:
     # Convert to DataFrame for easier analysis
     df = pd.DataFrame(event_data)
 
-    print(f"Total events: {len(df)}")
+    print(f"\nTotal events: {len(df)}")
     print(f"Event types: {df['type'].unique()}")
 
     # Analyze packet latencies using logger directly
@@ -81,7 +152,14 @@ def analyze_logger_events(logger) -> Dict:
     # Calculate energy efficiency metrics
     #efficiency_metrics = analyze_energy_efficiency(energy_df, packet_latencies, total_energy)
 
-    return packets_df, computations_df, df
+    # Return results including updated energy params
+    return {
+        'packets_df': packets_df,
+        'computations_df': computations_df,
+        'parallel_analysis': df,
+        'noc_energy': noc_energy_result,
+        'updated_energy_params': updated_energy_params
+    }
 
 
 def communication_type_to_string(ctype: int) -> str:
@@ -466,6 +544,267 @@ DEFAULT_ENERGY_PARAMS = {
 }
 
 
+def calculate_noc_energy_per_byte_per_packet(logger, packet_latencies, config_data=None):
+    """
+    Calculate actual NoC energy per byte for each packet based on individual packet latencies.
+    This is more accurate than the aggregate approach as it accounts for per-packet timing.
+
+    Parameters:
+    -----------
+    logger : EventLogger
+        Logger object with power_summary and stats_summary
+    packet_latencies : List[Dict]
+        List of packet latency dictionaries from analyze_packet_latencies()
+    config_data : dict, optional
+        Configuration data containing power and flit size info
+
+    Returns:
+    --------
+    dict with per-packet-type energy metrics
+    """
+    if not logger.has_power_summary:
+        raise ValueError("Logger does not have power summary. Set sim_power=1 in config.")
+
+    if not logger.has_stats_summary:
+        raise ValueError("Logger does not have stats summary. Set logger=1 in config.")
+
+    ps = logger.power_summary
+    stats = logger.stats_summary
+
+    # Get average packet size in flits and convert to bytes
+    avg_packet_length_flits = stats.accepted_packet_length_avg
+    flit_size_bytes = ps.flit_width_bits / 8
+    avg_packet_size_bytes = avg_packet_length_flits * flit_size_bytes
+
+    # Calculate energy for each packet based on its latency
+    packet_energies = {
+        'WRITE': [],
+        'WRITE_REQ': [],
+        'REPLY': [],
+        'READ': [],
+        'READ_REQ': [],
+        'ALL': []
+    }
+
+    for packet in packet_latencies:
+        comm_type = packet['communication_type']
+        latency_cycles = packet['latency']
+
+        # Energy consumed by this packet (assumes constant power during transmission)
+        packet_energy_J = ps.total_power * latency_cycles / ps.fclk
+
+        # Energy per byte for this packet (using average packet size)
+        energy_per_byte_J = packet_energy_J / avg_packet_size_bytes if avg_packet_size_bytes > 0 else 0
+
+        # Store by communication type
+        packet_energies['ALL'].append({
+            'packet_id': packet['packet_id'],
+            'type': comm_type,
+            'latency': latency_cycles,
+            'energy_J': packet_energy_J,
+            'energy_per_byte_J': energy_per_byte_J
+        })
+
+        if comm_type in packet_energies:
+            packet_energies[comm_type].append(energy_per_byte_J)
+
+    # Calculate averages for each communication type
+    result = {
+        'avg_packet_size_bytes': avg_packet_size_bytes,
+        'avg_packet_length_flits': avg_packet_length_flits,
+        'flit_size_bytes': flit_size_bytes,
+        'total_packets_analyzed': len(packet_latencies)
+    }
+
+    for comm_type in ['WRITE', 'WRITE_REQ', 'REPLY', 'READ', 'READ_REQ']:
+        if packet_energies[comm_type]:
+            energies = packet_energies[comm_type]
+            result[f'{comm_type}_energy_per_byte_J'] = np.mean(energies)
+            result[f'{comm_type}_energy_per_byte_pJ'] = np.mean(energies) * 1e12
+            result[f'{comm_type}_energy_per_byte_std_pJ'] = np.std(energies) * 1e12
+            result[f'{comm_type}_packet_count'] = len(energies)
+        else:
+            result[f'{comm_type}_energy_per_byte_J'] = 0
+            result[f'{comm_type}_energy_per_byte_pJ'] = 0
+            result[f'{comm_type}_energy_per_byte_std_pJ'] = 0
+            result[f'{comm_type}_packet_count'] = 0
+
+    # Also calculate overall average
+    if packet_energies['ALL']:
+        all_energies = [p['energy_per_byte_J'] for p in packet_energies['ALL']]
+        result['overall_energy_per_byte_J'] = np.mean(all_energies)
+        result['overall_energy_per_byte_pJ'] = np.mean(all_energies) * 1e12
+        result['overall_energy_per_byte_std_pJ'] = np.std(all_energies) * 1e12
+
+    result['packet_energies'] = packet_energies
+
+    return result
+
+
+def calculate_noc_energy_per_byte(logger, num_nodes=None, config_data=None):
+    """
+    Calculate actual NoC energy per byte from Booksim2 power and stats summaries
+
+    Parameters:
+    -----------
+    logger : EventLogger
+        Logger object with power_summary and stats_summary
+    num_nodes : int, optional
+        Number of nodes in the NoC. If not provided, will try to extract from config_data
+    config_data : dict, optional
+        Configuration data containing 'k' parameter (num_nodes = k * k)
+
+    Returns:
+    --------
+    dict with energy metrics and breakdown
+    """
+    if not logger.has_power_summary:
+        raise ValueError("Logger does not have power summary. Set sim_power=1 in config.")
+
+    if not logger.has_stats_summary:
+        raise ValueError("Logger does not have stats summary. Set logger=1 in config.")
+
+    # Determine number of nodes
+    if num_nodes is None:
+        if config_data is not None:
+            # Try to extract k from config (could be at root or in 'arch' section)
+            k = None
+            if 'k' in config_data:
+                k = config_data['k']
+            elif 'arch' in config_data and 'k' in config_data['arch']:
+                k = config_data['arch']['k']
+
+            if k is not None:
+                num_nodes = k * k
+            else:
+                # Default to 64 (8x8 grid)
+                num_nodes = 64
+                print(f"Warning: num_nodes not provided and 'k' not found in config. Using default: {num_nodes}")
+        else:
+            num_nodes = 64
+            print(f"Warning: num_nodes and config_data not provided. Using default: {num_nodes}")
+
+    ps = logger.power_summary
+    stats = logger.stats_summary
+
+    # Calculate total NoC energy (in Joules)
+    total_noc_energy_J = ps.total_power * ps.completion_time_cycles / ps.fclk
+
+    # Calculate total bytes transmitted
+    # Total packets = accepted_packet_rate * time * num_nodes
+    total_packets = stats.accepted_packet_rate_avg * stats.time_elapsed_cycles * num_nodes
+
+    # Average packet length in flits
+    avg_packet_length_flits = stats.accepted_packet_length_avg
+
+    # Flit size in bytes
+    flit_size_bytes = ps.flit_width_bits / 8
+
+    # Total bytes transmitted
+    total_bytes = total_packets * avg_packet_length_flits * flit_size_bytes
+
+    # Energy per byte (in Joules)
+    energy_per_byte_J = total_noc_energy_J / total_bytes if total_bytes > 0 else 0
+
+    # Breakdown by power component
+    channel_power = (ps.channel_wire_power + ps.channel_clock_power +
+                     ps.channel_retiming_power + ps.channel_leakage_power)
+    router_power = (ps.input_read_power + ps.input_write_power +
+                    ps.input_leakage_power + ps.switch_power +
+                    ps.switch_control_power + ps.switch_leakage_power +
+                    ps.output_dff_power + ps.output_clk_power +
+                    ps.output_control_power)
+
+    channel_energy_per_byte_J = (channel_power * ps.completion_time_cycles / ps.fclk / total_bytes
+                                  if total_bytes > 0 else 0)
+    router_energy_per_byte_J = (router_power * ps.completion_time_cycles / ps.fclk / total_bytes
+                                 if total_bytes > 0 else 0)
+
+    result = {
+        # Total energy
+        'total_noc_energy_J': total_noc_energy_J,
+        'total_noc_energy_uJ': total_noc_energy_J * 1e6,
+        'total_noc_energy_nJ': total_noc_energy_J * 1e9,
+
+        # Traffic stats
+        'total_packets': total_packets,
+        'avg_packet_length_flits': avg_packet_length_flits,
+        'flit_size_bytes': flit_size_bytes,
+        'total_bytes': total_bytes,
+
+        # Energy per byte
+        'energy_per_byte_J': energy_per_byte_J,
+        'energy_per_byte_pJ': energy_per_byte_J * 1e12,
+
+        # Breakdown
+        'channel_energy_per_byte_J': channel_energy_per_byte_J,
+        'channel_energy_per_byte_pJ': channel_energy_per_byte_J * 1e12,
+        'router_energy_per_byte_J': router_energy_per_byte_J,
+        'router_energy_per_byte_pJ': router_energy_per_byte_J * 1e12,
+    }
+
+    return result
+
+
+def get_updated_energy_params(logger, packet_latencies=None, num_nodes=None, config_data=None, use_per_packet=True):
+    """
+    Get updated energy parameters using actual NoC simulation data
+
+    Parameters:
+    -----------
+    logger : EventLogger
+        Logger with power and stats summaries
+    packet_latencies : List[Dict], optional
+        List of packet latency dictionaries. Required if use_per_packet=True
+    num_nodes : int, optional
+        Number of nodes in the NoC. Used if use_per_packet=False
+    config_data : dict, optional
+        Configuration data containing 'k' parameter
+    use_per_packet : bool, optional
+        If True, use per-packet energy calculation (more accurate). Default: True
+
+    Returns:
+    --------
+    tuple: (updated_params dict, noc_energy dict)
+    """
+    if use_per_packet and packet_latencies:
+        # Use per-packet energy calculation (more accurate)
+        noc_energy = calculate_noc_energy_per_byte_per_packet(logger, packet_latencies, config_data)
+
+        # Extract energy per byte for each communication type
+        write_energy = noc_energy.get('WRITE_energy_per_byte_J', noc_energy.get('overall_energy_per_byte_J', 5e-12))
+        write_req_energy = noc_energy.get('WRITE_REQ_energy_per_byte_J', write_energy)
+        reply_energy = noc_energy.get('REPLY_energy_per_byte_J', write_energy)
+
+        updated_params = {
+            "COMP_OP":    {"energy_per_flop": 1.1e-12},   # From Horowitz
+            "WRITE":      {"energy_per_byte": write_energy},  # From per-packet NoC simulation
+            "WRITE_REQ":  {"energy_per_byte": write_req_energy},  # From per-packet NoC simulation
+            "REPLY":      {"energy_per_byte": reply_energy},  # From per-packet NoC simulation
+            "SRAM_READ":  {"energy_per_byte": 10.5e-12},  # From Horowitz
+            "SRAM_WRITE": {"energy_per_byte": 12.5e-12},  # From Horowitz
+            "DEFAULT":    {"energy_per_byte": 1.1e-12, "energy_per_flop": 0.4e-12}
+        }
+    else:
+        # Fall back to aggregate calculation
+        noc_energy = calculate_noc_energy_per_byte(logger, num_nodes, config_data)
+
+        # Use calculated energy per byte for all network communication
+        energy_per_byte = noc_energy['energy_per_byte_J']
+
+        updated_params = {
+            "COMP_OP":   {"energy_per_flop": 1.1e-12},   # From Horowitz
+            "WRITE":     {"energy_per_byte": energy_per_byte},  # From NoC simulation
+            "WRITE_REQ": {"energy_per_byte": energy_per_byte},  # From NoC simulation
+            "REPLY":     {"energy_per_byte": energy_per_byte},  # From NoC simulation
+            "SRAM_READ":  {"energy_per_byte": 10.5e-12},  # From Horowitz
+            "SRAM_WRITE": {"energy_per_byte": 12.5e-12},  # From Horowitz
+            "DEFAULT":    {"energy_per_byte": 1.1e-12, "energy_per_flop": 0.4e-12}
+        }
+
+    return updated_params, noc_energy
+
+
 def load_workload_json(config_path: str) -> Dict:
     """Load JSON configuration from file path."""
     try:
@@ -724,6 +1063,149 @@ def analyze_energy_efficiency(packet_latencies: List[Dict], energy_df: pd.DataFr
     }
 
 
+def export_latency_energy_details_to_csv(
+    parallel_analysis: Dict,
+    noc_energy_result: Dict,
+    logger,
+    computation_times: List[Dict] = None,
+    packet_latencies: List[Dict] = None,
+    energy_params: Dict = None,
+    output_path: str = "latency_energy_details.csv",
+    config_data: Dict = None
+) -> pd.DataFrame:
+    """
+    Export comprehensive latency and energy details to CSV file.
+
+    Separates NoC energy (from Booksim2 power model) and PE energy (from computation events).
+
+    Parameters:
+    -----------
+    parallel_analysis : Dict
+        Result from analyze_parallel_execution_time()
+    noc_energy_result : Dict
+        Result from calculate_noc_energy_per_byte_per_packet()
+    logger : EventLogger
+        Logger object with power summary
+    computation_times : List[Dict], optional
+        List of computation time dictionaries from analyze_computation_times()
+    packet_latencies : List[Dict], optional
+        List of packet latency dictionaries from analyze_packet_latencies()
+    energy_params : Dict, optional
+        Energy parameters dict (if None, uses DEFAULT_ENERGY_PARAMS)
+    output_path : str
+        Path to output CSV file
+    config_data : Dict, optional
+        Configuration data for additional context
+
+    Returns:
+    --------
+    pd.DataFrame with the exported data
+    """
+    if not logger.has_power_summary:
+        raise ValueError("Logger does not have power summary")
+
+    ps = logger.power_summary
+
+    if energy_params is None:
+        energy_params = DEFAULT_ENERGY_PARAMS.copy()
+
+    # ==========================================
+    # NoC Energy (from Booksim2 power model)
+    # ==========================================
+    # Total NoC energy from power summary - this is ONLY for routers/channels
+    noc_total_energy_J = ps.total_power * ps.completion_time_cycles / ps.fclk
+
+    # ==========================================
+    # PE Energy (from computation events)
+    # ==========================================
+    pe_energy_J = 0.0
+
+    if computation_times:
+        # Estimate PE energy from computation operations
+        comp_flop_energy = energy_params.get('COMP_OP', {}).get('energy_per_flop', 1.1e-12)
+
+        for comp in computation_times:
+            # Use duration as flop estimate (or computation_time if available)
+            estimated_flops = comp.get('computation_time', comp['duration'])
+            pe_energy_J += estimated_flops * comp_flop_energy
+
+    # ==========================================
+    # Data Flow Energy (from packet events)
+    # ==========================================
+    dataflow_energy_J = 0.0
+
+    if packet_latencies and noc_energy_result and 'packet_energies' in noc_energy_result:
+        # Sum up actual energy consumed by all packets
+        all_packets = noc_energy_result['packet_energies'].get('ALL', [])
+        for packet_info in all_packets:
+            dataflow_energy_J += packet_info['energy_J']
+    else:
+        # Fallback: use NoC total energy as data flow energy
+        dataflow_energy_J = noc_total_energy_J
+
+    # Total energy = PE energy + Data flow energy
+    total_energy_J = pe_energy_J + dataflow_energy_J
+
+    # Create summary row
+    data = {
+        # Latency metrics (cycles)
+        'overall_latency_cycles': parallel_analysis['total_simulation_cycles'],
+        'comp_cycles': parallel_analysis['computation_occupied_cycles'],
+        'data_flow_cycles': parallel_analysis['packet_occupied_cycles'],
+        'overlapping_cycles': parallel_analysis['overlap_cycles'],
+        'idle_cycles': parallel_analysis['idle_cycles'],
+
+        # Energy metrics (Joules)
+        'energy_PEs_J': pe_energy_J,
+        'energy_data_flow_J': dataflow_energy_J,
+        'total_energy_J': total_energy_J,
+
+        # Energy metrics (microJoules)
+        'energy_PEs_uJ': pe_energy_J * 1e6,
+        'energy_data_flow_uJ': dataflow_energy_J * 1e6,
+        'total_energy_uJ': total_energy_J * 1e6,
+
+        # Percentage breakdowns
+        'comp_percentage': parallel_analysis['computation_percentage'],
+        'data_flow_percentage': parallel_analysis['packet_percentage'],
+        'overlap_percentage': parallel_analysis['overlap_percentage'],
+        'idle_percentage': parallel_analysis['idle_percentage'],
+
+        # NoC energy details (if available)
+        'noc_energy_per_byte_pJ': noc_energy_result.get('overall_energy_per_byte_pJ', 0) if noc_energy_result else 0,
+        'total_packets_analyzed': noc_energy_result.get('total_packets_analyzed', 0) if noc_energy_result else 0,
+        'avg_packet_size_bytes': noc_energy_result.get('avg_packet_size_bytes', 0) if noc_energy_result else 0,
+
+        # Power details
+        'noc_power_W': ps.total_power,
+        'clock_freq_Hz': ps.fclk,
+
+        # Parallelism metrics
+        'max_parallel_computations': parallel_analysis['max_parallel_computations'],
+        'avg_parallel_computations': parallel_analysis['avg_parallel_computations'],
+        'parallelism_speedup': parallel_analysis['parallelism_speedup'],
+
+        # Computation details
+        'total_computations': len(computation_times) if computation_times else 0,
+        'total_packets': len(packet_latencies) if packet_latencies else 0,
+    }
+
+    # Add per-packet-type energy if available
+    if noc_energy_result:
+        for comm_type in ['WRITE', 'WRITE_REQ', 'REPLY', 'READ', 'READ_REQ']:
+            data[f'{comm_type}_energy_per_byte_pJ'] = noc_energy_result.get(f'{comm_type}_energy_per_byte_pJ', 0)
+            data[f'{comm_type}_packet_count'] = noc_energy_result.get(f'{comm_type}_packet_count', 0)
+
+    # Create DataFrame
+    df = pd.DataFrame([data])
+
+    # Save to CSV
+    df.to_csv(output_path, index=False)
+    print(f"\n✓ Exported latency and energy details to: {output_path}")
+
+    return df
+
+
 def parallel_analysis_to_dataframe(parallel_analysis: Dict, strategy_name: str = None) -> pd.DataFrame:
     """
     Convert parallel execution analysis dictionary to DataFrame for CSV export.
@@ -795,11 +1277,6 @@ def analyze_simulation_results(config_path: str, output_dir: str = ".", create_p
 
     # Analyze logger data (includes timing and energy analysis)
     analysis_results = analyze_logger_events(logger)
-
-    # Create plots if requested
-    if create_plots and analysis_results:
-        plot_path = f"{output_dir}/timing_analysis.png"
-        plot_timing_analysis(analysis_results, plot_path)
 
     # Print summary of results
     #print(f"\n=== ANALYSIS SUMMARY ===")

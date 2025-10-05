@@ -41,6 +41,69 @@ struct HistoryBit {
     int end;
 };
 
+// Power summary structure to store Booksim2 power analysis results
+struct PowerSummary {
+    double vdd;                      // Voltage (V)
+    double resistance;               // Resistance (Ohm)
+    double fclk;                     // Clock frequency (Hz)
+    int completion_time_cycles;      // Completion time (cycles)
+    int flit_width_bits;            // Flit width (bits)
+    double channel_wire_power;       // Channel wire power (W)
+    double channel_clock_power;      // Channel clock power (W)
+    double channel_retiming_power;   // Channel retiming power (W)
+    double channel_leakage_power;    // Channel leakage power (W)
+    double input_read_power;         // Input read power (W)
+    double input_write_power;        // Input write power (W)
+    double input_leakage_power;      // Input leakage power (W)
+    double switch_power;             // Switch power (W)
+    double switch_control_power;     // Switch control power (W)
+    double switch_leakage_power;     // Switch leakage power (W)
+    double output_dff_power;         // Output DFF power (W)
+    double output_clk_power;         // Output clock power (W)
+    double output_control_power;     // Output control power (W)
+    double total_power;              // Total power (W)
+
+    PowerSummary() : vdd(0), resistance(0), fclk(0), completion_time_cycles(0),
+                     flit_width_bits(0), channel_wire_power(0), channel_clock_power(0),
+                     channel_retiming_power(0), channel_leakage_power(0), input_read_power(0),
+                     input_write_power(0), input_leakage_power(0), switch_power(0),
+                     switch_control_power(0), switch_leakage_power(0), output_dff_power(0),
+                     output_clk_power(0), output_control_power(0), total_power(0) {}
+};
+
+// Statistics summary structure to store Booksim2 latency/throughput stats
+struct StatsSummary {
+    double packet_latency_avg;
+    int packet_latency_min;
+    int packet_latency_max;
+    double network_latency_avg;
+    int network_latency_min;
+    int network_latency_max;
+    double flit_latency_avg;
+    int flit_latency_min;
+    int flit_latency_max;
+    double fragmentation_avg;
+    int fragmentation_min;
+    int fragmentation_max;
+    double injected_packet_rate_avg;
+    double accepted_packet_rate_avg;
+    double injected_flit_rate_avg;
+    double accepted_flit_rate_avg;
+    double injected_packet_length_avg;
+    double accepted_packet_length_avg;
+    int total_in_flight_flits;
+    int time_elapsed_cycles;
+
+    StatsSummary() : packet_latency_avg(0), packet_latency_min(0), packet_latency_max(0),
+                     network_latency_avg(0), network_latency_min(0), network_latency_max(0),
+                     flit_latency_avg(0), flit_latency_min(0), flit_latency_max(0),
+                     fragmentation_avg(0), fragmentation_min(0), fragmentation_max(0),
+                     injected_packet_rate_avg(0), accepted_packet_rate_avg(0),
+                     injected_flit_rate_avg(0), accepted_flit_rate_avg(0),
+                     injected_packet_length_avg(0), accepted_packet_length_avg(0),
+                     total_in_flight_flits(0), time_elapsed_cycles(0) {}
+};
+
 // the base class used to store important information on the events
 class EventInfo {
     public:
@@ -239,7 +302,7 @@ class Event {
 
 class EventLogger {
     public:
-        EventLogger() : _events(), _id_counter(0) {}
+        EventLogger() : _events(), _id_counter(0), _has_power_summary(false), _has_stats_summary(false) {}
 
         ~EventLogger() {
             for (auto& [id, info] : _event_info) {
@@ -314,10 +377,43 @@ class EventLogger {
                 event.print(os);
             }
         }
+
+        // Power and statistics summary setters
+        void set_power_summary(const PowerSummary& summary) {
+            _power_summary = summary;
+            _has_power_summary = true;
+        }
+
+        void set_stats_summary(const StatsSummary& summary) {
+            _stats_summary = summary;
+            _has_stats_summary = true;
+        }
+
+        // Power and statistics summary getters
+        const PowerSummary& get_power_summary() const {
+            return _power_summary;
+        }
+
+        const StatsSummary& get_stats_summary() const {
+            return _stats_summary;
+        }
+
+        bool has_power_summary() const {
+            return _has_power_summary;
+        }
+
+        bool has_stats_summary() const {
+            return _has_stats_summary;
+        }
+
     private:
         std::deque<Event> _events; // chrono timeline
         int _id_counter;
         std::map<int,std::map<int,EventInfo*>> _event_info; // to store the info of the events
+        bool _has_power_summary;
+        bool _has_stats_summary;
+        PowerSummary _power_summary;
+        StatsSummary _stats_summary;
 
 };
 

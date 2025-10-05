@@ -86,6 +86,61 @@ PYBIND11_MODULE(nocsim, m) {
         .value("END_COMPUTATION", EventType::END_COMPUTATION)
         .export_values();
 
+    py::class_<PowerSummary>(m, "PowerSummary")
+        .def(py::init<>())
+        .def("__repr__", [](const PowerSummary &ps) {
+            std::ostringstream oss;
+            oss << "PowerSummary(total_power=" << ps.total_power << "W, fclk=" << ps.fclk << "Hz, cycles=" << ps.completion_time_cycles << ")";
+            return oss.str();
+        })
+        .def_readonly("vdd", &PowerSummary::vdd)
+        .def_readonly("resistance", &PowerSummary::resistance)
+        .def_readonly("fclk", &PowerSummary::fclk)
+        .def_readonly("completion_time_cycles", &PowerSummary::completion_time_cycles)
+        .def_readonly("flit_width_bits", &PowerSummary::flit_width_bits)
+        .def_readonly("channel_wire_power", &PowerSummary::channel_wire_power)
+        .def_readonly("channel_clock_power", &PowerSummary::channel_clock_power)
+        .def_readonly("channel_retiming_power", &PowerSummary::channel_retiming_power)
+        .def_readonly("channel_leakage_power", &PowerSummary::channel_leakage_power)
+        .def_readonly("input_read_power", &PowerSummary::input_read_power)
+        .def_readonly("input_write_power", &PowerSummary::input_write_power)
+        .def_readonly("input_leakage_power", &PowerSummary::input_leakage_power)
+        .def_readonly("switch_power", &PowerSummary::switch_power)
+        .def_readonly("switch_control_power", &PowerSummary::switch_control_power)
+        .def_readonly("switch_leakage_power", &PowerSummary::switch_leakage_power)
+        .def_readonly("output_dff_power", &PowerSummary::output_dff_power)
+        .def_readonly("output_clk_power", &PowerSummary::output_clk_power)
+        .def_readonly("output_control_power", &PowerSummary::output_control_power)
+        .def_readonly("total_power", &PowerSummary::total_power);
+
+    py::class_<StatsSummary>(m, "StatsSummary")
+        .def(py::init<>())
+        .def("__repr__", [](const StatsSummary &ss) {
+            std::ostringstream oss;
+            oss << "StatsSummary(packet_latency_avg=" << ss.packet_latency_avg << ", cycles=" << ss.time_elapsed_cycles << ")";
+            return oss.str();
+        })
+        .def_readonly("packet_latency_avg", &StatsSummary::packet_latency_avg)
+        .def_readonly("packet_latency_min", &StatsSummary::packet_latency_min)
+        .def_readonly("packet_latency_max", &StatsSummary::packet_latency_max)
+        .def_readonly("network_latency_avg", &StatsSummary::network_latency_avg)
+        .def_readonly("network_latency_min", &StatsSummary::network_latency_min)
+        .def_readonly("network_latency_max", &StatsSummary::network_latency_max)
+        .def_readonly("flit_latency_avg", &StatsSummary::flit_latency_avg)
+        .def_readonly("flit_latency_min", &StatsSummary::flit_latency_min)
+        .def_readonly("flit_latency_max", &StatsSummary::flit_latency_max)
+        .def_readonly("fragmentation_avg", &StatsSummary::fragmentation_avg)
+        .def_readonly("fragmentation_min", &StatsSummary::fragmentation_min)
+        .def_readonly("fragmentation_max", &StatsSummary::fragmentation_max)
+        .def_readonly("injected_packet_rate_avg", &StatsSummary::injected_packet_rate_avg)
+        .def_readonly("accepted_packet_rate_avg", &StatsSummary::accepted_packet_rate_avg)
+        .def_readonly("injected_flit_rate_avg", &StatsSummary::injected_flit_rate_avg)
+        .def_readonly("accepted_flit_rate_avg", &StatsSummary::accepted_flit_rate_avg)
+        .def_readonly("injected_packet_length_avg", &StatsSummary::injected_packet_length_avg)
+        .def_readonly("accepted_packet_length_avg", &StatsSummary::accepted_packet_length_avg)
+        .def_readonly("total_in_flight_flits", &StatsSummary::total_in_flight_flits)
+        .def_readonly("time_elapsed_cycles", &StatsSummary::time_elapsed_cycles);
+
     py::class_<EventLogger>(m, "EventLogger")
         .def(py::init<>())
         .def("__repr__", [](const EventLogger &logger) {
@@ -99,7 +154,11 @@ PYBIND11_MODULE(nocsim, m) {
             return oss.str();
         })
         .def_property_readonly("events", &EventLogger::get_events)
-        .def("get_event_info", &EventLogger::get_event_info, py::arg("id"));
+        .def("get_event_info", &EventLogger::get_event_info, py::arg("id"))
+        .def_property_readonly("power_summary", &EventLogger::get_power_summary)
+        .def_property_readonly("stats_summary", &EventLogger::get_stats_summary)
+        .def_property_readonly("has_power_summary", &EventLogger::has_power_summary)
+        .def_property_readonly("has_stats_summary", &EventLogger::has_stats_summary);
 
     // Version and model info
     m.attr("__version__") = "2.1.0";

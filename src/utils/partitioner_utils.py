@@ -2001,7 +2001,11 @@ def column_wise_mapping(task_graph, domain, verbose = False):
                 next_node = drain_node 
             else:
                 #K is the number of PEs in one dimension, size is the K * N (which N is the number of dimensions)
-                next_node = (task_id * domain.K) % domain.size
+                rows = domain.size // domain.K
+                col = task_id // rows
+                row = task_id % rows
+                next_node = (row * domain.K + col) % domain.size
+                #next_node = (task_id * domain.K) % domain.size
                 #print(f"Task id: {task_id} and next node {next_node}")
                 #np.random.choice(range(domain.size), 1)[0]
             

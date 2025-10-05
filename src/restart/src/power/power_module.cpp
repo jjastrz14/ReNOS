@@ -30,6 +30,7 @@
 #include "buffer_monitor.hpp"
 #include "switch_monitor.hpp"
 #include "iq_router.hpp"
+#include "logger.hpp"
 
 Power_Module::Power_Module(Network * n , const Configuration &config)
   : Module( 0, "power_module" ){
@@ -531,7 +532,30 @@ void Power_Module::run(){
   *(net->context->gDumpFile)<< "- Total Area:    "<<totalarea<<" mm^2\n" ;
   *(net->context->gDumpFile)<< "-----------------------------------------\n" ;
 
+  // Store power summary in logger if logger is enabled
+  if (net->context->logger != nullptr) {
+    PowerSummary power_summary;
+    power_summary.vdd = Vdd;
+    power_summary.resistance = R;
+    power_summary.fclk = fCLK;
+    power_summary.completion_time_cycles = totalTime;
+    power_summary.flit_width_bits = (int)channel_width;
+    power_summary.channel_wire_power = channelWirePower;
+    power_summary.channel_clock_power = channelClkPower;
+    power_summary.channel_retiming_power = channelDFFPower;
+    power_summary.channel_leakage_power = channelLeakPower;
+    power_summary.input_read_power = inputReadPower;
+    power_summary.input_write_power = inputWritePower;
+    power_summary.input_leakage_power = inputLeakagePower;
+    power_summary.switch_power = switchPower;
+    power_summary.switch_control_power = switchPowerCtrl;
+    power_summary.switch_leakage_power = switchPowerLeak;
+    power_summary.output_dff_power = outputPower;
+    power_summary.output_clk_power = outputPowerClk;
+    power_summary.output_control_power = outputCtrlPower;
+    power_summary.total_power = totalpower;
 
-
+    net->context->logger->set_power_summary(power_summary);
+  }
 
 }
