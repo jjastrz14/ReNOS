@@ -106,7 +106,7 @@ if __name__ == "__main__":
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
     #spatial, output, input
-    parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
+    parts, deps = build_partitions_splitting_input_for_many_tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
     #print partitions and dependencies in a table format
     print("")
     print("Analysis of the partitions...") 

@@ -36,8 +36,8 @@ if __name__ == '__main__':
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
-    model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
+    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
     x_of_grid = 4
     source = 0
@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
     #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)] (1,1,1) (2,2,2) (3,3,3) (4,3,3)
     
-    partitioner_tuples = [(0, 1, 1), (4,3,3) ,(2,2,2), (4,3,3), (2,2,2), (4,3,3), (2,2,2), (4,3,3)]
+    partitioner_tuples = [(0, 1, 1), (5,4,4), (2,2,2), (2,2,2), (1,1,1), (5,5,5), (2,2,2), (2,2,2), (1,1,1), (3,1,1), (1,1,1), (1,1,1), (3,1,1)] #[(0, 1, 1), (4,3,3) ,(2,2,2), (4,3,3), (2,2,2), (4,3,3), (2,2,2), (4,3,3)]
     #for lenet: 
     #[(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]]
     #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
     #spatial, output, input
-    parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
+    parts, deps = build_partitions_splitting_input_for_many_tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
 
     #print partitions and dependencies in a table format
     #print("")
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     print(f"Time gain fast analytical: {booksim_time / fast_analytical_time:.4f}x")
     
 
-    visualise = False
+    visualise = True
     if visualise:
         plot_timeline("./data/partitioner_data/mapping.json", timeline_path = "./data/partitioner_data/timeline.png", verbose = False)
         # Visualize analytical model simulation

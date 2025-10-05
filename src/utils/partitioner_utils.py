@@ -1745,7 +1745,7 @@ def build_partitions_splitting_input(model: keras.Model, grid, partitioning_tupl
 
     return partitions, partitions_deps
 
-def build_partitions_splitting_input_for_many__tuples(model: keras.Model, grid, partitioning_tuple=None, grouping: bool = True, verbose: bool = True) -> Tuple[dict, dict]:
+def build_partitions_splitting_input_for_many_tuples(model: keras.Model, grid, partitioning_tuple=None, grouping: bool = True, verbose: bool = True) -> Tuple[dict, dict]:
     """
     The function creates the partitions for each layer in the model, based on the partitioning strategies provided as input.
 

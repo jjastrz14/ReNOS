@@ -702,7 +702,6 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
     // If k is set to a special value (e.g., -1 or 0), estimate from graph
     if (k_param <= 0) {
         k_param = estimate_k_from_dependency_graph();
-        std::cout << "Estimated k from dependency graph: " << k_param << std::endl;
     }
 
     // Pre-compute C_A from MMPP
@@ -934,109 +933,135 @@ void FastAnalyticalModel::calculate_utilizations() {
 }
 
 int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
-    // Estimate k (burstiness parameter) from dependency graph structure
+    // Estimate k (burstiness parameter) from actual temporal injection pattern
     // k = λ₁/λ₀ represents ratio of high vs low arrival rates in MMPP
+    //
+    // Key insight: Calculate WHEN packets actually enter the network
+    // considering dependencies and computation delays, then measure
+    // the coefficient of variation of the injection rate over time
 
-    if (_tasks_by_id.empty()) {
-        return 10;  // Default moderate burstiness
-    }
+    // Step 1: Estimate injection times for all communication tasks
+    // We approximate start times by considering dependencies
+    std::map<int, double> task_start_times;
 
-    // Metric 1: Calculate parallelism variance
-    // - High parallelism → many tasks at same depth → bursty traffic
-    // - Low parallelism → sequential tasks → smooth traffic
-
-    std::unordered_map<int, int> depth_map;  // task_id → depth
-    std::unordered_map<int, int> depth_count; // depth → num_tasks
-
-    // Calculate depth for each task (longest path from root)
-    std::function<int(int)> get_depth = [&](int task_id) -> int {
-        if (depth_map.count(task_id)) {
-            return depth_map[task_id];
+    // Calculate start time for each task using a simple critical path analysis
+    // (without network contention - we just need relative timing)
+    std::function<double(int)> get_start_time;
+    get_start_time = [&](int task_id) -> double {
+        if (task_start_times.count(task_id)) {
+            return task_start_times[task_id];
         }
 
         const auto& task = _tasks_by_id.at(task_id);
-        int max_dep_depth = 0;
+        double start_time = 0.0;
 
+        // Task can't start until all dependencies complete
         for (int dep_id : task.dependencies) {
             if (_tasks_by_id.count(dep_id)) {
-                max_dep_depth = std::max(max_dep_depth, get_depth(dep_id) + 1);
+                const auto& dep_task = _tasks_by_id.at(dep_id);
+                double dep_start = get_start_time(dep_id);
+
+                // Estimate dependency completion time
+                double dep_duration = 0.0;
+                if (dep_task.type == "COMP_OP") {
+                    dep_duration = dep_task.ct_required * _arch.ANY_comp_cycles;
+                } else if (dep_task.type == "WRITE" || dep_task.type == "WRITE_REQ") {
+                    // Simplified: just processing time (ignore network for this estimation)
+                    dep_duration = dep_task.pt_required;
+                }
+
+                start_time = std::max(start_time, dep_start + dep_duration);
             }
         }
 
-        depth_map[task_id] = max_dep_depth;
-        return max_dep_depth;
+        task_start_times[task_id] = start_time;
+        return start_time;
     };
 
-    // Calculate depth for all tasks
+    // Calculate start times for all tasks
     for (const auto& [task_id, task] : _tasks_by_id) {
-        int depth = get_depth(task_id);
-        depth_count[depth]++;
+        get_start_time(task_id);
     }
 
-    // Calculate parallelism statistics
-    if (depth_count.empty()) {
-        return 10;
+    // Step 2: Bin injection times and count packets per time bin
+    // Use time bins to discretize the injection process
+    std::map<int, int> injection_count_per_bin;  // time_bin → packet_count
+    int total_packets = 0;
+    double max_time = 0.0;
+
+    // Determine time bin size adaptively based on average task duration
+    double total_duration = 0.0;
+    int duration_count = 0;
+    for (const auto& [task_id, task] : _tasks_by_id) {
+        if (task.type == "COMP_OP") {
+            total_duration += task.ct_required * _arch.ANY_comp_cycles;
+            duration_count++;
+        }
     }
-
-    int max_parallelism = 0;
-    int min_parallelism = INT_MAX;
-    double avg_parallelism = 0.0;
-
-    for (const auto& [depth, count] : depth_count) {
-        max_parallelism = std::max(max_parallelism, count);
-        min_parallelism = std::min(min_parallelism, count);
-        avg_parallelism += count;
-    }
-    avg_parallelism /= depth_count.size();
-
-    // Metric 2: Communication pattern variance
-    // Count messages per source node
-    std::unordered_map<int, int> msgs_per_src;
-    int total_comm_tasks = 0;
+    double avg_duration = (duration_count > 0) ? (total_duration / duration_count) : 10.0;
+    double bin_size = avg_duration;  // Bin size = average computation time
 
     for (const auto& [task_id, task] : _tasks_by_id) {
         if ((task.type == "WRITE" || task.type == "WRITE_REQ") && task.src != task.dst) {
-            msgs_per_src[task.src]++;
-            total_comm_tasks++;
+            double start_time = task_start_times[task_id];
+            int time_bin = static_cast<int>(start_time / bin_size);
+
+            injection_count_per_bin[time_bin]++;
+            total_packets++;
+            max_time = std::max(max_time, start_time);
+
+            // WRITE_REQ also generates reverse packets (ACKs)
+            if (task.type == "WRITE_REQ") {
+                // Reverse packets arrive later (after forward path completes)
+                double reverse_time = start_time + task.pt_required;
+                int reverse_bin = static_cast<int>(reverse_time / bin_size);
+                injection_count_per_bin[reverse_bin] += 3;  // 3 reverse packets
+                total_packets += 3;
+                max_time = std::max(max_time, reverse_time);
+            }
         }
     }
 
-    double comm_variance = 0.0;
-    if (total_comm_tasks > 0 && !msgs_per_src.empty()) {
-        double avg_msgs = static_cast<double>(total_comm_tasks) / msgs_per_src.size();
-
-        for (const auto& [src, count] : msgs_per_src) {
-            double diff = count - avg_msgs;
-            comm_variance += diff * diff;
-        }
-        comm_variance /= msgs_per_src.size();
+    // Handle edge cases
+    if (total_packets == 0 || injection_count_per_bin.size() < 2) {
+        std::cout << "  No network traffic or insufficient data, using default k=1 (Poisson)" << std::endl;
+        return 1;
     }
 
-    // Estimate k based on metrics
-    // Higher parallelism variation → higher k
-    // Higher communication variance → higher k
+    // Step 3: Calculate coefficient of variation of injection rate
+    int num_bins = injection_count_per_bin.rbegin()->first + 1;  // Max bin index + 1
+    double mean_rate = static_cast<double>(total_packets) / num_bins;
 
-    double parallelism_ratio = (min_parallelism > 0) ?
-        static_cast<double>(max_parallelism) / min_parallelism : 1.0;
+    // Calculate variance: sum over ALL bins (including empty ones with count=0)
+    double variance = 0.0;
+    for (int bin = 0; bin < num_bins; bin++) {
+        int count = injection_count_per_bin[bin];  // Default 0 if not present
+        double deviation = count - mean_rate;
+        variance += deviation * deviation;
+    }
+    variance /= num_bins;
 
-    double comm_cv = (avg_parallelism > 0) ?
-        std::sqrt(comm_variance) / avg_parallelism : 0.0;
+    // Coefficient of variation (CV) of injection rate
+    double cv_injection = (mean_rate > 0.0) ? (std::sqrt(variance) / mean_rate) : 0.0;
 
-    // Continuous mapping to k values (can be any value, interpolated in lookup table)
-    // Combine both metrics with weights
-    // 0.8 because parallelism is more indicative of burstiness
-    // 0.2 because communication pattern also contributes
-    // Scaling factor needed because comm_cv ∈ [0, 1] while parallelism_ratio ∈ [2, 100+]. Without scaling, comm_cv would have negligible impact on the combined score.
-    double burstiness_score = 2.0 * parallelism_ratio + 1.0 * (comm_cv * 100.0);
+    // Step 4: Map CV to k parameter
+    // For MMPP: higher CV → higher burstiness → higher k
+    // CV ≈ 1.0 (Poisson-like) → k ≈ 1
+    // CV >> 1.0 (bursty) → k increases
+    //
+    // Use quadratic relationship: k = 1 + cv²
+    // This gives smooth scaling from uniform (cv=0, k=1) to bursty traffic
+    double k_estimate = 1.0 + cv_injection * cv_injection;
 
-    int estimated_k = static_cast<int>(burstiness_score);
+    int estimated_k = static_cast<int>(std::round(k_estimate));
 
-    std::cout << "  Parallelism ratio (max/min): " << parallelism_ratio << std::endl;
-    std::cout << "  Communication CV: " << comm_cv << std::endl;
-    std::cout << "  Max parallelism at depth: " << max_parallelism << std::endl;
-    std::cout << "  Burstiness score: " << burstiness_score << std::endl;
-    std::cout << "  Estimated k: " << estimated_k << std::endl;
-    
+    std::cout << "  Total network packets: " << total_packets << std::endl;
+    std::cout << "  Time bins: " << num_bins << " (bin size: " << bin_size << " cycles)" << std::endl;
+    std::cout << "  Mean injection rate: " << mean_rate << " packets/bin" << std::endl;
+    std::cout << "  Injection rate variance: " << variance << std::endl;
+    std::cout << "  Injection rate CV: " << cv_injection << std::endl;
+    std::cout << "  Estimated k from temporal burstiness: " << estimated_k << std::endl;
+
     return estimated_k;
 }
 
@@ -1248,7 +1273,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
 
     // Iterate until convergence
     const int max_iterations = 100;
-    const double epsilon = 0.001;
+    const double epsilon = 0.01;
 
     // Track which iteration each channel converged at
     std::map<OutputChannelKey, int> channel_convergence_iter;
@@ -1325,7 +1350,9 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
                 double denominator = _mu_service_rate - lambda_total;
 
                 if (denominator > 0.0001 && rho < 0.99) {
+                    //_C_A coses most of the problems in the model. I mean C_A estimation at this moment.
                     double numerator = rho * (_C_A * _C_A + C_S * C_S);
+                    //double numerator = rho * (0.5 * 0.5 + C_S * C_S);
                     _waiting_time[key] = numerator / (2.0 * denominator);
                 } else {
                     _waiting_time[key] = mu * 10.0;  // High waiting time for saturated channels
