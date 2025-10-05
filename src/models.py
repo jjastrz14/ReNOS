@@ -76,17 +76,37 @@ def VGG_late_layers(input_shape=(14, 14, 512), num_classes=10, verbose=False):
     
 
 def ResBlock(x, filters, kernel_size=(3, 3), strides=(1, 1)):
-    # First convolution in residual block
-    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(x)
+    """
+    Residual block with skip connection.
+
+    Args:
+        x: Input tensor
+        filters: Number of output filters
+        kernel_size: Convolution kernel size
+        strides: Convolution strides
+
+    Returns:
+        Output tensor after residual connection (x + F(x))
+    """
+    # Main path: two convolutions with BN
+    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', use_bias=False)(x)
     y = layers.BatchNormalization()(y)
-    # Second convolution in residual block
-    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same')(y)
+    y = layers.ReLU()(y)
+    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', use_bias=False)(y)
     y = layers.BatchNormalization()(y)
-    # Skip connection (no Add, just pass y and skip connection separately)
+
+    # Skip connection with projection if needed
+    shortcut = x
     if x.shape[-1] != filters:
-        x = layers.Conv2D(filters, kernel_size=(1, 1), strides=strides, padding='same')(x)
-    # Output is just the skip connection (x) or y, not added together
-    return y  # or return x if you want to preserve only the skip connection
+        # Projection shortcut to match dimensions
+        shortcut = layers.Conv2D(filters, kernel_size=(1, 1), strides=strides, padding='same', use_bias=False)(x)
+        shortcut = layers.BatchNormalization()(shortcut)
+
+    # Add skip connection
+    out = layers.Add()([shortcut, y])
+    out = layers.ReLU()(out)
+
+    return out
 
 def Resnet9s(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     inputs = layers.Input(shape=input_shape)

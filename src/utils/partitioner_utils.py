@@ -1236,34 +1236,57 @@ def _build_layer_deps(model: keras.Model)->Set:
     def add_to_deps(node_in, layer_out, deps, dep_id):
         if isinstance(node_in.inbound_layers, list):
             for in_layer in node_in.inbound_layers:
-                # check the type of the inbound layer
-                # if the layer is a Flatten type, we skip it
-
-                if isinstance(in_layer, layers.Flatten):
+                # Skip Flatten and Add layers (Add is handled separately)
+                if isinstance(in_layer, (layers.Flatten, layers.Add)):
                     continue
 
                 deps.add((dep_id, in_layer, layer_out))
         else:
             in_layer = node_in.inbound_layers
-            if isinstance(in_layer, layers.Flatten):
+            # Skip Flatten and Add layers (Add is handled separately)
+            if isinstance(in_layer, (layers.Flatten, layers.Add)):
                 return
             deps.add(( dep_id, in_layer, layer_out))
 
 
     for layer in model.layers:
-        # check if the layer is layer.Flatten type: if so, we create dependencies between its
-        # input and output nodes
+        # Special handling for Flatten: create dependencies between its input and output nodes
         if isinstance(layer, layers.Flatten):
             for node_in in layer._inbound_nodes:
                 for node_out in layer._outbound_nodes:
                     out_layer = node_out.outbound_layer # just one output layer
                     add_to_deps(node_in, out_layer, dependencies, dep_id)
                     dep_id += 1
+
+        # Special handling for Add: create dependencies from ALL input branches to next layer
+        # This implements residual/skip connections where multiple branches merge
+        elif isinstance(layer, layers.Add):
+            # Get all input branches to the ADD layer
+            input_layers = []
+            for node_in in layer._inbound_nodes:
+                if isinstance(node_in.inbound_layers, list):
+                    input_layers.extend(node_in.inbound_layers)
+                else:
+                    input_layers.append(node_in.inbound_layers)
+
+            # Get all output layers that ADD connects to
+            output_layers = []
+            for node_out in layer._outbound_nodes:
+                output_layers.append(node_out.outbound_layer)
+
+            # Create dependencies: each input branch → each output layer
+            # This creates a fan-in pattern where all branches feed into the next layer
+            for in_layer in input_layers:
+                for out_layer in output_layers:
+                    dependencies.add((dep_id, in_layer, out_layer))
+                    dep_id += 1
+
+        # Regular layers: standard dependency handling
         else:
             for node in layer._inbound_nodes:
                 add_to_deps(node, layer, dependencies, dep_id)
                 dep_id += 1
-        
+
 
     return dependencies
 
@@ -1799,48 +1822,69 @@ def build_partitions_splitting_input_for_many_tuples(model: keras.Model, grid, p
     if verbose:
         print(f"Layer {input_layer.name} partitioned successfully with partition parameters: {(spat, out_ch, in_ch)}")
 
-    actual_prev_layer = None  # Track the actual previous non-skipped layer
-    
     # Create a mapping from layer to its partitioning tuple
     layer_partitioning = {}
     for i, layer in enumerate(model.layers):
         layer_partitioning[layer.name] = partitioning_tuple[i]
     
+    # Track which layers have been partitioned
+    partitioned_layers = set()
+    # Track which output layers have been grouped (to avoid re-marking their partitions)
+    # For multi-input layers, the first input will do full grouping with marking,
+    # subsequent inputs will only add dependencies without marking
+    grouped_output_layers = set()
+
     # then proceed with the other layers
     for _, prev_layer, layer in sorted(layer_deps, key=lambda x: x[0]):
-        
+
         # if the layer is in a skipped layers list we can directly skip it
         if isinstance(layer, layers_skip):
             print(f"Skipping layer {layer.name}")
             print(f"Warning: Layer {layer.name} is skipped, might be a problem with dependencies.")
             continue
-        
-        # Get partitioning for this specific layer
-        spat, out_ch, in_ch = layer_partitioning[layer.name]
-        partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
-        
-        # Update tracking of computational layers
-        if isinstance(layer, computational_layers):
-            last_computational_partitioning = (spat, out_ch, in_ch)
+
+        # Create partitions for this layer (only once)
+        if layer.name not in partitioned_layers:
+            # Get partitioning for this specific layer
+            spat, out_ch, in_ch = layer_partitioning[layer.name]
+            partitions[layer.name] = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
+            partitioned_layers.add(layer.name)
+
+            # Update tracking of computational layers
+            if isinstance(layer, computational_layers):
+                last_computational_partitioning = (spat, out_ch, in_ch)
+                if verbose:
+                    print(f"Updated computational layer tracking: {last_computational_partitioning}")
+
             if verbose:
-                print(f"Updated computational layer tracking: {last_computational_partitioning}")
-        
-        # group the partitions that are interdependent
-        # Use actual_prev_layer if available, otherwise fall back to prev_layer
-        if actual_prev_layer is not None:
-            partitions1 = partitions[actual_prev_layer.name]
-        else:
-            partitions1 = partitions[prev_layer.name]
-        
-        partitions2 = partitions[layer.name]
-        # dependencies are dealt directly in _group_partitions
-        _group_partitions(partitions1, partitions2, layer_deps, partitions_deps)
-        
-        # Update the actual previous layer to current layer (since it wasn't skipped)
-        actual_prev_layer = layer
-        
-        if verbose:
-            print(f"Layer {layer.name} partitioned successfully with partition parameters: {(spat, out_ch, in_ch)}")
+                print(f"Layer {layer.name} partitioned successfully with partition parameters: {(spat, out_ch, in_ch)}")
+
+        # Group partitions for this dependency edge
+        # This handles multi-input layers (e.g., after ADD) by processing each input separately
+        if prev_layer.name in partitions:
+            # Check if this output layer has already been grouped
+            if layer.name not in grouped_output_layers:
+                # First time seeing this output layer - do full grouping with marking
+                partitions1 = partitions[prev_layer.name]
+                partitions2 = partitions[layer.name]
+                _group_partitions(partitions1, partitions2, layer_deps, partitions_deps)
+                grouped_output_layers.add(layer.name)
+            else:
+                # Multi-input layer: just build dependencies without re-marking partitions
+                partitions1 = partitions[prev_layer.name]
+                partitions2 = partitions[layer.name]
+                # Build dependencies only (skip the marking done in _group_partitions)
+                temp_deps = _build_partitions_deps(partitions1, partitions2, layer_deps)
+                name_layer1 = partitions1[0].id.split('-')[0]
+                name_layer2 = partitions2[0].id.split('-')[0]
+                if (name_layer1, name_layer2) in temp_deps:
+                    # Add to existing dependencies or create new entry
+                    if (name_layer1, name_layer2) in partitions_deps:
+                        # Merge with existing dependencies
+                        for key, value in temp_deps[(name_layer1, name_layer2)].items():
+                            partitions_deps[(name_layer1, name_layer2)][key] = value
+                    else:
+                        partitions_deps[(name_layer1, name_layer2)] = temp_deps[(name_layer1, name_layer2)]
 
     if grouping:
         _section_partitions(partitions, partitions_deps, pe.mem_size)
