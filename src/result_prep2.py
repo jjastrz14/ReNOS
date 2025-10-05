@@ -130,7 +130,7 @@ if __name__ == '__main__':
         
         dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
         #spatial, output, input
-        parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
+        parts, deps = build_partitions_splitting_input_for_many_tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
         
         #instead of optmisation step, just map following a simple path from source to drain
         task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)

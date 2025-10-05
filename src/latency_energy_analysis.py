@@ -452,17 +452,17 @@ def print_timing_analysis(df: pd.DataFrame, packet_latencies: List[Dict], comput
 # ENERGY ESTIMATION FUNCTIONS
 # ============================================================================
 
-# Default energy parameters (Joules) - change to your calibrated values
+# Data from Horowitz: Computing's Energy Problem
 DEFAULT_ENERGY_PARAMS = {
-    "COMP_OP":   {"energy_per_flop": 1e-12},   # 1 pJ per flop (example)
+    "COMP_OP":   {"energy_per_flop": 1.1e-12},   # 0.4 pJ per flop (example)
     "WRITE":     {"energy_per_byte": 5e-12},   # 5 pJ per byte (example)
     "WRITE_REQ": {"energy_per_byte": 5e-12},   # same as WRITE by default
     # added types for SRAM and reply
-    "SRAM_READ":  {"energy_per_byte": 2e-12},  # example: 2 pJ/byte
-    "SRAM_WRITE": {"energy_per_byte": 3e-12},  # example: 3 pJ/byte
+    "SRAM_READ":  {"energy_per_byte": 10.5e-12},  # example: 10.5 pJ/byte
+    "SRAM_WRITE": {"energy_per_byte": 12.5e-12},  # example: 12.5 pJ/byte
     "REPLY":      {"energy_per_byte": 5e-12},  # treat reply as network byte cost by default
     # fallback DEFAULT if needed
-    "DEFAULT":    {"energy_per_byte": 5e-12, "energy_per_flop": 1e-12}
+    "DEFAULT":    {"energy_per_byte": 1.1e-12, "energy_per_flop": 0.4e-12}
 }
 
 
@@ -724,230 +724,6 @@ def analyze_energy_efficiency(packet_latencies: List[Dict], energy_df: pd.DataFr
     }
 
 
-def plot_timing_analysis(analysis_results: Dict, output_path: Optional[str] = None):
-    """
-    Create visualization plots for timing analysis
-    """
-    if not analysis_results:
-        print("No analysis results to plot")
-        return
-
-    packet_latencies = analysis_results.get('packet_latencies', [])
-    computation_times = analysis_results.get('computation_times', [])
-
-    # Create subplots
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    fig.suptitle('NoC Simulation Timing Analysis', fontsize=16)
-
-    # Plot 1: Packet latency histogram
-    if packet_latencies:
-        latencies = [p['latency'] for p in packet_latencies]
-        axes[0, 0].hist(latencies, bins=20, alpha=0.7, color='blue', edgecolor='black')
-        axes[0, 0].set_title('Packet Latency Distribution')
-        axes[0, 0].set_xlabel('Latency (cycles)')
-        axes[0, 0].set_ylabel('Frequency')
-        axes[0, 0].grid(True, alpha=0.3)
-
-    # Plot 2: Computation time histogram
-    if computation_times:
-        durations = [c['duration'] for c in computation_times]
-        axes[0, 1].hist(durations, bins=20, alpha=0.7, color='green', edgecolor='black')
-        axes[0, 1].set_title('Computation Duration Distribution')
-        axes[0, 1].set_xlabel('Duration (cycles)')
-        axes[0, 1].set_ylabel('Frequency')
-        axes[0, 1].grid(True, alpha=0.3)
-
-    # Plot 3: Timeline of packet events
-    if packet_latencies:
-        start_times = [p['start_cycle'] for p in packet_latencies]
-        end_times = [p['end_cycle'] for p in packet_latencies]
-        packet_ids = [p['packet_id'] for p in packet_latencies]
-
-        axes[1, 0].scatter(start_times, packet_ids, alpha=0.6, color='blue', label='Start', s=20)
-        axes[1, 0].scatter(end_times, packet_ids, alpha=0.6, color='red', label='End', s=20)
-        axes[1, 0].set_title('Packet Timeline')
-        axes[1, 0].set_xlabel('Cycle')
-        axes[1, 0].set_ylabel('Packet ID')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-
-    # Plot 4: Latency vs Start Time
-    if packet_latencies:
-        start_times = [p['start_cycle'] for p in packet_latencies]
-        latencies = [p['latency'] for p in packet_latencies]
-
-        axes[1, 1].scatter(start_times, latencies, alpha=0.6, color='purple', s=30)
-        axes[1, 1].set_title('Latency vs Start Time')
-        axes[1, 1].set_xlabel('Start Cycle')
-        axes[1, 1].set_ylabel('Latency (cycles)')
-        axes[1, 1].grid(True, alpha=0.3)
-
-    plt.tight_layout()
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to: {output_path}")
-
-    plt.show()
-
-
-def plot_parallel_execution_comparison(results_list, partition_counts: List[int],
-                                    overlap_strategy: str = 'three_part',
-                                    output_path: Optional[str] = None):
-    """
-    Create bar plot comparing parallel execution across different partition counts.
-
-    Parameters:
-    -----------
-    results_list : List[Dict] or List[pd.DataFrame]
-        List of analysis results from analyze_parallel_execution_time() (Dict)
-        or DataFrames from parallel_analysis_to_dataframe()
-    partition_counts : List[int]
-        List of partition counts corresponding to each result
-    overlap_strategy : str
-        How to handle overlap in visualization:
-        - 'three_part': Computation, Overlap, Packets (most accurate)
-        - 'subtract_from_comp': Subtract overlap from computation
-        - 'subtract_from_packet': Subtract overlap from packet transmission
-        - 'ignore_overlap': Simple two-part (will exceed 100%)
-    output_path : str, optional
-        Path to save the plot
-    """
-
-    if len(results_list) != len(partition_counts):
-        raise ValueError("results_list and partition_counts must have same length")
-
-    # Prepare data for plotting
-    comp_data = []
-    packet_data = []
-    overlap_data = []
-    idle_data = []
-    total_cycles = []
-
-    for result in results_list:
-        # Handle both DataFrame and Dict inputs
-        if isinstance(result, pd.DataFrame):
-            # Extract values from DataFrame (assuming single row)
-            row = result.iloc[0]
-            total = row['total_simulation_cycles']
-            comp_cycles = row['computation_occupied_cycles']
-            packet_cycles = row['packet_occupied_cycles']
-            overlap_cycles = row['overlap_cycles']
-            idle_cycles = row['idle_cycles']
-        else:
-            # Handle Dict input (original format)
-            total = result['total_simulation_cycles']
-            comp_cycles = result['computation_occupied_cycles']
-            packet_cycles = result['packet_occupied_cycles']
-            overlap_cycles = result['overlap_cycles']
-            idle_cycles = result['idle_cycles']
-
-        total_cycles.append(total)
-
-        if overlap_strategy == 'three_part':
-            # Pure computation, overlap, pure packet, idle
-            pure_comp = comp_cycles - overlap_cycles
-            pure_packet = packet_cycles - overlap_cycles
-            comp_data.append(pure_comp)
-            packet_data.append(pure_packet)
-            overlap_data.append(overlap_cycles)
-            idle_data.append(idle_cycles)
-
-        elif overlap_strategy == 'subtract_from_comp':
-            # Subtract overlap from computation
-            comp_data.append(comp_cycles - overlap_cycles)
-            packet_data.append(packet_cycles)
-            overlap_data.append(0)
-            idle_data.append(idle_cycles + overlap_cycles)
-
-        elif overlap_strategy == 'subtract_from_packet':
-            # Subtract overlap from packet
-            comp_data.append(comp_cycles)
-            packet_data.append(packet_cycles - overlap_cycles)
-            overlap_data.append(0)
-            idle_data.append(idle_cycles + overlap_cycles)
-
-        else:  # ignore_overlap
-            comp_data.append(comp_cycles)
-            packet_data.append(packet_cycles)
-            overlap_data.append(0)
-            idle_data.append(idle_cycles)
-
-    # Create the plot
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    x = np.arange(len(partition_counts))
-    width = 0.6
-
-    # Create stacked bars
-    if overlap_strategy == 'three_part':
-        p1 = ax.bar(x, comp_data, width, label='Pure Computation', color='#2E86AB', alpha=0.8)
-        p2 = ax.bar(x, overlap_data, width, bottom=comp_data, label='Computation + Packet Overlap', color='#A23B72', alpha=0.8)
-        p3 = ax.bar(x, packet_data, width, bottom=np.array(comp_data) + np.array(overlap_data),
-                   label='Pure Packet Transmission', color='#F18F01', alpha=0.8)
-        p4 = ax.bar(x, idle_data, width,
-                   bottom=np.array(comp_data) + np.array(overlap_data) + np.array(packet_data),
-                   label='Idle', color='#C73E1D', alpha=0.3)
-    else:
-        p1 = ax.bar(x, comp_data, width, label='Computation', color='#2E86AB', alpha=0.8)
-        p2 = ax.bar(x, packet_data, width, bottom=comp_data, label='Packet Transmission', color='#F18F01', alpha=0.8)
-        p3 = ax.bar(x, idle_data, width, bottom=np.array(comp_data) + np.array(packet_data),
-                   label='Idle/Other', color='#C73E1D', alpha=0.3)
-
-    # Customize the plot
-    ax.set_xlabel('Number of Partitions', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Simulation Cycles', fontsize=12, fontweight='bold')
-    ax.set_title('Parallel Execution Time Distribution by Partition Count', fontsize=14, fontweight='bold')
-    ax.set_xticks(x)
-    ax.set_xticklabels(partition_counts)
-    ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1))
-
-    # Add percentage labels on bars
-    for i, (partitions, total) in enumerate(zip(partition_counts, total_cycles)):
-        comp_pct = (comp_data[i] / total) * 100
-        packet_pct = (packet_data[i] / total) * 100
-
-        # Add text on computation part
-        if comp_data[i] > total * 0.05:  # Only if segment is large enough
-            ax.text(i, comp_data[i]/2, f'{comp_pct:.1f}%',
-                   ha='center', va='center', fontweight='bold', color='white')
-
-        # Add text on packet part
-        if packet_data[i] > total * 0.05:
-            y_pos = comp_data[i] + (overlap_data[i] if overlap_strategy == 'three_part' else 0) + packet_data[i]/2
-            ax.text(i, y_pos, f'{packet_pct:.1f}%',
-                   ha='center', va='center', fontweight='bold', color='white')
-
-    # Add grid for better readability
-    ax.grid(True, axis='y', alpha=0.3, linestyle='--')
-    ax.set_axisbelow(True)
-
-    plt.tight_layout()
-
-    if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to: {output_path}")
-
-    plt.show()
-
-    # Print summary table
-    print("\n" + "="*80)
-    print("PARALLEL EXECUTION COMPARISON SUMMARY")
-    print("="*80)
-    print(f"{'Partitions':<10} {'Total':<8} {'Comp':<8} {'Packet':<8} {'Overlap':<8} {'Idle':<6} {'Speedup':<8}")
-    print("-" * 80)
-
-    for i, (partitions, result) in enumerate(zip(partition_counts, results_list)):
-        total = result['total_simulation_cycles']
-        comp_pct = (result['computation_occupied_cycles'] / total) * 100
-        packet_pct = (result['packet_occupied_cycles'] / total) * 100
-        overlap_pct = (result['overlap_cycles'] / total) * 100
-        idle_pct = (result['idle_cycles'] / total) * 100
-        speedup = result['parallelism_speedup']
-
-        print(f"{partitions:<10} {total:<8} {comp_pct:<7.1f}% {packet_pct:<7.1f}% {overlap_pct:<7.1f}% {idle_pct:<5.1f}% {speedup:<7.2f}x")
-
-
 def parallel_analysis_to_dataframe(parallel_analysis: Dict, strategy_name: str = None) -> pd.DataFrame:
     """
     Convert parallel execution analysis dictionary to DataFrame for CSV export.
@@ -1039,14 +815,3 @@ def analyze_simulation_results(config_path: str, output_dir: str = ".", create_p
 
     return analysis_results
 
-
-#if __name__ == "__main__":
-#    # Example usage
-#    # Replace with your actual config file path
-#    config_file = "./data/partitioner_data/test1.json"
-#
-#    try:
-#       results = analyze_simulation_results(config_file)
-#        print("\nAnalysis completed successfully!")
-#    except Exception as e:
-#        print(f"Error during analysis: {e}")

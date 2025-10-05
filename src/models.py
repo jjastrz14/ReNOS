@@ -5,6 +5,77 @@ from tensorflow.keras.utils import plot_model
 import larq
 
 
+def ResNet32_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    """
+    Early blocks of ResNet32: initial layers and first stage
+    """
+    inputs = layers.Input(shape=input_shape)
+    
+    # First layer: initial convolution
+    x = layers.Conv2D(16, kernel_size=(3, 3), padding='same', use_bias=False)(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    
+    # First stage: 5 ResBlocks with 16 filters (10 layers total)
+    # ResNet32 has 3 stages with 5 ResBlocks each (5*2*3 = 30 layers) + initial conv = 31 layers
+    for _ in range(5):
+        x = ResBlock(x, filters=16, strides=(1, 1))
+    
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    if verbose:
+        model.summary()
+        print(f'Output shape of early blocks: {x.shape}')
+    
+    return model
+
+def ResNet32_mid_blocks(input_shape=(32, 32, 16), num_classes=10, verbose=False):
+    """
+    Middle blocks of ResNet32: second stage with increased filters
+    """
+    inputs = layers.Input(shape=input_shape)
+    x = inputs
+    
+    # Second stage: 5 ResBlocks with 32 filters
+    # First block uses stride=2 to downsample, others use stride=1
+    x = ResBlock(x, filters=32, strides=(2, 2))  # Downsample
+    for _ in range(4):
+        x = ResBlock(x, filters=32, strides=(1, 1))
+    
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    if verbose:
+        model.summary()
+        print(f'Output shape of mid blocks: {x.shape}')
+    
+    return model
+
+def ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False):
+    """
+    Late blocks of ResNet32: third stage and final layers
+    """
+    inputs = layers.Input(shape=input_shape)
+    x = inputs
+    
+    # Third stage: 5 ResBlocks with 64 filters
+    # First block uses stride=2 to downsample, others use stride=1
+    x = ResBlock(x, filters=64, strides=(2, 2))  # Downsample
+    for _ in range(4):
+        x = ResBlock(x, filters=64, strides=(1, 1))
+    
+    # Final layers
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dense(num_classes, activation='softmax')(x)
+    
+    model = keras.Model(inputs=inputs, outputs=x)
+    
+    if verbose:
+        model.summary()
+        print(f'Output shape before pooling: {x.shape}')
+    
+    return model
+
+
 
 def ResNet_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     inputs = layers.Input(shape=input_shape)
@@ -92,7 +163,7 @@ def ResBlock(x, filters, kernel_size=(3, 3), strides=(1, 1)):
     y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', use_bias=False)(x)
     y = layers.BatchNormalization()(y)
     y = layers.ReLU()(y)
-    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', use_bias=False)(y)
+    y = layers.Conv2D(filters, kernel_size=kernel_size, strides=(1, 1), padding='same', use_bias=False)(y)
     y = layers.BatchNormalization()(y)
 
     # Skip connection with projection if needed

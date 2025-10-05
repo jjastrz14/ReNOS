@@ -37,15 +37,16 @@ if __name__ == '__main__':
     #model = single_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
-    model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    #model = ResNet_early_blocks((16, 16, 3), verbose=True)
+    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = LeNet4((28, 28, 1), num_classes=10, verbose=True)
     
     model = fuse_conv_bn(model, verbose=True)
 
     
-    x_of_grid = 4
+    x_of_grid = 8
     source = 0
-    drain = 15
+    drain = 63
 
     grid = dm.Grid()
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
@@ -65,12 +66,13 @@ if __name__ == '__main__':
     #    partitioner_tuples.append((spatial, output, input_split))
 
     #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)] (1,1,1) (2,2,2) (3,3,3) (4,3,3)
+    #resNet32 early blocks
+    partitioner_tuples = [(0, 1, 1), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3), (3,3,3)]
     
-    partitioner_tuples = [(0, 1, 1), (4,4,3), (4,4,3), (4,4,3), (4,4,3), (4,4,3), (4,4,3), (4,3,3)] #[(0, 1, 1), (4,3,3) ,(2,2,2), (4,3,3), (2,2,2), (4,3,3), (2,2,2), (4,3,3)]
-    #for lenet: 
-    partitioner_tuples = [(0, 1, 1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1)] 
+    #partitioner_tuples = [(0, 1, 1), (4,4,4), (4,4,4), (4,4,4), (4,4,4), (4,4,4), (4,4,4), (4,4,4)] #[(0, 1, 1), (4,3,3) ,(2,2,2), (4,3,3), (2,2,2), (4,3,3), (2,2,2), (4,3,3)]
+    #partitioner_tuples = [(0, 1, 1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1), (2,1,1)] 
     #[(0, 1, 1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1), (4,1,1)]]
-    #print(f"Best partitioning factors found: spatial={spatial}, output={output}, input_split={input_split}")
+    
 
     #partitioner_tuple = (spatial, output, input_split)
 
