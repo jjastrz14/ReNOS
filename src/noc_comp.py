@@ -51,11 +51,11 @@ if __name__ == '__main__':
     model = fuse_conv_bn(model, verbose=True)
     
     model_name = "ResNet32_early_blocks"
-    result_file = "./data/light_noc_comp/"
+    result_file = "./data/light_noc_comp"
     
     # Prepare CSV files
-    csv_filename = f"{result_file}/p1_noc_comparison_results_{model_name}.csv"
-    energy_csv_filename = f"{result_file}/p1_latency_energy_results_{model_name}.csv"
+    csv_filename = f"{result_file}/p3_noc_comparison_results_{model_name}.csv"
+    energy_csv_filename = f"{result_file}/p3_latency_energy_results_{model_name}.csv"
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
 
     # Grid setup
@@ -89,16 +89,61 @@ if __name__ == '__main__':
 
     # Generate all partition configurations incrementally
     # Pattern: (1,1,1), (2,1,1), (2,2,1), (2,2,2), (3,2,2), (3,3,2), (3,3,3), etc.
-    configurations = []
-    for spatial in range(1, 2):
-        for output in range(1, spatial + 1):
-            for input_split in range(1, output + 1):
-                configurations.append((spatial, output, input_split))
+    #configurations = []
+    #for spatial in range(1, 3):
+    #    for output in range(1, spatial + 1):
+    #        for input_split in range(1, output + 1):
+    #            configurations.append((spatial, output, input_split))
+
+    
+    #another option is to manually define a few configurations
+    #configuration p1
+    #configurations= [
+    #(1, 1, 1), (1, 1, 2), (1, 1, 3),
+    #(1, 2, 1), (1, 2, 2), (1, 2, 3),
+    #(1, 3, 1), (1, 3, 2), (1, 3, 3),
+    #(2, 1, 1), (2, 1, 2), (2, 1, 3),
+    #(2, 2, 1), (2, 2, 2), (2, 2, 3),
+    #(2, 3, 1), (2, 3, 2), (2, 3, 3),
+    #(3, 1, 1), (3, 1, 2), (3, 1, 3),
+    #(3, 2, 1), (3, 2, 2), (3, 2, 3),
+    #(3, 3, 1), (3, 3, 2), (3, 3, 3)
+    #]
+    #configuration p2
+    #configurations = [ (1, 1, 4), (1, 1, 5), (1, 1, 6), (1, 2, 4), (1, 2, 5), (1, 2, 6),(1, 3, 4),
+    #                    (1, 3, 5), (1, 3, 6),(1, 4, 1), (1, 4, 2), (1, 4, 3), (1, 4, 4), (1, 4, 5),
+    #                    (1, 4, 6), (1, 5, 1), (1, 5, 2), (1, 5, 3), (1, 5, 4), (1, 5, 5), (1, 5, 6),
+    #                    (1, 6, 1), (1, 6, 2), (1, 6, 3), (1, 6, 4), (1, 6, 5), (1, 6, 6)]
+    #configuration p3
+    configurations = [  (2, 1, 4),
+                        (2, 1, 5),
+                        (2, 1, 6),
+                        (2, 2, 4),
+                        (2, 2, 5),
+                        (2, 2, 6),
+                        (2, 3, 4),
+                        (2, 3, 5),
+                        (2, 3, 6),
+                        (2, 4, 1),
+                        (2, 4, 2),
+                        (2, 4, 3),
+                        (2, 4, 4),
+                        (2, 4, 5),
+                        (2, 4, 6),
+                        (2, 5, 1),
+                        (2, 5, 2),
+                        (2, 5, 3),
+                        (2, 5, 4),
+                        (2, 5, 5),
+                        (2, 5, 6),
+                        (2, 6, 1),
+                        (2, 6, 2),
+                        (2, 6, 3),
+                        (2, 6, 4),
+                        (2, 6, 5),
+                        (2, 6, 6)]
 
     print(f"Generated {len(configurations)} configurations to test\n")
-    #another option is to manually define a few configurations
-    #configurations = [(2,2,2),(3,3,3)]
-    
     # Iterate over configurations    
     iteration = 0
     for config in configurations:
@@ -133,7 +178,7 @@ if __name__ == '__main__':
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
                         if task_id != "start" and task_id != "end"}
             
-            config_path_file = result_file + f"mapping_{spatial}_{output}_{input_split}.json"
+            config_path_file = result_file + f"/mapping_{spatial}_{output}_{input_split}.json"
             
             mapper_config = "." + config_path_file
             mapper = ma.Mapper()

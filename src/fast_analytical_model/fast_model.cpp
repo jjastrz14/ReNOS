@@ -757,7 +757,7 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
     std::cout << "  Average C_S across all channels: " << std::fixed << std::setprecision(2) << avg_C_S << std::endl;
 
     // Congestion threshold: avg_C_S > 2.0 indicates congested network
-    const double CONGESTION_THRESHOLD = 2.0;
+    const double CONGESTION_THRESHOLD = 5.0;
 
     if (avg_C_S > CONGESTION_THRESHOLD) {
         // ========================================================================

@@ -1196,7 +1196,7 @@ def export_simulation_results_to_csv(
     packet_latencies = packets_df.to_dict('records') if packets_df is not None else []
     computation_times = computations_df.to_dict('records') if computations_df is not None else []
 
-    # Export to CSV
+    # Export to CSV (get DataFrame, don't write yet)
     csv_df = export_latency_energy_details_to_csv(
         parallel_analysis=parallel_analysis,
         noc_energy_result=noc_energy_result,
@@ -1211,16 +1211,17 @@ def export_simulation_results_to_csv(
         partitioner_config=partitioner_config
     )
 
-    # Handle append mode
+    # Handle file writing with proper append logic
     if append and os.path.exists(output_path):
-        # Read existing, append new row
+        # Append to existing file
         existing_df = pd.read_csv(output_path)
         combined_df = pd.concat([existing_df, csv_df], ignore_index=True)
         combined_df.to_csv(output_path, index=False)
         print(f"✓ Appended results to: {output_path}")
     else:
-        # Already saved by export_latency_energy_details_to_csv
-        pass
+        # Create new file
+        csv_df.to_csv(output_path, index=False)
+        print(f"✓ Exported latency and energy details to: {output_path}")
 
     return csv_df
 
@@ -1452,9 +1453,8 @@ def export_latency_energy_details_to_csv(
     # Create DataFrame
     df = pd.DataFrame([data])
 
-    # Save to CSV
-    df.to_csv(output_path, index=False)
-    print(f"\n✓ Exported latency and energy details to: {output_path}")
+    # Note: File writing is handled by the caller (export_simulation_results_to_csv)
+    # to properly support append mode
 
     return df
 
