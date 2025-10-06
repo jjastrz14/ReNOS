@@ -29,9 +29,11 @@ import fast_analytical_simulator_stub as ssfam
 from visualizer import plot_timeline
 from utils.ani_utils import visualize_simulation
 from utils.model_fusion import fuse_conv_bn
+from latency_energy_analysis import export_simulation_results_to_csv
 import time
 import csv
 import os
+import json
 
 
 def count_operational_layers(model):
@@ -47,6 +49,13 @@ if __name__ == '__main__':
     # Model setup
     model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     model = fuse_conv_bn(model, verbose=True)
+    
+    model_name = "ResNet32_early_blocks"
+    config_path_file = "./data/light_noc_comp/mapping.json"
+    # Prepare CSV files
+    csv_filename = f"./data/light_noc_comp/noc_comparison_results_{model_name}.csv"
+    energy_csv_filename = f"./data/light_noc_comp/latency_energy_results_{model_name}.csv"
+    os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
 
     # Grid setup
     x_of_grid = 8
@@ -58,10 +67,6 @@ if __name__ == '__main__':
     # Get number of layers that need tuples
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
-
-    # Prepare CSV file
-    csv_filename = "./data/light_noc_comp/noc_comparison_results.csv"
-    os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
 
     # CSV header
     fieldnames = [
@@ -84,13 +89,17 @@ if __name__ == '__main__':
     # Generate all partition configurations incrementally
     # Pattern: (1,1,1), (2,1,1), (2,2,1), (2,2,2), (3,2,2), (3,3,2), (3,3,3), etc.
     configurations = []
-    for spatial in range(1, 5):
+    for spatial in range(1, 2):
         for output in range(1, spatial + 1):
             for input_split in range(1, output + 1):
                 configurations.append((spatial, output, input_split))
 
     print(f"Generated {len(configurations)} configurations to test\n")
 
+    #another option is to manually define a few configurations
+    #configurations = [(2,2,2),(3,3,3)]
+    
+    # Iterate over configurations    
     iteration = 0
     for config in configurations:
         iteration += 1
@@ -122,35 +131,72 @@ if __name__ == '__main__':
 
             # Construct mapping
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
-                      if task_id != "start" and task_id != "end"}
-
+                        if task_id != "start" and task_id != "end"}
+            
+            mapper_config = "." + config_path_file
             mapper = ma.Mapper()
             mapper.init(task_graph, grid)
             mapper.set_mapping(mapping)
-            mapper.mapping_to_json("../data/light_noc_comp/mapping.json",
-                                  file_to_append="./config_files/arch.json")
+            mapper.mapping_to_json(mapper_config,
+                                    file_to_append="./config_files/arch.json")
 
             # Run Fast Analytical model
             print("Running Fast Analytical model simulation...")
             fast_sim = ssfam.FastAnalyticalSimulatorStub()
             start_time = time.time()
             result_fast_anal, logger_fast_anal = fast_sim.run_simulation(
-                "./data/light_noc_comp/mapping.json", verbose=False
+                config_path_file, verbose=False
             )
             fast_analytical_time = time.time() - start_time
             print(f"  Result: {result_fast_anal} cycles")
             print(f"  Time: {fast_analytical_time:.4f} seconds")
+            
+            # Read config and enable logger/sim_power
+            with open(config_path_file, 'r') as f:
+                config = json.load(f)
+
+            # Ensure logger and sim_power are enabled
+            if 'arch' in config:
+                config['arch']['logger'] = 1
+                config['arch']['sim_power'] = 1
+
+                # Write back the modified config
+                with open(config_path_file, 'w') as f:
+                    json.dump(config, f, indent=2)
+                print("  ✓ Enabled logger and sim_power in config")
+            else:
+                print("  ✗ Config file missing 'arch' section. Skipping logger setup.")
 
             # Run Booksim2 simulation
             print("\nRunning Booksim2 simulation...")
             stub = ss.SimulatorStub()
             start_time = time.time()
-            result_booksim, logger = stub.run_simulation(
-                "./data/light_noc_comp/mapping.json", dwrap=True
-            )
+            result_booksim, logger = stub.run_simulation(config_path_file, dwrap=False)
             booksim_time = time.time() - start_time
             print(f"  Result: {result_booksim} cycles")
             print(f"  Time: {booksim_time:.4f} seconds")
+
+            # Export latency and energy analysis to CSV
+            print("\nExporting latency/energy analysis...")
+            try:
+                csv_df = export_simulation_results_to_csv(
+                    logger=logger,
+                    config_path="./data/light_noc_comp/mapping.json",
+                    output_path=energy_csv_filename,
+                    append=(iteration > 1),  # Append after first iteration
+                    num_partitions=total_partitions,
+                    parts_per_layer=num_partitions_per_layer[1],
+                    partitioner_config = str(partitioner_tuples[1])
+                )
+                print(f"  ✓ Energy analysis saved to: {energy_csv_filename}")
+
+                # Print energy summary
+                print(f"\n  Energy Summary:")
+                print(f"    PE Energy: {csv_df['energy_PEs_uJ'].values[0]:.3f} µJ")
+                print(f"    Data Flow Energy: {csv_df['energy_data_flow_uJ'].values[0]:.3f} µJ")
+                print(f"    Total Energy: {csv_df['total_energy_uJ'].values[0]:.3f} µJ")
+            except Exception as e:
+                print(f"  ✗ Failed to export energy analysis: {e}")
 
             # Calculate metrics
             percentage_diff = abs(result_fast_anal - result_booksim) / result_booksim * 100
@@ -175,7 +221,6 @@ if __name__ == '__main__':
                     'partitioner_config': str(partitioner_tuples[1])
                 })
 
-            print(f"\n✓ Config {config} completed successfully")
             print(f"✓ Results appended to {csv_filename}")
 
         except Exception as e:

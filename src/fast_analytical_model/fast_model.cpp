@@ -1039,7 +1039,8 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
         double deviation = count - mean_rate;
         variance += deviation * deviation;
     }
-    variance /= num_bins;
+    // this switch off to get bigger cv_injection and thus bigger k
+    //variance /= num_bins;
 
     // Coefficient of variation (CV) of injection rate
     double cv_injection = (mean_rate > 0.0) ? (std::sqrt(variance) / mean_rate) : 0.0;

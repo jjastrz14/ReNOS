@@ -47,7 +47,7 @@ if __name__ == '__main__':
     x_of_grid = 8
     source = 0
     drain = 63
-
+    
     grid = dm.Grid()
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     #    print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
     #    partitioner_tuples.append((spatial, output, input_split))
 
-    partitioner_tuples = [(0, 1, 1)] + [(4, 3, 1)] * (len(model.layers))
+    partitioner_tuples = [(0, 1, 1)] + [(4, 4, 1)] * (len(model.layers))
 
     #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)] (1,1,1) (2,2,2) (3,3,3) (4,3,3)
     #resNet32 early blocks
@@ -100,8 +100,8 @@ if __name__ == '__main__':
 
     #instead of optmisation step, just map following a simple path from source to drain
     task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-    #path = row_wise_mapping(task_graph, grid, verbose = False)
-    path = column_wise_mapping(task_graph, grid, verbose = False)
+    path = row_wise_mapping(task_graph, grid, verbose = False)
+    #path = column_wise_mapping(task_graph, grid, verbose = False)
 
     # constuct the mapping form the path
     mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
