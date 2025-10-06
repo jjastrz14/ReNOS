@@ -117,7 +117,7 @@ if __name__ == "__main__":
     #spatial, output, input
     #parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
     
-    partitioner_tuples = [(0, 1, 1)] + [(4, 2, 1)] * (len(model.layers))
+    partitioner_tuples = [(0, 1, 1)] + [(2, 2, 2)] * (len(model.layers))
     num_partitions = 2**partitioner_tuples[1][0]*partitioner_tuples[1][1]*partitioner_tuples[1][2]
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
@@ -144,18 +144,19 @@ if __name__ == "__main__":
         print("\n ...Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 25,
+            n_ants = 10,
             rho = 0.05, #evaporation rate
             n_best = 5,
-            n_iterations = 10,
+            n_iterations = 3,
             alpha = 1.,
             beta = 1.2,
             is_analytical = True, #use analytical model instead of cycle-accurate simulator
+            start_row_wise= False, #start from a row-wise mapping
         )
-        n_procs = 5
+        n_procs = 10
         
         if args.algo == "ACO_parallel":
-            print(f"Creating the Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
+            print(f"Creating the Parallel Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
             opt = op.ParallelAntColony(n_procs, params, grid, task_graph, seed = None)
         else:
             print(f"Creating the Ant Colony Optimization instance with ants: {params.n_ants} for {params.n_iterations} iterations.")
@@ -174,7 +175,7 @@ if __name__ == "__main__":
             output_dir=get_ACO_DIR(),
             algorithm_name="ACO",
             timestamp=get_timestamp(),
-            verbose=True
+            verbose=False
         )
             
         end = time.time()
@@ -189,7 +190,7 @@ if __name__ == "__main__":
         print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 10, #30,
+        sol_per_pop = 25, #30,
         n_parents_mating= 5, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
@@ -197,12 +198,13 @@ if __name__ == "__main__":
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
+        start_row_wise= False, #start from a row-wise mapping
         )
         
-        n_procs = 2
+        n_procs = 10
         
         if args.algo == "GA_parallel":
-            print(f"Creating the Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
+            print(f"Creating the Parallel Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")
             opt = op.ParallelGA(n_procs, params, grid, task_graph, seed = None)
         else:
             print(f"Creating the Genetic Algorithm instance with, population size: {params.sol_per_pop}, generations: {params.n_generations}.")

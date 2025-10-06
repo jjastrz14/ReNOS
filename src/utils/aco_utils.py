@@ -63,9 +63,13 @@ class Ant:
         self.analytical_model = is_analytical
 
         self.current_path = None
-        
+
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
+
+        # Don't create stub here - it won't survive pickling for multiprocessing
+        # Will be created lazily on first use in each worker process
+        self.stub = None
         
 
     def pick_move(self,task_id, d_level, current, resources, added_space, prev_path, random_heuristic = False):
@@ -134,15 +138,26 @@ class Ant:
         mapper = mp.Mapper()
         mapper.init(graph, domain)
         mapper.set_mapping(mapping)
-        mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=self.ARCH_FILE)
-        
-        if self.analytical_model:
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
-        else:
-            stub = ss.SimulatorStub()
-            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
-        return result, logger
+
+        # Use process ID + ant ID to avoid file conflicts in parallel execution
+        import multiprocessing
+        pid = multiprocessing.current_process().pid
+        json_filename = self.CONFIG_DUMP_DIR + "/dump_{}_{}.json".format(pid, self.id)
+        mapper.mapping_to_json(json_filename, file_to_append=self.ARCH_FILE)
+
+        # Lazy initialization: create stub on first use in this worker process
+        if self.stub is None:
+            if self.analytical_model:
+                self.stub = ssam.FastAnalyticalSimulatorStub()
+            else:
+                self.stub = ss.SimulatorStub()
+            #print(f"Debug: [Ant {self.id}, PID {pid}] Created new stub (first use in this process)")
+
+        # Use the reusable stub instance
+        result, logger = self.stub.run_simulation(json_filename)
+
+        # Return result, logger, and the json filename for later retrieval
+        return result, logger, json_filename
         
     def walk(self):
         """
@@ -198,8 +213,9 @@ class Ant:
             path.append((task_id, current_node, next_node))
             prev_node = next_node
         
-        path_lenght = self.path_lenght(self.graph, self.domain, path)
-        self.current_path = (self.id, path, path_lenght[0])
+        path_lenght_result = self.path_lenght(self.graph, self.domain, path)
+        # path_lenght now returns (result, logger, json_filename)
+        self.current_path = (self.id, path, path_lenght_result[0], path_lenght_result[2])
         return self.current_path
     
     @staticmethod

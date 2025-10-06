@@ -5,6 +5,172 @@ from tensorflow.keras.utils import plot_model
 import larq
 
 
+def AlexNet(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    """
+    Lightweight AlexNet adapted for CIFAR-10 (32x32 images).
+
+    Original AlexNet uses 227x227 inputs. This version:
+    - Reduces kernel sizes and strides for smaller input
+    - Uses BatchNormalization instead of LRN
+    - Reduces Dense layer size from 4096 to 1024
+    - Adds Dropout for regularization
+
+    Parameters:
+        input_shape: tuple, default (32, 32, 3) for CIFAR-10
+        num_classes: int, number of output classes
+        verbose: bool, print model summary and stats
+
+    Returns:
+        keras.Model
+    """
+    inputs = layers.Input(shape=input_shape)
+
+    # Conv Block 1: 32x32x3 -> 16x16x64
+    x = layers.Conv2D(64, kernel_size=(5, 5), strides=(1, 1),
+                        padding='same', activation='relu')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2),
+                            padding='same')(x)
+
+    # Conv Block 2: 16x16x64 -> 8x8x192
+    x = layers.Conv2D(192, kernel_size=(5, 5), padding='same',
+                        activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2),
+                            padding='same')(x)
+
+    # Conv Block 3: 8x8x192 -> 8x8x384
+    x = layers.Conv2D(384, kernel_size=(3, 3), padding='same',
+                        activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+
+    # Conv Block 4: 8x8x384 -> 8x8x256
+    x = layers.Conv2D(256, kernel_size=(3, 3), padding='same',
+                        activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+
+    # Conv Block 5: 8x8x256 -> 4x4x256
+    x = layers.Conv2D(256, kernel_size=(3, 3), padding='same',
+                        activation='relu')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2),
+                            padding='same')(x)
+
+    # Flatten: 4x4x256 = 4096 features
+    #x = layers.Flatten()(x)
+
+    # FC Block 1: 4096 -> 1024 (reduced from original 4096)
+    x = layers.Dense(1024, activation='relu')(x)
+    #x = layers.Dropout(0.5)(x)
+
+    # FC Block 2: 1024 -> 1024 (reduced from original 4096)
+    x = layers.Dense(1024, activation='relu')(x)
+    #x = layers.Dropout(0.5)(x)
+
+    # Output Layer: 1024 -> num_classes
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = keras.Model(inputs=inputs, outputs=outputs)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape: {outputs.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+    return model
+
+def VGG_16_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+    """
+    First 8 convolutional layers of VGG16 (first 3 blocks).
+
+    VGG16 structure:
+    - Block 1: 2x Conv(64) + MaxPool  → 32x32 -> 16x16
+    - Block 2: 2x Conv(128) + MaxPool → 16x16 -> 8x8
+    - Block 3: 3x Conv(256) + MaxPool → 8x8 -> 4x4
+    Total: 7 conv layers (stops before the last conv in block 3)
+
+    Output: (4, 4, 256)
+    """
+    inputs = layers.Input(shape=input_shape)
+
+    # Block 1: 32x32x3 -> 16x16x64
+    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
+    x = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+    # Block 2: 16x16x64 -> 8x8x128
+    x = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+    # Block 3: 8x8x128 -> 4x4x256
+    x = layers.Conv2D(256, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(256, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(256, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+    model = keras.Model(inputs=inputs, outputs=x)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape of early layers: {x.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+
+    return model
+
+def VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=False):
+    """
+    Last 6 convolutional layers + FC layers of VGG16 (last 2 blocks + classifier).
+
+    VGG16 structure:
+    - Block 4: 3x Conv(512) + MaxPool → 4x4 -> 2x2
+    - Block 5: 3x Conv(512) + MaxPool → 2x2 -> 1x1
+    - FC layers: Flatten -> Dense(4096) -> Dense(4096) -> Dense(num_classes)
+    Total: 6 conv layers + 3 FC layers
+
+    Input: (4, 4, 256) from early layers
+    Output: (num_classes,)
+    """
+    inputs = layers.Input(shape=input_shape)
+
+    # Block 4: 4x4x256 -> 2x2x512
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(inputs)
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+    # Block 5: 2x2x512 -> 1x1x512
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = layers.Conv2D(512, (3, 3), activation='relu', padding='same')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+    # Classifier: Flatten + FC layers
+    #x = layers.Flatten()(x)
+    x = layers.Dense(4096, activation='relu')(x)
+    #x = layers.Dropout(0.5)(x)
+    x = layers.Dense(4096, activation='relu')(x)
+    #x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = keras.Model(inputs=inputs, outputs=outputs)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape: {outputs.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+
+    return model
+
+
 def ResNet32_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     """
     Early blocks of ResNet32: initial layers and first stage

@@ -65,7 +65,7 @@ if __name__ == '__main__':
     #    print(f"Layer {layer.name}: spatial={spatial}, output={output}, input_split={input_split}")
     #    partitioner_tuples.append((spatial, output, input_split))
 
-    partitioner_tuples = [(0, 1, 1)] + [(4, 2, 1)] * (len(model.layers))
+    partitioner_tuples = [(0, 1, 1)] + [(2, 2, 2)] * (len(model.layers))
 
     #partitioner_tuples = [(0, 1, 1), (3,2,2),(3,2,2)] (1,1,1) (2,2,2) (3,3,3) (4,3,3)
     #resNet32 early blocks

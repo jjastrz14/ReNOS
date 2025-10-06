@@ -64,6 +64,8 @@ class ACOParameters:
             - n_best : int
                 The number of best solutions to keep track of.
             - starting_rho : float
+            - start_row_wise : bool
+                If True, use row-wise mapping for initialization instead of random
     """
     alpha : float = 1.0
     beta : float = 1.0
@@ -74,6 +76,7 @@ class ACOParameters:
     rho_start : Union[float, None] = None
     rho_end : Union[float, None] = None
     is_analytical : bool = False
+    start_row_wise : bool = False
 
 
 class BaseOpt :
@@ -146,35 +149,51 @@ class AntColony(BaseOpt):
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
         self.analytical_model = self.par.is_analytical
-        
+
         # Initialize upper latency bound (will be set by normalization)
         self.upper_latency_bound = None
 
+        # Create stub instance once during initialization
+        if self.analytical_model:
+            self.stub = ssam.FastAnalyticalSimulatorStub()
+        else:
+            self.stub = ss.SimulatorStub()
+
     def on_start_fitness_norm(self):
         '''
-        Method to be called before starting the ACO process. It is used to dynamically estimate 
-        the parameters which scale the fitness function by running a random mapping.
+        Method to be called before starting the ACO process. It is used to dynamically estimate
+        the parameters which scale the fitness function by running a mapping (row-wise or random).
         '''
         print("Starting fitness normalization for ACO...")
-        
-        init_genes = []
-        # randomly assign the tasks to the PEs in the NoC
-        for task in self.tasks:
-            if task == 'start':
-                # 'start' task must be mapped to source node
-                init_genes.append(self.task_graph.SOURCE_POINT)
-            elif task == 'end':
-                # 'end' task must be mapped to drain node  
-                init_genes.append(self.task_graph.DRAIN_POINT)
-            else:
-                # Regular tasks can be mapped to any PE
-                init_genes.append(np.random.choice(range(self.domain.size)))
-        
-        # Create mapping from random assignment
-        mapping_norm = {}
-        for task_idx, task in enumerate(self.tasks):
-            if task != "start" and task != "end":
-                mapping_norm[task] = int(init_genes[task_idx])
+
+        if self.par.start_row_wise:
+            # Use row-wise mapping for initialization
+            print("Using row-wise mapping for initialization...")
+            from utils.partitioner_utils import row_wise_mapping
+            path = row_wise_mapping(self.task_graph, self.domain, verbose=False)
+
+            # Extract mapping from path: path is list of (task_id, current_node, next_node)
+            mapping_norm = {}
+            for task_id, _, next_node in path:
+                if task_id not in ("start", "end"):
+                    mapping_norm[task_id] = int(next_node)
+        else:
+            # Use random mapping for initialization
+            print("Using random mapping for initialization...")
+            init_genes = []
+            for task in self.tasks:
+                if task == 'start':
+                    init_genes.append(self.task_graph.SOURCE_POINT)
+                elif task == 'end':
+                    init_genes.append(self.task_graph.DRAIN_POINT)
+                else:
+                    init_genes.append(np.random.choice(range(self.domain.size)))
+
+            # Create mapping from random assignment
+            mapping_norm = {}
+            for task_idx, task in enumerate(self.tasks):
+                if task != "start" and task != "end":
+                    mapping_norm[task] = int(init_genes[task_idx])
 
         # Apply the mapping to the task graph
         import mapper as ma
@@ -183,13 +202,11 @@ class AntColony(BaseOpt):
         mapper_norm.set_mapping(mapping_norm)
         mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", file_to_append=self.ARCH_FILE)
 
-        # Run the simulation for normalization
+        # Run the simulation for normalization using reusable stub
         if self.analytical_model:
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
+            result_to_norm, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json")
         else:
-            stub = ss.SimulatorStub()
-            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
+            result_to_norm, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
         
         print(f"Initial fitness norm result: {result_to_norm}")
         
@@ -323,7 +340,8 @@ class AntColony(BaseOpt):
             moving_average = np.mean([path[2] for path in all_paths])
             moving_std = np.std([path[2] for path in all_paths])
             if once_every is not None and i%once_every == 0:
-                number, path_list, value = shortest_path
+                # Handle both 3-tuple (sequential) and 4-tuple (parallel with filename)
+                number, path_list, value = shortest_path[0], shortest_path[1], shortest_path[2]
                 print(f"Iteration # {i} chosen path is: {number}, {path_list[0:5]}, ..., {path_list[-5:]}, latency: {value}")
                 print("Moving average for the path lenght is:", moving_average)
             
@@ -517,14 +535,13 @@ class AntColony(BaseOpt):
         if verbose:
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
-        if self.analytical_model: 
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
+        # Use the reusable stub instance
+        if self.analytical_model:
+            result, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
             #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
             return result, _
         else:
-            stub = ss.SimulatorStub()
-            result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
+            result, logger = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
             #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
             return result, logger
 
@@ -641,12 +658,28 @@ class ParallelAntColony(AntColony):
 
         self.analytical_model = self.par.is_analytical
 
+        # Worker pool will be created in run() after normalization
+        self.pool = None
+
     def run(self, once_every = 10, show_traces = False):
         """
         Run the algorithm
         """
         # Run fitness normalization before starting optimization
         self.on_start_fitness_norm()
+
+        # Create persistent worker pool (reused across all iterations)
+        # Created here so upper_latency_bound is available
+        # maxtasksperchild=None prevents workers from being recycled
+        self.pool = mp.Pool(
+            processes=self.n_processes,
+            initializer=ParallelAntColony.init,
+            initargs=(self.tau_start, self.tau, self.eta,
+                     (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
+                     (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
+                     self.upper_latency_bound),
+            maxtasksperchild=None  # Keep workers alive indefinitely
+        )
         
         if self.seed is not None:
             np.random.seed(self.seed)
@@ -671,7 +704,8 @@ class ParallelAntColony(AntColony):
             moving_average = np.mean([path[2] for path in all_paths])
             moving_std = np.std([path[2] for path in all_paths])
             if once_every is not None and i%once_every == 0:
-                number, path_list, value = shortest_path
+                # Handle both 3-tuple (sequential) and 4-tuple (parallel with filename)
+                number, path_list, value = shortest_path[0], shortest_path[1], shortest_path[2]
                 print(f"Iteration # {i} chosen path is: {number}, {path_list[0:5]}, ..., {path_list[-5:]}, latency: {value}")
                 print("Moving average for the path lenght is:", moving_average)
             
@@ -702,21 +736,25 @@ class ParallelAntColony(AntColony):
             for i in range(self.par.n_iterations):
                 shortest_path = single_iteration(i, once_every, rho_step)
                 if shortest_path[2] < all_time_shortest_path[2]:
-                    all_time_shortest_path = shortest_path 
+                    all_time_shortest_path = shortest_path
                     # save the dump of the best solution in data
                     # 1. get the id of the ant that found the best solution
                     ant_id = shortest_path[0]
                     # save the corresponding dump file into data
                     if not self.CONFIG_DUMP_DIR or not self.ACO_DIR:
                         raise RuntimeError("Directories not initialized. Call initialize_globals() first.")
-                
-                    dump_file = os.path.join(self.CONFIG_DUMP_DIR, f"dump{ant_id}.json")
-                    
+
+                    # Get the actual dump filename (includes PID for parallel execution)
+                    if len(shortest_path) > 3:
+                        # Parallel ACO: tuple is (ant_id, path, latency, json_filename)
+                        dump_file = shortest_path[3]
+                    else:
+                        # Sequential ACO: tuple is (ant_id, path, latency)
+                        dump_file = os.path.join(self.CONFIG_DUMP_DIR, f"dump{ant_id}.json")
+
                     print("Saving the best solution found by ant", ant_id, "in " + self.ACO_DIR + "/best_solution.json")
                     #save the corresponding dump file into data
-                    os.system(f"cp {dump_file} {self.ACO_DIR}")
-                    #save the dump of the best solution in data
-                    os.system(f"mv {self.ACO_DIR}/dump{ant_id}.json {self.ACO_DIR}/best_solution.json")
+                    os.system(f"cp {dump_file} {self.ACO_DIR}/best_solution.json")
                 
                 np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
                 print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
@@ -726,7 +764,12 @@ class ParallelAntColony(AntColony):
             np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
             print("Saving Final Results in: " + self.ACO_DIR)
             print(" ")
-            
+
+        # Clean up: close the worker pool
+        if self.pool is not None:
+            self.pool.close()
+            self.pool.join()
+            print("Worker pool closed.")
 
         return all_time_shortest_path
 
@@ -741,22 +784,14 @@ class ParallelAntColony(AntColony):
         vardict["upper_latency_bound"] = upper_latency_bound
 
     def generate_colony_paths(self):
-        # generate the colony of ants (parallel workers)
-        
-        with closing(mp.Pool
-                    (processes = self.n_processes, 
-                    initializer = ParallelAntColony.init, 
-                    initargs = (self.tau_start, self.tau, self.eta, 
-                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size), 
-                                (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
-                                self.upper_latency_bound),
-                                )) as pool:
-            # generate the paths in parallel: each process is assigned to a subset of the ants
-            # evenly distributed
-            # seed below allows for setting same seed for each ants (set it by passing seed to the constructor)
-            colony_paths = pool.map_async(walk_batch,[(self.ants[start:end], self.seed)for start, end in self.intervals])
-            colony_paths = colony_paths.get()
-        pool.join()
+        # Generate colony paths using persistent worker pool
+        # Pool is created once in run() and reused across all iterations
+
+        # Generate the paths in parallel: each process is assigned to a subset of the ants
+        # seed below allows for setting same seed for each ants (set it by passing seed to the constructor)
+        colony_paths = self.pool.map_async(walk_batch, [(self.ants[start:end], self.seed) for start, end in self.intervals])
+        colony_paths = colony_paths.get()
+
         # unpack the batches of paths
         colony_paths = [path for batch in colony_paths for path in batch]
         return colony_paths
@@ -831,6 +866,8 @@ class GAParameters:
                 The probability of mutation
             - crossover_probability : float
                 The probability of crossover
+            - start_row_wise : bool
+                If True, use row-wise mapping for initialization instead of random
 
     """
 
@@ -847,6 +884,7 @@ class GAParameters:
     crossover_probability : float = 0.8
     k_tournament : int = 3
     is_analytical : bool = False
+    start_row_wise : bool = False
 
 
 class GeneticAlgorithm(BaseOpt):
@@ -936,28 +974,47 @@ class GeneticAlgorithm(BaseOpt):
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
         self.ARCH_FILE = get_ARCH_FILE()
         self.analytical_model = self.par.is_analytical
+
+        # Create stub instance once during initialization
+        if self.analytical_model:
+            self.stub = ssam.FastAnalyticalSimulatorStub()
+        else:
+            self.stub = ss.SimulatorStub()
         
     def on_start_fitness_norm(self, ga_instance):
         '''
-        Method to be called before starting the evolution process. It is used to dynamically estimate the parameters which scales the fitness fucntion.
+        Method to be called before starting the evolution process. It is used to dynamically estimate
+        the parameters which scales the fitness function by running a mapping (row-wise or random).
         '''
-        init_genes = []
-        # randomly assign the tasks to the PEs in the NoC
-        for task in self.tasks:
-            if task == 'start':
-                # 'start' task must be mapped to source node
-                init_genes.append(self.task_graph.SOURCE_POINT)
-            elif task == 'end':
-                # 'end' task must be mapped to drain node  
-                init_genes.append(self.task_graph.DRAIN_POINT)
-            else:
-                # Regular tasks can be mapped to any PE
-                init_genes.append(np.random.choice(range(self.domain.size)))
-        
-        mapping_norm = {}
-        for task_idx, task in enumerate(self.tasks):
-            if task_idx != "start" and task_idx != "end":
-                mapping_norm[task] = int(init_genes[task_idx])
+        print("Starting fitness normalization for GA...")
+
+        if self.par.start_row_wise:
+            # Use row-wise mapping for initialization
+            print("Using row-wise mapping for initialization...")
+            from utils.partitioner_utils import row_wise_mapping
+            path = row_wise_mapping(self.task_graph, self.domain, verbose=False)
+
+            # Extract mapping from path: path is list of (task_id, current_node, next_node)
+            mapping_norm = {}
+            for task_id, _, next_node in path:
+                if task_id not in ("start", "end"):
+                    mapping_norm[task_id] = int(next_node)
+        else:
+            # Use random mapping for initialization
+            print("Using random mapping for initialization...")
+            init_genes = []
+            for task in self.tasks:
+                if task == 'start':
+                    init_genes.append(self.task_graph.SOURCE_POINT)
+                elif task == 'end':
+                    init_genes.append(self.task_graph.DRAIN_POINT)
+                else:
+                    init_genes.append(np.random.choice(range(self.domain.size)))
+
+            mapping_norm = {}
+            for task_idx, task in enumerate(self.tasks):
+                if task != "start" and task != "end":
+                    mapping_norm[task] = int(init_genes[task_idx])
 
         # 2. apply the mapping to the task graph
         mapper_norm = ma.Mapper()
@@ -965,13 +1022,11 @@ class GeneticAlgorithm(BaseOpt):
         mapper_norm.set_mapping(mapping_norm)
         mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", file_to_append=self.ARCH_FILE)
 
-        # 3. run the simulation
+        # 3. run the simulation using reusable stub
         if self.analytical_model:
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
-        else: 
-            stub = ss.SimulatorStub()
-            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+            result_to_norm, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json")
+        else:
+            result_to_norm, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
         
         print(f"Initial fitness norm result: {result_to_norm}")
         
@@ -1006,13 +1061,11 @@ class GeneticAlgorithm(BaseOpt):
         mapper.set_mapping(mapping)
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) + ".json", file_to_append=self.ARCH_FILE)
 
-        # 3. run the simulation
+        # 3. run the simulation using reusable stub
         if self.analytical_model:
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
+            result, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json")
         else:
-            stub = ss.SimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
+            result, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
         
         if not hasattr(self, 'upper_latency_bound'):
             raise RuntimeError("upper_latency_bound not initialized. Call on_start_fitness_norm() first.")
@@ -1075,23 +1128,35 @@ class ParallelGA(GeneticAlgorithm):
         )
                 
     def run_norm_simulation(self, args):
-        seed, task_graph, domain, tasks, config_dir, arch_file = args
+        seed, task_graph, domain, tasks, config_dir, arch_file, start_row_wise = args
 
         np.random.seed(seed)
 
-        init_genes = []
-        for task in tasks:
-            if task == 'start':
-                init_genes.append(task_graph.SOURCE_POINT)
-            elif task == 'end':
-                init_genes.append(task_graph.DRAIN_POINT)
-            else:
-                init_genes.append(np.random.choice(range(domain.size)))
+        if start_row_wise:
+            # Use row-wise mapping for initialization
+            from utils.partitioner_utils import row_wise_mapping
+            path = row_wise_mapping(task_graph, domain, verbose=False)
 
-        mapping_norm = {}
-        for task_idx, task in enumerate(tasks):
-            if task != "start" and task != "end":
-                mapping_norm[task] = int(init_genes[task_idx])
+            # Extract mapping from path: path is list of (task_id, current_node, next_node)
+            mapping_norm = {}
+            for task_id, _, next_node in path:
+                if task_id not in ("start", "end"):
+                    mapping_norm[task_id] = int(next_node)
+        else:
+            # Use random mapping for initialization
+            init_genes = []
+            for task in tasks:
+                if task == 'start':
+                    init_genes.append(task_graph.SOURCE_POINT)
+                elif task == 'end':
+                    init_genes.append(task_graph.DRAIN_POINT)
+                else:
+                    init_genes.append(np.random.choice(range(domain.size)))
+
+            mapping_norm = {}
+            for task_idx, task in enumerate(tasks):
+                if task != "start" and task != "end":
+                    mapping_norm[task] = int(init_genes[task_idx])
 
         mapper_norm = ma.Mapper()
         mapper_norm.init(task_graph, domain)
@@ -1100,9 +1165,10 @@ class ParallelGA(GeneticAlgorithm):
         json_path = config_dir + f"/dump_GA_x_{seed}.json"
         mapper_norm.mapping_to_json(json_path, file_to_append=arch_file)
 
+        # Create a fresh stub for this process (each process needs its own)
         if self.analytical_model:
             stub = ssam.FastAnalyticalSimulatorStub()
-            result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
+            result_to_norm, _ = stub.run_simulation(json_path)
         else:
             stub = ss.SimulatorStub()
             result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
@@ -1113,13 +1179,20 @@ class ParallelGA(GeneticAlgorithm):
     def on_start_fitness_norm_parallel(self, ga_instance):
         """
         Runs n_procs parallel simulations to estimate the normalization parameter for fitness.
+        Uses row-wise or random mapping based on start_row_wise parameter.
         """
+        print("Starting fitness normalization for parallel GA...")
+
+        if self.par.start_row_wise:
+            print("Using row-wise mapping for initialization...")
+        else:
+            print("Using random mapping for initialization...")
 
         num_jobs = ga_instance.parallel_processing[1]
 
-        # Prepare arguments for each process
+        # Prepare arguments for each process (include start_row_wise parameter)
         arg_list = [
-            (i, self.task_graph, self.domain, self.tasks, self.CONFIG_DUMP_DIR, self.ARCH_FILE)
+            (i, self.task_graph, self.domain, self.tasks, self.CONFIG_DUMP_DIR, self.ARCH_FILE, self.par.start_row_wise)
             for i in range(num_jobs)
         ]
 
@@ -1159,13 +1232,11 @@ class ParallelGA(GeneticAlgorithm):
         # 3. determine which process is running the simulation
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", file_to_append=self.ARCH_FILE)
 
-        # 3. run the simulation
+        # 3. run the simulation using reusable stub
         if self.analytical_model:
-            stub = ssam.FastAnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", dwrap=True)
+            result, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
         else:
-            stub = ss.SimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", dwrap=True)
+            result, _ = self.stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
         
         norm_result = self.upper_latency_bound / (result + 1e-6)
 
