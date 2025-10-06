@@ -185,11 +185,9 @@ class AntColony(BaseOpt):
 
         # Run the simulation for normalization
         if self.analytical_model:
-            import analytical_simulator_stub as ssam
-            stub = ssam.AnalyticalSimulatorStub()
-            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json")
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
         else:
-            import simulator_stub as ss
             stub = ss.SimulatorStub()
             result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_ACO_norm.json", dwrap=True)
         
@@ -520,8 +518,8 @@ class AntColony(BaseOpt):
             plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         if self.analytical_model: 
-            stub = ssam.AnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id))
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), dwrap=True)
             #result is number of cycles of chosen path and logger are the events one by one hapenning in restart
             return result, _
         else:
@@ -968,8 +966,12 @@ class GeneticAlgorithm(BaseOpt):
         mapper_norm.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", file_to_append=self.ARCH_FILE)
 
         # 3. run the simulation
-        stub = ss.SimulatorStub()
-        result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+        if self.analytical_model:
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
+        else: 
+            stub = ss.SimulatorStub()
+            result_to_norm, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_x.json", dwrap=True)
         
         print(f"Initial fitness norm result: {result_to_norm}")
         
@@ -1006,8 +1008,8 @@ class GeneticAlgorithm(BaseOpt):
 
         # 3. run the simulation
         if self.analytical_model:
-            stub = ssam.AnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json")
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
         else:
             stub = ss.SimulatorStub()
             result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx) +".json", dwrap=True)
@@ -1098,9 +1100,13 @@ class ParallelGA(GeneticAlgorithm):
         json_path = config_dir + f"/dump_GA_x_{seed}.json"
         mapper_norm.mapping_to_json(json_path, file_to_append=arch_file)
 
-        stub = ss.SimulatorStub()
-        result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
-
+        if self.analytical_model:
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
+        else:
+            stub = ss.SimulatorStub()
+            result_to_norm, _ = stub.run_simulation(json_path, dwrap=True)
+        
         return result_to_norm
 
         
@@ -1155,11 +1161,11 @@ class ParallelGA(GeneticAlgorithm):
 
         # 3. run the simulation
         if self.analytical_model:
-            stub = ssam.AnalyticalSimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
+            stub = ssam.FastAnalyticalSimulatorStub()
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", dwrap=True)
         else:
             stub = ss.SimulatorStub()
-            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json")
+            result, _ = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump_GA_"+ str(solution_idx)+".json", dwrap=True)
         
         norm_result = self.upper_latency_bound / (result + 1e-6)
 

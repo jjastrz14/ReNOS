@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <string>
 #include <queue>
+#include <iostream>
 
 #include "../restart/include/nlohmann/json.hpp"
 
@@ -128,9 +129,16 @@ private:
     // Congestion correction
     double _congestion_correction_factor; // Multiplicative correction for congested networks (applied to final result)
 
+    // Output stream for logging (like gDumpFile in Booksim2)
+    std::ostream* _gDumpFile;
+
 public:
     FastAnalyticalModel();
+    FastAnalyticalModel(std::ostream* dump_file);
     ~FastAnalyticalModel() = default;
+
+    // Set output stream
+    void set_dump_file(std::ostream* dump_file) { _gDumpFile = dump_file; }
 
     // Configuration
     void configure(const std::string& config_file);
@@ -191,6 +199,6 @@ private:
 };
 
 // High-level simulation function
-int simulate_fast_analytical(const std::string& config_file);
+int simulate_fast_analytical(const std::string& config_file, std::ostream* dump_file = &std::cout);
 
 #endif // _FAST_MODEL_H_

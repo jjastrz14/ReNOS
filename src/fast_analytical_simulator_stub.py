@@ -108,6 +108,8 @@ class FastAnalyticalSimulatorStub:
         # Run fast analytical simulation
         if dwrap:
             results, logger = dangerwrap(run_fast_analytical_simulation, path_to_config_file, "")
+        elif verbose: #print to terminal
+            results, logger = run_fast_analytical_simulation(path_to_config_file, "-")
         else:
             results, logger = run_fast_analytical_simulation(path_to_config_file, "")
         end = time.time()

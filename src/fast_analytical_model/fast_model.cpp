@@ -23,7 +23,10 @@ using json = nlohmann::json;
 // FastAnalyticalModel Implementation
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FastAnalyticalModel::FastAnalyticalModel() : _total_nodes(0), _congestion_correction_factor(1.0) {
+FastAnalyticalModel::FastAnalyticalModel() : _total_nodes(0), _congestion_correction_factor(1.0), _gDumpFile(&std::cout) {
+}
+
+FastAnalyticalModel::FastAnalyticalModel(std::ostream* dump_file) : _total_nodes(0), _congestion_correction_factor(1.0), _gDumpFile(dump_file) {
 }
 
 void FastAnalyticalModel::configure(const std::string& config_file) {
@@ -524,7 +527,7 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
                     C_S_channel = cs_it->second;  // Use dynamically calculated C_S
                 }
                 else {
-                    std::cout << "DEBUG: Using default C_S for channel at router " << hop.router_id
+                    *_gDumpFile << "DEBUG: Using default C_S for channel at router " << hop.router_id
                     << " port " << hop.output_port << std::endl;
                 }
 
@@ -537,7 +540,7 @@ double FastAnalyticalModel::calculate_message_latency(int src, int dst, int size
                 //        << " W=" << W << std::endl;
             } else {
                 // Channel saturated - use large delay
-                std::cout << "WARN: Channel saturated at router " << hop.router_id
+                *_gDumpFile << "WARN: Channel saturated at router " << hop.router_id
                         << " port " << hop.output_port << ", setting high waiting time." << std::endl;
                 W = 100.0;
             }
@@ -633,7 +636,7 @@ double FastAnalyticalModel::calculate_C_A_mmpp(int k_param) const {
     else if (k_param > 300) {
         // Linear model: C_A = 1.44982296 + 0.034281 * k
         double C_A_linear = 1.44982296 + 0.0325 * k_param;
-        std::cout << "WARN: calculate_C_A_mmpp: k_param = " << k_param
+        *_gDumpFile << "WARN: calculate_C_A_mmpp: k_param = " << k_param
                 << " indicates severe network congestion. Using linear C_A scaling (C_A = "
                 << C_A_linear << ") as artificial workaround. "
                 << "This solution should NOT be used for accurate modeling." << std::endl;
@@ -643,7 +646,7 @@ double FastAnalyticalModel::calculate_C_A_mmpp(int k_param) const {
     else if (k_param > 200) {
         // Power law model: C_A = 0.57092083 * k^0.44049964
         double C_A_extrapolated = 0.57092083 * pow(k_param, 0.44049964);
-        std::cout << "INFO: calculate_C_A_mmpp: k_param = " << k_param
+        *_gDumpFile << "INFO: calculate_C_A_mmpp: k_param = " << k_param
                 << " exceeds table range (max=200), using power law extrapolation: C_A = "
                 << C_A_extrapolated << std::endl;
         return C_A_extrapolated;
@@ -752,9 +755,9 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
 
     double avg_C_S = (num_channels > 0) ? (total_C_S / num_channels) : 0.0;
 
-    std::cout << "\nCongestion Detection (based on C_S from PASS 1):" << std::endl;
-    std::cout << "  Max C_S across all channels: " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
-    std::cout << "  Average C_S across all channels: " << std::fixed << std::setprecision(2) << avg_C_S << std::endl;
+    *_gDumpFile << "\nCongestion Detection (based on C_S from PASS 1):" << std::endl;
+    *_gDumpFile << "  Max C_S across all channels: " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
+    *_gDumpFile << "  Average C_S across all channels: " << std::fixed << std::setprecision(2) << avg_C_S << std::endl;
 
     // Congestion threshold: avg_C_S > 2.0 indicates congested network
     const double CONGESTION_THRESHOLD = 5.0;
@@ -764,12 +767,12 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
         // PASS 2: Congestion detected - correct λ (but keep C_S from PASS 1)
         // ========================================================================
 
-        std::cout << "\n" << std::string(80, '=') << std::endl;
-        std::cout << "WARNING: Network congestion detected!" << std::endl;
-        std::cout << "  Average C_S = " << std::fixed << std::setprecision(2) << avg_C_S
+        *_gDumpFile << "\n" << std::string(80, '=') << std::endl;
+        *_gDumpFile << "WARNING: Network congestion detected!" << std::endl;
+        *_gDumpFile << "  Average C_S = " << std::fixed << std::setprecision(2) << avg_C_S
                 << " (threshold: " << CONGESTION_THRESHOLD << ")" << std::endl;
-        std::cout << "  Max C_S = " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
-        std::cout << std::string(80, '=') << std::endl;
+        *_gDumpFile << "  Max C_S = " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
+        *_gDumpFile << std::string(80, '=') << std::endl;
 
         // High C_S means packets experience high variance in service time
         // This indicates the real critical path is longer than our initial estimate
@@ -782,34 +785,34 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
         // The 0.15 scaling factor is tunable based on empirical data
         double critical_path_extension = 1.0 + (avg_C_S - 1.0) * 0.15;
 
-        std::cout << "Applying congestion correction (based on avg C_S):" << std::endl;
-        std::cout << "  Critical path extension factor: " << std::fixed << std::setprecision(3)
+        *_gDumpFile << "Applying congestion correction (based on avg C_S):" << std::endl;
+        *_gDumpFile << "  Critical path extension factor: " << std::fixed << std::setprecision(3)
                 << critical_path_extension << "x" << std::endl;
-        std::cout << "  Real critical path is estimated ~"
+        *_gDumpFile << "  Real critical path is estimated ~"
                   << std::fixed << std::setprecision(1) << ((critical_path_extension - 1.0) * 100)
                 << "% longer due to network contention" << std::endl;
 
         // Store the congestion correction factor to be applied to final result
         _congestion_correction_factor = critical_path_extension;
 
-        std::cout << "  Congestion correction factor: " << std::fixed << std::setprecision(3)
+        *_gDumpFile << "  Congestion correction factor: " << std::fixed << std::setprecision(3)
                     << _congestion_correction_factor << "x will be applied to final result" << std::endl;
-        std::cout << std::string(80, '=') << std::endl << std::endl;
+        *_gDumpFile << std::string(80, '=') << std::endl << std::endl;
     } else {
         _congestion_correction_factor = 1.0;  // No correction needed
-        std::cout << "  Network operating normally (avg C_S < " << CONGESTION_THRESHOLD << ")" << std::endl;
-        std::cout << "  No congestion correction needed." << std::endl << std::endl;
+        *_gDumpFile << "  Network operating normally (avg C_S < " << CONGESTION_THRESHOLD << ")" << std::endl;
+        *_gDumpFile << "  No congestion correction needed." << std::endl << std::endl;
     }
 
     // C_A is interarrival time variability coefficient from MMPP
     // C_S is now calculated per-channel based on paper's equations 16-19
 
-    std::cout << "Traffic parameters calculated:" << std::endl;
-    std::cout << "  C_A = " << _C_A << std::endl;
-    std::cout << "  C_S from arch.json = " << _arch.C_S << std::endl;
-    std::cout << "  μ (service rate) = " << _mu_service_rate << " packets/cycle" << std::endl;
-    std::cout << "  Average packet size = " << avg_packet_flits << " flits" << std::endl;
-    std::cout << "  Number of IC→OC channels with traffic = " << _lambda_ic_oc.size() << std::endl;
+    *_gDumpFile << "Traffic parameters calculated:" << std::endl;
+    *_gDumpFile << "  C_A = " << _C_A << std::endl;
+    *_gDumpFile << "  C_S from arch.json = " << _arch.C_S << std::endl;
+    *_gDumpFile << "  μ (service rate) = " << _mu_service_rate << " packets/cycle" << std::endl;
+    *_gDumpFile << "  Average packet size = " << avg_packet_flits << " flits" << std::endl;
+    *_gDumpFile << "  Number of IC→OC channels with traffic = " << _lambda_ic_oc.size() << std::endl;
 }
 
 double FastAnalyticalModel::calculate_average_packet_size_flits() const {
@@ -884,7 +887,7 @@ double FastAnalyticalModel::calculate_critical_path_time() const {
 
     // Ensure non-zero critical path
     if (critical_path <= 0.0) {
-        std::cout << "WARN: calculate_critical_path_time: critical path is zero or negative, using default=1000.0" << std::endl;
+        *_gDumpFile << "WARN: calculate_critical_path_time: critical path is zero or negative, using default=1000.0" << std::endl;
         return 1000.0;
     }
 
@@ -909,7 +912,7 @@ void FastAnalyticalModel::calculate_arrival_rates() {
     // Calculate total execution time (critical path through dependency graph)
     double critical_path_time = calculate_critical_path_time();
 
-    std::cout << "INFO: Critical path time = " << critical_path_time << " cycles" << std::endl;
+    *_gDumpFile << "INFO: Critical path time = " << critical_path_time << " cycles" << std::endl;
 
     // Step 1: Accumulate relative traffic (packet counts) per channel
     std::map<ChannelKey, double> packet_counts;
@@ -966,13 +969,13 @@ void FastAnalyticalModel::calculate_arrival_rates() {
         max_utilization = std::max(max_utilization, util);
     }
 
-    std::cout << "INFO: Max utilization = " << max_utilization << std::endl;
+    *_gDumpFile << "INFO: Max utilization = " << max_utilization << std::endl;
 
     // Only scale if extremely high to prevent numerical instability
     // Higher threshold (0.98 vs 0.85) allows queueing formula to capture more contention
     if (max_utilization > 0.98) {
         double scale_factor = 0.98 / max_utilization;
-        std::cout << "INFO: Scaling arrival rates by " << scale_factor
+        *_gDumpFile << "INFO: Scaling arrival rates by " << scale_factor
                 << " for numerical stability (max_util was " << max_utilization << ")" << std::endl;
         for (auto& [key, lambda] : _lambda_ic_oc) {
             lambda *= scale_factor;
@@ -995,7 +998,7 @@ void FastAnalyticalModel::calculate_utilizations() {
 
         // Cap utilization at 0.99 to avoid division by zero
         if (lambda_total >= 0.99) {
-            std::cout << "WARN: High utilization (" << lambda_total
+            *_gDumpFile << "WARN: High utilization (" << lambda_total
                         << ") at router " << out_key.router
                         << " port " << out_key.output_port << std::endl;
             lambda_total = 0.99;
@@ -1095,7 +1098,7 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
 
     // Handle edge cases
     if (total_packets == 0 || injection_count_per_bin.size() < 2) {
-        std::cout << "  No network traffic or insufficient data, using default k=1 (Poisson)" << std::endl;
+        *_gDumpFile << "  No network traffic or insufficient data, using default k=1 (Poisson)" << std::endl;
         return 1;
     }
 
@@ -1127,12 +1130,12 @@ int FastAnalyticalModel::estimate_k_from_dependency_graph() const {
 
     int estimated_k = static_cast<int>(std::round(k_estimate));
 
-    std::cout << "  Total network packets: " << total_packets << std::endl;
-    std::cout << "  Time bins: " << num_bins << " (bin size: " << bin_size << " cycles)" << std::endl;
-    std::cout << "  Mean injection rate: " << mean_rate << " packets/bin" << std::endl;
-    std::cout << "  Injection rate variance: " << variance << std::endl;
-    std::cout << "  Injection rate CV: " << cv_injection << std::endl;
-    std::cout << "  Estimated k from temporal burstiness: " << estimated_k << std::endl;
+    *_gDumpFile << "  Total network packets: " << total_packets << std::endl;
+    *_gDumpFile << "  Time bins: " << num_bins << " (bin size: " << bin_size << " cycles)" << std::endl;
+    *_gDumpFile << "  Mean injection rate: " << mean_rate << " packets/bin" << std::endl;
+    *_gDumpFile << "  Injection rate variance: " << variance << std::endl;
+    *_gDumpFile << "  Injection rate CV: " << cv_injection << std::endl;
+    *_gDumpFile << "  Estimated k from temporal burstiness: " << estimated_k << std::endl;
 
     return estimated_k;
 }
@@ -1193,7 +1196,7 @@ void FastAnalyticalModel::calculate_channel_indices() {
         }
     }
 
-    std::cout << "Channel indexing complete" << std::endl;
+    *_gDumpFile << "Channel indexing complete" << std::endl;
 }
 
 void FastAnalyticalModel::initialize_ejection_channels() {
@@ -1261,7 +1264,7 @@ void FastAnalyticalModel::initialize_ejection_channels() {
         }
     }
 
-    std::cout << "Ejection channels initialized (Group 0)" << std::endl;
+    *_gDumpFile << "Ejection channels initialized (Group 0)" << std::endl;
 }
 
 std::map<OutputChannelKey, double> FastAnalyticalModel::get_routing_probabilities(OutputChannelKey channel) const {
@@ -1328,7 +1331,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
         max_group = std::max(max_group, index);
     }
 
-    std::cout << "Calculating service times for groups 1 to " << max_group << std::endl;
+    *_gDumpFile << "Calculating service times for groups 1 to " << max_group << std::endl;
 
     // Buffer parameters
     int t_body_hop = _arch.sw_alloc_delay + _arch.st_prepare_delay + _arch.st_final_delay;
@@ -1427,7 +1430,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
                     //double numerator = rho * (0.5 * 0.5 + C_S * C_S);
                     _waiting_time[key] = numerator / (2.0 * denominator);
                 } else {
-                    std::cout << "WARN: Saturated channel at router " << key.router
+                    *_gDumpFile << "WARN: Saturated channel at router " << key.router
                                 << " port " << key.output_port
                                 << " (ρ=" << rho << "), setting high waiting time" << std::endl;
                     _waiting_time[key] = mu * 100.0;  // High waiting time for saturated channels
@@ -1446,7 +1449,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
         }
 
         if (converged) {
-            std::cout << "Service time calculation converged in " << (iter + 1) << " iterations" << std::endl;
+            *_gDumpFile << "Service time calculation converged in " << (iter + 1) << " iterations" << std::endl;
             break;
         }
     }
@@ -1462,7 +1465,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
         }
         if (count > 0) avg_final_C_S /= count;
 
-        std::cout << "WARN: Service time calculation did not converge after "
+        *_gDumpFile << "WARN: Service time calculation did not converge after "
                     << max_iterations << " iterations. Using last computed values "
                     << "(average C_S = " << avg_final_C_S << ")" << std::endl;
     }
@@ -1484,11 +1487,11 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
         }
     }
 
-    std::cout << "Per-group C_S statistics:" << std::endl;
+    *_gDumpFile << "Per-group C_S statistics:" << std::endl;
     for (const auto& [group, count] : group_counts) {
         double avg_C_S = group_C_S_sum[group] / count;
         double avg_convergence = group_convergence_sum[group] / count;
-        std::cout << "  Group " << group << ": " << count << " channels, "
+        *_gDumpFile << "  Group " << group << ": " << count << " channels, "
             << "average C_S = " << std::fixed << std::setprecision(2) << avg_C_S
             << ", average convergence iteration = " << std::fixed << std::setprecision(2) << avg_convergence
             << std::endl;
@@ -1499,8 +1502,8 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
 // High-level simulation function
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-int simulate_fast_analytical(const std::string& config_file) {
-    FastAnalyticalModel model;
+int simulate_fast_analytical(const std::string& config_file, std::ostream* dump_file) {
+    FastAnalyticalModel model(dump_file);
     model.configure(config_file);
     return model.run_simulation();
 }

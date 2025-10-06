@@ -137,7 +137,7 @@ class Ant:
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id), file_to_append=self.ARCH_FILE)
         
         if self.analytical_model:
-            stub = ssam.AnalyticalSimulatorStub()
+            stub = ssam.FastAnalyticalSimulatorStub()
             result, logger = stub.run_simulation(self.CONFIG_DUMP_DIR + "/dump{}.json".format(self.id))
         else:
             stub = ss.SimulatorStub()

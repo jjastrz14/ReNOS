@@ -36,7 +36,7 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
     
     # Run analytical simulator
     print("Running analytical model...")
-    stub_anal = ssam.AnalyticalSimulatorStub()
+    stub_anal = ssam.FastAnalyticalSimulatorStub()
     total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
     print(f"Analytical model result: {total_latency} cycles")
     results['analytical_latency'] = total_latency

@@ -11,6 +11,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/iostream.h>
 #include <sstream>
+#include <fstream>
 #include <memory>
 
 #include "fast_model.h"
@@ -74,15 +75,43 @@ PYBIND11_MODULE(fast_nocsim, m) {
         .def("topological_sort", &FastAnalyticalModel::topological_sort,
             "Get topological order of tasks");
 
-    // High-level simulation wrapper function
-    m.def("simulate_fast_analytical", &simulate_fast_analytical,
-            "Run fast analytical simulation with config file",
-            py::arg("config_file"));
+    // High-level simulation wrapper function with output control
+    m.def("simulate_fast_analytical", [](const std::string& config_file, const std::string& output_file = "") {
+        // Handle output file like Booksim2
+        std::ostream* dump_file;
+        std::ofstream file_stream;
+        std::ostream null_stream(nullptr);
+
+        if (output_file == "") {
+            dump_file = &null_stream;  // Empty string = no output
+        } else if (output_file == "-") {
+            dump_file = &std::cout;    // "-" = stdout
+        } else {
+            file_stream.open(output_file);
+            dump_file = &file_stream;  // filename = file output
+        }
+
+        return simulate_fast_analytical(config_file, dump_file);
+    }, "Run fast analytical simulation with config file",
+        py::arg("config_file"), py::arg("output_file") = "");
 
     // Wrapper function that matches the interface of the original analytical simulator
     m.def("simulate_analytical", [](const std::string& config_file, const std::string& output_file = "") {
-        // Run fast simulation (ignore output_file for now since it's purely mathematical)
-        int simulation_time = simulate_fast_analytical(config_file);
+        // Handle output file like Booksim2
+        std::ostream* dump_file;
+        std::ofstream file_stream;
+        std::ostream null_stream(nullptr);
+
+        if (output_file == "") {
+            dump_file = &null_stream;  // Empty string = no output
+        } else if (output_file == "-") {
+            dump_file = &std::cout;    // "-" = stdout
+        } else {
+            file_stream.open(output_file);
+            dump_file = &file_stream;  // filename = file output
+        }
+
+        int simulation_time = simulate_fast_analytical(config_file, dump_file);
 
         // Return tuple (simulation_time, logger) to match original interface
         // Logger is None since we don't generate events in fast mode
