@@ -51,10 +51,11 @@ if __name__ == '__main__':
     model = fuse_conv_bn(model, verbose=True)
     
     model_name = "ResNet32_early_blocks"
-    config_path_file = "./data/light_noc_comp/mapping.json"
+    result_file = "./data/light_noc_comp/"
+    
     # Prepare CSV files
-    csv_filename = f"./data/light_noc_comp/noc_comparison_results_{model_name}.csv"
-    energy_csv_filename = f"./data/light_noc_comp/latency_energy_results_{model_name}.csv"
+    csv_filename = f"{result_file}/p1_noc_comparison_results_{model_name}.csv"
+    energy_csv_filename = f"{result_file}/p1_latency_energy_results_{model_name}.csv"
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
 
     # Grid setup
@@ -95,7 +96,6 @@ if __name__ == '__main__':
                 configurations.append((spatial, output, input_split))
 
     print(f"Generated {len(configurations)} configurations to test\n")
-
     #another option is to manually define a few configurations
     #configurations = [(2,2,2),(3,3,3)]
     
@@ -132,6 +132,8 @@ if __name__ == '__main__':
             # Construct mapping
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
                         if task_id != "start" and task_id != "end"}
+            
+            config_path_file = result_file + f"mapping_{spatial}_{output}_{input_split}.json"
             
             mapper_config = "." + config_path_file
             mapper = ma.Mapper()
@@ -181,7 +183,7 @@ if __name__ == '__main__':
             try:
                 csv_df = export_simulation_results_to_csv(
                     logger=logger,
-                    config_path="./data/light_noc_comp/mapping.json",
+                    config_path=config_path_file,
                     output_path=energy_csv_filename,
                     append=(iteration > 1),  # Append after first iteration
                     num_partitions=total_partitions,
