@@ -23,7 +23,7 @@ using json = nlohmann::json;
 // FastAnalyticalModel Implementation
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-FastAnalyticalModel::FastAnalyticalModel() : _total_nodes(0) {
+FastAnalyticalModel::FastAnalyticalModel() : _total_nodes(0), _congestion_correction_factor(1.0) {
 }
 
 void FastAnalyticalModel::configure(const std::string& config_file) {
@@ -688,6 +688,9 @@ int FastAnalyticalModel::get_total_simulation_time() const {
         max_time = std::max(max_time, completion_time);
     }
 
+    // Apply congestion correction factor (if network was detected as congested)
+    max_time *= _congestion_correction_factor;
+
     return static_cast<int>(std::ceil(max_time));
 }
 
@@ -729,6 +732,74 @@ void FastAnalyticalModel::calculate_traffic_parameters() {
     calculate_channel_indices();
     initialize_ejection_channels();
     calculate_service_times_and_C_S();
+
+    // ========================================================================
+    // TWO-PASS CONGESTION CORRECTION
+    // PASS 1 COMPLETE: C_S calculated with initial λ
+    // Now detect congestion and correct λ if needed (without recalculating C_S)
+    // ========================================================================
+
+    // Analyze C_S statistics to detect network congestion
+    double max_C_S = 0.0;
+    double total_C_S = 0.0;
+    int num_channels = 0;
+
+    for (const auto& [key, C_S] : _service_time_C_S) {
+        max_C_S = std::max(max_C_S, C_S);
+        total_C_S += C_S;
+        num_channels++;
+    }
+
+    double avg_C_S = (num_channels > 0) ? (total_C_S / num_channels) : 0.0;
+
+    std::cout << "\nCongestion Detection (based on C_S from PASS 1):" << std::endl;
+    std::cout << "  Max C_S across all channels: " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
+    std::cout << "  Average C_S across all channels: " << std::fixed << std::setprecision(2) << avg_C_S << std::endl;
+
+    // Congestion threshold: avg_C_S > 2.0 indicates congested network
+    const double CONGESTION_THRESHOLD = 2.0;
+
+    if (avg_C_S > CONGESTION_THRESHOLD) {
+        // ========================================================================
+        // PASS 2: Congestion detected - correct λ (but keep C_S from PASS 1)
+        // ========================================================================
+
+        std::cout << "\n" << std::string(80, '=') << std::endl;
+        std::cout << "WARNING: Network congestion detected!" << std::endl;
+        std::cout << "  Average C_S = " << std::fixed << std::setprecision(2) << avg_C_S
+                << " (threshold: " << CONGESTION_THRESHOLD << ")" << std::endl;
+        std::cout << "  Max C_S = " << std::fixed << std::setprecision(2) << max_C_S << std::endl;
+        std::cout << std::string(80, '=') << std::endl;
+
+        // High C_S means packets experience high variance in service time
+        // This indicates the real critical path is longer than our initial estimate
+        // Therefore, λ should be lower (same packets spread over longer time)
+
+        // Use AVERAGE C_S for correction (balances congested and non-congested channels)
+        // Max C_S can be skewed by a few extremely congested channels (especially when capped)
+        // Average C_S gives a better overall network congestion measure
+        // Heuristic: extension = 1.0 + (avg_C_S - 1.0) * scaling_factor
+        // The 0.15 scaling factor is tunable based on empirical data
+        double critical_path_extension = 1.0 + (avg_C_S - 1.0) * 0.15;
+
+        std::cout << "Applying congestion correction (based on avg C_S):" << std::endl;
+        std::cout << "  Critical path extension factor: " << std::fixed << std::setprecision(3)
+                << critical_path_extension << "x" << std::endl;
+        std::cout << "  Real critical path is estimated ~"
+                  << std::fixed << std::setprecision(1) << ((critical_path_extension - 1.0) * 100)
+                << "% longer due to network contention" << std::endl;
+
+        // Store the congestion correction factor to be applied to final result
+        _congestion_correction_factor = critical_path_extension;
+
+        std::cout << "  Congestion correction factor: " << std::fixed << std::setprecision(3)
+                    << _congestion_correction_factor << "x will be applied to final result" << std::endl;
+        std::cout << std::string(80, '=') << std::endl << std::endl;
+    } else {
+        _congestion_correction_factor = 1.0;  // No correction needed
+        std::cout << "  Network operating normally (avg C_S < " << CONGESTION_THRESHOLD << ")" << std::endl;
+        std::cout << "  No congestion correction needed." << std::endl << std::endl;
+    }
 
     // C_A is interarrival time variability coefficient from MMPP
     // C_S is now calculated per-channel based on paper's equations 16-19
@@ -1274,7 +1345,7 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
 
     // Iterate until convergence
     const int max_iterations = 100;
-    const double epsilon = 0.01;
+    const double epsilon = 0.1;
 
     // Track which iteration each channel converged at
     std::map<OutputChannelKey, int> channel_convergence_iter;
@@ -1356,7 +1427,10 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
                     //double numerator = rho * (0.5 * 0.5 + C_S * C_S);
                     _waiting_time[key] = numerator / (2.0 * denominator);
                 } else {
-                    _waiting_time[key] = mu * 10.0;  // High waiting time for saturated channels
+                    std::cout << "WARN: Saturated channel at router " << key.router
+                                << " port " << key.output_port
+                                << " (ρ=" << rho << "), setting high waiting time" << std::endl;
+                    _waiting_time[key] = mu * 100.0;  // High waiting time for saturated channels
                 }
 
                 // Check convergence for this channel
@@ -1389,8 +1463,8 @@ void FastAnalyticalModel::calculate_service_times_and_C_S() {
         if (count > 0) avg_final_C_S /= count;
 
         std::cout << "WARN: Service time calculation did not converge after "
-                  << max_iterations << " iterations. Using last computed values "
-                  << "(average C_S = " << avg_final_C_S << ")" << std::endl;
+                    << max_iterations << " iterations. Using last computed values "
+                    << "(average C_S = " << avg_final_C_S << ")" << std::endl;
     }
 
     // Print statistics per group

@@ -125,6 +125,9 @@ private:
     std::map<OutputChannelKey, double> _service_time_C_S;  // C_S: service time CV per channel
     std::map<OutputChannelKey, double> _waiting_time;      // W: average waiting time per channel
 
+    // Congestion correction
+    double _congestion_correction_factor; // Multiplicative correction for congested networks (applied to final result)
+
 public:
     FastAnalyticalModel();
     ~FastAnalyticalModel() = default;
