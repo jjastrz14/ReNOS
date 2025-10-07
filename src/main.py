@@ -90,9 +90,11 @@ if __name__ == "__main__":
     # model = load_model("ResNet50")
     # model = load_model("MobileNet")
     # model = load_model("MobileNetV2")
-    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
+    
+    model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
     
     model = fuse_conv_bn(model, verbose=True)
 
@@ -117,7 +119,7 @@ if __name__ == "__main__":
     #spatial, output, input
     #parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
     
-    partitioner_tuples = [(0, 1, 1)] + [(2, 2, 2)] * (len(model.layers))
+    partitioner_tuples = [(0, 1, 1)] + [(2, 6, 5)] * (len(model.layers))
     num_partitions = 2**partitioner_tuples[1][0]*partitioner_tuples[1][1]*partitioner_tuples[1][2]
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
@@ -190,18 +192,18 @@ if __name__ == "__main__":
         print("Running Genetic Algorithm Optimization...")
         
         params = op.GAParameters(
-        sol_per_pop = 20, #30,
-        n_parents_mating= 5, #Number of solutions to be selected as parents.
+        sol_per_pop = 512, #30,
+        n_parents_mating= 50, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 3, #800,
+        n_generations = 100, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
         start_row_wise= True, #start from a row-wise mapping
         )
         
-        n_procs = 10
+        n_procs = 128
         
         if args.algo == "GA_parallel":
             print(f"Creating the Parallel Genetic Algorithm instance with {n_procs} processes, population size: {params.sol_per_pop}, generations: {params.n_generations}.")

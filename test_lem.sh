@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_lem
-#SBATCH --time=06:05:00       #time limit HH:MM:SS
+#SBATCH --time=10:05:00       #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128  #number of threads per task
-#SBATCH --mem=25gb               #memory per node
+#SBATCH --mem=150gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL
@@ -17,8 +17,8 @@ module load pybind11/2.11.1-GCCcore-12.3.0
 source ~/renos/bin/activate
 
 
-ALGO="GA"
-RESULT_DIR="LeNet4_test_lem"
+ALGO="GA_parallel"
+RESULT_DIR="ISCAS_sub_AlexNet"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
