@@ -64,7 +64,7 @@ if __name__ == '__main__':
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
 
     # Generate all partition combinations
-    combinations = [(i, j, k) for i in range(1, number_of_parts) for j in range(1, number_of_parts) for k in range(1, number_of_parts)]
+    combinations = [(i, j, k) for i in range(0, number_of_parts) for j in range(1, number_of_parts) for k in range(1, number_of_parts)]
 
     # Prepare CSV file
     csv_filename = f"./data/partitioner_data/partition_statistics_{model_name}.csv"
