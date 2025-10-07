@@ -98,7 +98,8 @@ if __name__ == "__main__":
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
     #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
-    model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False)
+    #model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False)
+    model = VGG_16_early_layers((32, 32, 3), num_classes=10, verbose=True)
 
     
     model = fuse_conv_bn(model, verbose=True)
