@@ -46,16 +46,24 @@ def count_operational_layers(model):
 
 
 if __name__ == '__main__':
+    #done 
+    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
+    #model = VGG_16_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=True)
+    #model = VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=True)
+    #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True) 
+    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+    #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
+
+    model = ResNet32_late_blocks((16, 16, 32), num_classes=10, verbose=True)
     # Model setup
-    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     model = fuse_conv_bn(model, verbose=True)
 
-    model_name = "ResNet32_early_blocks"
+    model_name = "ResNet32_late"
     result_file = "./data/mapping_comparison"
 
     # Prepare CSV files
     csv_filename = f"{result_file}/mapping_comparison_{model_name}.csv"
-    energy_csv_filename = f"{result_file}/latency_energy_{model_name}.csv"
+    #energy_csv_filename = f"{result_file}/latency_energy_{model_name}.csv"
     os.makedirs(result_file, exist_ok=True)
 
     # Grid setup
@@ -70,10 +78,10 @@ if __name__ == '__main__':
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
 
     # Configuration to test
-    configuration = (1, 1, 1)  # (spatial, output, input_split)
+    configuration = (3, 4, 3)  # (spatial, output, input_split)
 
     # Mapping strategies to test
-    mapping_strategies = ['row_wise', 'column_wise', 'random']
+    mapping_strategies = ['row_wise', 'column_wise']
 
     # CSV header
     fieldnames = [
@@ -82,11 +90,7 @@ if __name__ == '__main__':
         'parts_per_layer',
         'total_tasks',
         'result_analytical',
-        'result_booksim',
-        'percentage_diff',
         'analytical_time',
-        'booksim_time',
-        'time_gain',
         'partitioner_config'
     ]
 
@@ -148,12 +152,13 @@ if __name__ == '__main__':
 
             print(f"Generated {len(mapping)} task mappings using {mapping_strategy}")
 
-            config_path_file = f"{result_file}/mapping_{mapping_strategy}_{spatial}_{output}_{input_split}.json"
+            config_path_file = f"{result_file}/mapping_{model_name}_{mapping_strategy}_{spatial}_{output}_{input_split}.json"
 
+            config_path_file_mapping = f".{config_path_file}"
             mapper = ma.Mapper()
             mapper.init(task_graph, grid)
             mapper.set_mapping(mapping)
-            mapper.mapping_to_json(config_path_file,
+            mapper.mapping_to_json(config_path_file_mapping,
                                     file_to_append="./config_files/arch.json")
 
             # Run Fast Analytical model
@@ -182,6 +187,7 @@ if __name__ == '__main__':
             else:
                 print("  ✗ Config file missing 'arch' section. Skipping logger setup.")
 
+            '''
             # Run Booksim2 simulation
             print("\nRunning Booksim2 simulation...")
             start_time = time.time()
@@ -220,6 +226,8 @@ if __name__ == '__main__':
             print(f"  Difference: {abs(result_fast_anal - result_booksim)} cycles ({percentage_diff:.2f}%)")
             print(f"  Time gain: {time_gain:.4f}x")
 
+            
+            '''
             # Write to CSV immediately after each mapping strategy
             with open(csv_filename, 'a', newline='') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -229,16 +237,12 @@ if __name__ == '__main__':
                     'parts_per_layer': num_partitions_per_layer[1],
                     'total_tasks': total_tasks,
                     'result_analytical': result_fast_anal,
-                    'result_booksim': result_booksim,
-                    'percentage_diff': f"{percentage_diff:.2f}",
                     'analytical_time': f"{fast_analytical_time:.4f}",
-                    'booksim_time': f"{booksim_time:.4f}",
-                    'time_gain': f"{time_gain:.4f}",
                     'partitioner_config': str(partitioner_tuples[1])
                 })
 
             print(f"\n✓ Results for {mapping_strategy} appended to {csv_filename}")
-
+            
         except Exception as e:
             print(f"\n✗ Error with mapping strategy {mapping_strategy}: {str(e)}")
             import traceback
@@ -250,7 +254,7 @@ if __name__ == '__main__':
     print(f"All mapping strategies tested!")
     print(f"Results saved to:")
     print(f"  - {csv_filename}")
-    print(f"  - {energy_csv_filename}")
+    #print(f"  - {energy_csv_filename}")
     print(f"{'='*80}\n")
         
 
