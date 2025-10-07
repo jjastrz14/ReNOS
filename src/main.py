@@ -95,12 +95,12 @@ if __name__ == "__main__":
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
     #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
-    model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
-    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+    #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
+    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
 
     model = fuse_conv_bn(model, verbose=True)
     
-    partitioning_per_layer = [(0, 4, 5)]
+    partitioning_per_layer = [(2, 4, 3)]
 
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")

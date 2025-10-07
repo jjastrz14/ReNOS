@@ -18,7 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="GA_parallel"
-RESULT_DIR="ISCAS_sub_ResNetEarly"
+RESULT_DIR="ISCAS_sub_ResNetEarly_2"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
