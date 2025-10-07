@@ -18,7 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="ACO_parallel"
-RESULT_DIR="ACO_ISCAS_AlexNet"
+RESULT_DIR="ACO_ISCAS_MobileNet"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
