@@ -17,8 +17,8 @@ module load pybind11/2.11.1-GCCcore-12.3.0
 source ~/renos/bin/activate
 
 
-ALGO="GA_parallel"
-RESULT_DIR="ISCAS_sub_Vgg16early2"
+ALGO="ACO_parallel"
+RESULT_DIR="ACO_ISCAS_AlexNet"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
