@@ -97,8 +97,10 @@ if __name__ == "__main__":
     #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
     #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
-    model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
+    #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
+    model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False)
 
+    
     model = fuse_conv_bn(model, verbose=True)
     
     partitioning_per_layer = [(3, 4, 3)]
