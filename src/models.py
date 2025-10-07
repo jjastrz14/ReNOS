@@ -230,7 +230,7 @@ def ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False
         x = ResBlock(x, filters=64, strides=(1, 1))
     
     # Final layers
-    x = layers.GlobalAveragePooling2D()(x)
+    #x = layers.GlobalAveragePooling2D()(x)
     x = layers.Dense(num_classes, activation='softmax')(x)
     
     model = keras.Model(inputs=inputs, outputs=x)
@@ -241,6 +241,79 @@ def ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False
     
     return model
 
+
+def MobileNetv1(input_shape=(32, 32, 3), num_classes=10, verbose=False):
+
+    def depthwise_separable_conv(x, filters, strides=(1, 1)):
+        """
+        Depthwise Separable Convolution block.
+
+        Consists of:
+        1. Depthwise Conv: 3x3 conv on each input channel separately
+        2. BatchNorm + ReLU
+        3. Pointwise Conv: 1x1 conv to combine channels
+        4. BatchNorm + ReLU
+        """
+        # Depthwise convolution
+        x = layers.DepthwiseConv2D(kernel_size=(3, 3),
+                                    strides=strides,
+                                    padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.ReLU()(x)
+
+        # Pointwise convolution (1x1)
+        x = layers.Conv2D(filters, kernel_size=(1, 1),
+                            strides=(1, 1),
+                            padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.ReLU()(x)
+
+        return x
+
+    inputs = layers.Input(shape=input_shape)
+
+    # Initial standard convolution: 32x32x3 -> 16x16x32
+    x = layers.Conv2D(32, kernel_size=(3, 3), strides=(2, 2),
+                        padding='same')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+
+    # Depthwise Separable Convolution blocks
+    # Block 1: 16x16x32 -> 16x16x64
+    x = depthwise_separable_conv(x, 64, strides=(1, 1))
+
+    # Block 2: 16x16x64 -> 8x8x128
+    x = depthwise_separable_conv(x, 128, strides=(2, 2))
+
+    # Block 3: 8x8x128 -> 4x4x256
+    x = depthwise_separable_conv(x, 256, strides=(2, 2))
+
+    # Block 4: 4x4x256 -> 4x4x512
+    x = depthwise_separable_conv(x, 512, strides=(1, 1))
+
+    # Block 5: 4x4x512 -> 2x2x1024
+    x = depthwise_separable_conv(x, 1024, strides=(2, 2))
+
+    # Final block: 2x2x1024 -> 2x2x1024
+    x = depthwise_separable_conv(x, 1024, strides=(1, 1))
+
+    # Global Average Pooling: 2x2x1024 -> 1x1x1024
+    #x = layers.GlobalAveragePooling2D()(x)
+
+    # Classifier: 1024 -> num_classes
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = keras.Model(inputs=inputs, outputs=outputs)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape: {outputs.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+
+    return model
 
 
 def ResNet_early_blocks(input_shape=(32, 32, 3), num_classes=10, verbose=False):
