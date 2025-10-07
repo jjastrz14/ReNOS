@@ -94,9 +94,13 @@ if __name__ == "__main__":
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
-    model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
-    
+    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
+    model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
+    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+
     model = fuse_conv_bn(model, verbose=True)
+    
+    partitioning_per_layer = [(0, 4, 5)]
 
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
@@ -119,7 +123,7 @@ if __name__ == "__main__":
     #spatial, output, input
     #parts, deps = build_partitions(model, grid, chosen_splitting_strategy = "input", grouping = False, verbose = True)
     
-    partitioner_tuples = [(0, 1, 1)] + [(2, 6, 5)] * (len(model.layers))
+    partitioner_tuples = [(0, 1, 1)] + partitioning_per_layer * (len(model.layers))
     num_partitions = 2**partitioner_tuples[1][0]*partitioner_tuples[1][1]*partitioner_tuples[1][2]
         
     dep_graph = TaskGraph(source = grid.source, drain = grid.drain)

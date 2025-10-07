@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_lem
-#SBATCH --time=10:05:00       #time limit HH:MM:SS
+#SBATCH --time=24:05:00       #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128  #number of threads per task
@@ -18,7 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="GA_parallel"
-RESULT_DIR="ISCAS_sub_AlexNet"
+RESULT_DIR="ISCAS_sub_ResNetEarly"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
