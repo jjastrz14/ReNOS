@@ -35,6 +35,8 @@ import multiprocessing as mp
 import concurrent.futures
 from utils.aco_utils import Ant, vardict, walk_batch, update_pheromones_batch, manhattan_distance, random_heuristic_update
 from utils.partitioner_utils import PE
+from utils.partitioner_utils import row_wise_mapping
+
 
 
 class OptimizerType(enum.Enum):
@@ -186,8 +188,6 @@ class AntColony(BaseOpt):
             if task != "start" and task != "end":
                 mapping_norm[task] = int(init_genes[task_idx])
 
-        # Apply the mapping to the task graph
-        import mapper as ma
         mapper_norm = ma.Mapper()
         mapper_norm.init(self.task_graph, self.domain)
         mapper_norm.set_mapping(mapping_norm)
@@ -206,8 +206,14 @@ class AntColony(BaseOpt):
         
         print(f"Initial fitness norm result rounded: {result_norm}")
         
-        self.upper_latency_bound = result_norm 
-        
+        self.upper_latency_bound = result_norm
+
+        # If start_row_wise is enabled, generate the row-wise path for first iteration
+        if self.par.start_row_wise:
+            print("\nGenerating row-wise path for first iteration...")
+            self.row_wise_path = row_wise_mapping(self.task_graph, self.domain, verbose=False)
+            print(f"Row-wise path generated with {len(self.row_wise_path)} tasks")
+
         print("Finished on_start_fitness_norm, upper_latency_bound set to:", self.upper_latency_bound)
 
     def run_and_show_traces(self, single_iteration_func, **kwargs):
@@ -523,8 +529,8 @@ class AntColony(BaseOpt):
         mapper.set_mapping(mapping)
         mapper.mapping_to_json(self.CONFIG_DUMP_DIR + "/dump{}.json".format(ant_id), file_to_append=self.ARCH_FILE)
         
-        if verbose:
-            plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
+        #if verbose:
+        #    plot_mapping_gif(mapper, "../visual/solution_mapping.gif")
 
         # Use the reusable stub instance
         if self.analytical_model:
@@ -540,23 +546,22 @@ class AntColony(BaseOpt):
     def generate_colony_paths(self):
         colony_paths = []
 
-        # If row-wise path available, use it for first ant in first iteration
+        # If row-wise path available, use it for ALL ants in first iteration
         if self.row_wise_path is not None:
-            print("Using row-wise path for ant 0 in first iteration")
-            path_length = self.path_length(0, self.row_wise_path)
-            colony_paths.append((0, self.row_wise_path, path_length[0]))
-            # Clear it so it's only used once
+            print("Using row-wise path for ALL ants in first iteration")
+            for ant_id in range(self.par.n_ants):
+                path_length = self.path_length(ant_id, self.row_wise_path)
+                colony_paths.append((ant_id, self.row_wise_path, path_length[0]))
+            # Clear it so it's only used once (first iteration only)
             self.row_wise_path = None
-            start_idx = 1  # Start from ant 1
         else:
-            start_idx = 0
-
-        for _ in range(start_idx, self.par.n_ants):
-            ant_path = self.generate_ant_path()
-            #pass and id and ant_path to restart to measure the path length
-            path_length = self.path_length( _ , ant_path)
-            #append ant_id, ant_path and length of this path
-            colony_paths.append((_ , ant_path, path_length[0]))
+            # Normal path generation for all ants
+            for ant_id in range(self.par.n_ants):
+                ant_path = self.generate_ant_path()
+                #pass ant_id and ant_path to restart to measure the path length
+                path_length = self.path_length(ant_id, ant_path)
+                #append ant_id, ant_path and length of this path
+                colony_paths.append((ant_id, ant_path, path_length[0]))
         return colony_paths
     
     def evaporate_pheromones(self, step):
@@ -681,9 +686,9 @@ class ParallelAntColony(AntColony):
             processes=self.n_processes,
             initializer=ParallelAntColony.init,
             initargs=(self.tau_start, self.tau, self.eta,
-                     (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
-                     (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
-                     self.upper_latency_bound),
+                        (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
+                        (self.task_graph.n_nodes-1, self.domain.size, self.domain.size),
+                        self.upper_latency_bound),
             maxtasksperchild=None  # Keep workers alive indefinitely
         )
         
@@ -793,29 +798,21 @@ class ParallelAntColony(AntColony):
         # Generate colony paths using persistent worker pool
         # Pool is created once in run() and reused across all iterations
 
-        # If row-wise path available, inject it for first ant in first iteration
+        # If row-wise path available, use it for ALL ants in first iteration
         if self.row_wise_path is not None:
-            print("Using row-wise path for ant 0 in first iteration (parallel)")
+            print("Using row-wise path for ALL ants in first iteration (parallel)")
 
-            # Compute path length for row-wise path using ant 0
+            # Since all ants use the same row-wise path, compute path length once
             ant_0 = self.ants[0]
-            path_length_result = ant_0.path_lenght(0, self.row_wise_path)
-
+            path_length_result = ant_0.path_lenght(self.task_graph, self.domain, self.row_wise_path)
             # Extract the path length value (it returns tuple: result, logger, json_filename)
             path_length = path_length_result[0]
 
-            # Start colony paths with row-wise solution
-            colony_paths = [(0, self.row_wise_path, path_length)]
+            # Create colony paths with same row-wise solution for all ants
+            colony_paths = [(i, self.row_wise_path, path_length) for i in range(self.par.n_ants)]
 
-            # Clear row-wise path so it's only used once
+            # Clear row-wise path so it's only used once (first iteration only)
             self.row_wise_path = None
-
-            # Generate remaining ants' paths in parallel (ants 1 to n-1)
-            remaining_colony_paths = self.pool.map_async(walk_batch, [(self.ants[start:end], self.seed) for start, end in self.intervals if start > 0])
-            remaining_colony_paths = remaining_colony_paths.get()
-
-            # Unpack batches and add to colony paths
-            colony_paths.extend([path for batch in remaining_colony_paths for path in batch])
         else:
             # Normal parallel generation for all ants
             colony_paths = self.pool.map_async(walk_batch, [(self.ants[start:end], self.seed) for start, end in self.intervals])
@@ -1055,9 +1052,16 @@ class GeneticAlgorithm(BaseOpt):
 
         self.upper_latency_bound = result_norm
 
-        # If using row-wise initialization, inject it into the initial population
+        # If using row-wise initialization, inject it into ALL individuals in the initial population
         if self.par.start_row_wise:
-            print("Injecting row-wise solution into initial population...")
+            print("\nInjecting row-wise solution into ALL individuals in initial population...")
+            # Get the actual row-wise mapping
+            path = row_wise_mapping(self.task_graph, self.domain, verbose=False)
+
+            # Construct mapping dictionary (excluding start and end)
+            mapping = {task_id: int(next_node) for task_id, _, next_node in path
+                        if task_id != "start" and task_id != "end"}
+
             # Convert mapping to gene format (list of PE assignments for each task)
             row_wise_genes = []
             for task in self.tasks:
@@ -1066,11 +1070,12 @@ class GeneticAlgorithm(BaseOpt):
                 elif task == "end":
                     row_wise_genes.append(self.task_graph.DRAIN_POINT)
                 else:
-                    row_wise_genes.append(mapping_norm[task])
+                    row_wise_genes.append(mapping[task])
 
-            # Replace first solution in population with row-wise solution
-            self.ga_instance.population[0] = np.array(row_wise_genes)
-            print(f"Row-wise solution injected as solution 0")
+            # Replace ALL solutions in population with row-wise solution
+            for i in range(self.ga_instance.sol_per_pop):
+                self.ga_instance.population[i] = np.array(row_wise_genes)
+            print(f"Row-wise solution injected into all {self.ga_instance.sol_per_pop} individuals")
 
         print("\nFinished on_start_fitness_norm, upper_latency_bound set to:", self.upper_latency_bound)  
         
@@ -1234,12 +1239,15 @@ class ParallelGA(GeneticAlgorithm):
         
         self.upper_latency_bound = result_norm_median
 
-        # If using row-wise initialization, inject it into the initial population
+        # If using row-wise initialization, inject it into ALL individuals in the initial population
         if self.par.start_row_wise:
-            print("Injecting row-wise solution into initial population...")
+            print("\nInjecting row-wise solution into ALL individuals in initial population...")
             # Get the row-wise mapping from first normalization run
-            from utils.partitioner_utils import row_wise_mapping
             path = row_wise_mapping(self.task_graph, self.domain, verbose=False)
+
+            # Construct mapping dictionary (excluding start and end)
+            mapping = {task_id: int(next_node) for task_id, _, next_node in path
+                        if task_id != "start" and task_id != "end"}
 
             # Convert mapping to gene format
             row_wise_genes = []
@@ -1249,15 +1257,12 @@ class ParallelGA(GeneticAlgorithm):
                 elif task == "end":
                     row_wise_genes.append(self.task_graph.DRAIN_POINT)
                 else:
-                    # Find task in path
-                    for task_id, _, next_node in path:
-                        if task_id == task:
-                            row_wise_genes.append(int(next_node))
-                            break
+                    row_wise_genes.append(mapping[task])
 
-            # Replace first solution in population with row-wise solution
-            ga_instance.population[0] = np.array(row_wise_genes)
-            print(f"Row-wise solution injected as solution 0")
+            # Replace ALL solutions in population with row-wise solution
+            for i in range(ga_instance.sol_per_pop):
+                ga_instance.population[i] = np.array(row_wise_genes)
+            print(f"Row-wise solution injected into all {ga_instance.sol_per_pop} individuals")
 
         print("\nFinished on_start_fitness_norm_parallel, upper_latency_bound set to:", self.upper_latency_bound)
 

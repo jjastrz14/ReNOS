@@ -48,26 +48,4 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
     print(f"BookSim2 result: {booksim_result} cycles")
     results['booksim_latency'] = booksim_result
     
-    # Calculate comparison metrics
-    if booksim_result > 0:
-        percentage_diff = abs(total_latency - booksim_result) / booksim_result * 100
-        ratio = total_latency / booksim_result
-        results['percentage_diff'] = percentage_diff
-        results['ratio'] = ratio
-        
-        print(f"Difference: {abs(total_latency - booksim_result)} cycles ({percentage_diff:.2f}%)")
-        print(f"Analytical/BookSim2 ratio: {ratio:.2f}x")
-        
-        if total_latency > booksim_result:
-            print(f"Analytical model is {ratio:.2f}x slower than BookSim2")
-            results['comparison'] = f"{ratio:.2f}x slower"
-        else:
-            print(f"Analytical model is {1/ratio:.2f}x faster than BookSim2")
-            results['comparison'] = f"{1/ratio:.2f}x faster"
-    else:
-        print("Warning: BookSim2 returned 0 cycles, cannot calculate ratio")
-        results['percentage_diff'] = None
-        results['ratio'] = None
-        results['comparison'] = "BookSim2 returned 0 cycles"
-    
     return results

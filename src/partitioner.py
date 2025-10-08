@@ -41,10 +41,10 @@ if __name__ == '__main__':
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
+    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
     
     #model = VGG_16_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=True)
-    #model = VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=True)
+    model = VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=True)
 
     #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
@@ -64,8 +64,8 @@ if __name__ == '__main__':
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source = source, drain = drain)
 
     # Generate all partition combinations
-    combinations = [(i, j, k) for i in range(0, number_of_parts) for j in range(1, number_of_parts) for k in range(1, number_of_parts)]
-
+    #combinations = [(i, j, k) for i in range(0, number_of_parts) for j in range(1, number_of_parts) for k in range(1, number_of_parts)]
+    combinations = [(0,2,2)]
     # Prepare CSV file
     csv_filename = f"./data/partitioner_data/partition_statistics_{model_name}.csv"
     os.makedirs("./data/partitioner_data", exist_ok=True)

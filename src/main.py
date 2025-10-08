@@ -94,9 +94,9 @@ if __name__ == "__main__":
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
-    model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
+    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
-    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
     #model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False)
     #model = VGG_16_early_layers((32, 32, 3), num_classes=10, verbose=True)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     
     model = fuse_conv_bn(model, verbose=True)
     
-    partitioning_per_layer = [(0, 9, 9)]
+    partitioning_per_layer = [(0, 2, 4)]
 
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
@@ -154,16 +154,16 @@ if __name__ == "__main__":
         print("\n ...Running Ant Colony Optimization...")
 
         params = op.ACOParameters(
-            n_ants = 512,
+            n_ants = 1, #512,
             rho = 0.05, #evaporation rate
-            n_best = 5,
-            n_iterations = 100,
+            n_best = 1,
+            n_iterations = 2,
             alpha = 1.,
             beta = 1.2,
             is_analytical = True, #use analytical model instead of cycle-accurate simulator
             start_row_wise= True, #start from a row-wise mapping
         )
-        n_procs = 128
+        n_procs = 5 #128
         
         if args.algo == "ACO_parallel":
             print(f"Creating the Parallel Ant Colony Optimization instance with {n_procs} processes running in parallel ants: {params.n_ants} for {params.n_iterations} iterations.")
