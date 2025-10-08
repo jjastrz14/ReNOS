@@ -204,7 +204,6 @@ class Ant:
             if task_id not in ("start", "end"):
                 
                 #Lack of the fallback mechanism for the case when no resources are available
-                
                 resources[next_node].mem_used += task_size
             
             #add step to path
