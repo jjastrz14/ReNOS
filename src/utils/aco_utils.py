@@ -23,8 +23,7 @@ import mapper as mp
 from dirs import get_CONFIG_DUMP_DIR, get_ARCH_FILE
 from utils.partitioner_utils import PE
 from domain import Grid, Topology
-
-
+import multiprocessing
 import matplotlib.pyplot as plt
 
 # a utility function to compute manhattan distance
@@ -140,7 +139,6 @@ class Ant:
         mapper.set_mapping(mapping)
 
         # Use process ID + ant ID to avoid file conflicts in parallel execution
-        import multiprocessing
         pid = multiprocessing.current_process().pid
         json_filename = self.CONFIG_DUMP_DIR + "/dump_{}_{}.json".format(pid, self.id)
         mapper.mapping_to_json(json_filename, file_to_append=self.ARCH_FILE)
