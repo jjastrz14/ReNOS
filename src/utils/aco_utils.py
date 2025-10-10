@@ -198,7 +198,7 @@ class Ant:
                 next_node = drain_node
             else:
                 # Pick the next node based on pheromone, heuristic, and resource availability
-                next_node = self.pick_move(task_id, d_level, current_node, resources, task_size, path, random_heuristic = False)
+                next_node = self.pick_move(task_id, d_level, current_node, resources, task_size, path, random_heuristic = True)
 
             # update the resources
             if task_id not in ("start", "end"):

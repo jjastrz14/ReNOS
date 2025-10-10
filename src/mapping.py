@@ -34,6 +34,7 @@ import time
 import csv
 import os
 import json
+import argparse
 
 
 def count_operational_layers(model):
@@ -45,20 +46,54 @@ def count_operational_layers(model):
     return count
 
 
+def get_model(model_name, verbose=True):
+    """Load model based on name"""
+    models_config = {
+        'AlexNet': (AlexNet, (32, 32, 3), {'num_classes': 10, 'verbose': verbose}),
+        'VGG_16_early': (VGG_16_early_layers, (32, 32, 3), {'num_classes': 10, 'verbose': verbose}),
+        'VGG_16_late': (VGG_16_late_layers, (4, 4, 256), {'num_classes': 10, 'verbose': verbose}),
+        'MobileNetv1': (MobileNetv1, (32, 32, 3), {'num_classes': 10, 'verbose': verbose}),
+        'ResNet32_early': (ResNet32_early_blocks, (32, 32, 3), {'verbose': verbose}),
+        'ResNet32_mid': (ResNet32_mid_blocks, (32, 32, 16), {'num_classes': 10, 'verbose': verbose}),
+        'ResNet32_late': (ResNet32_late_blocks, (16, 16, 32), {'num_classes': 10, 'verbose': verbose}),
+    }
+
+    if model_name not in models_config:
+        raise ValueError(f"Unknown model: {model_name}. Available: {list(models_config.keys())}")
+
+    model_class, input_shape, kwargs = models_config[model_name]
+    model = model_class(input_shape, **kwargs)
+    model = fuse_conv_bn(model, verbose=verbose)
+    return model
+
+
 if __name__ == '__main__':
-    #done 
-    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
-    #model = VGG_16_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=True)
-    #model = VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=True)
-    #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True) 
-    #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
-    #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Run mapping simulations with configurable parameters')
+    parser.add_argument('-model', '--model', type=str, required=True,
+                        choices=['AlexNet', 'VGG_16_early', 'VGG_16_late', 'MobileNetv1',
+                                'ResNet32_early', 'ResNet32_mid', 'ResNet32_late'],
+                        help='Model to use for simulation')
+    parser.add_argument('-config', '--config', type=int, nargs=3, required=True,
+                        metavar=('SPATIAL', 'OUTPUT', 'INPUT_SPLIT'),
+                        help='Configuration tuple: spatial output input_split')
+    parser.add_argument('-mapping', '--mapping', type=str, required=True,
+                        choices=['random', 'row_wise', 'column_wise'],
+                        help='Mapping strategy to use')
+    parser.add_argument('-runs', '--runs', type=int, default=10,
+                        help='Number of runs (only for random mapping, default: 10)')
+    parser.add_argument('-run_booksim', '--run_booksim', type=lambda x: x.lower() == 'true',
+                        default=False,
+                        help='Run Booksim2 simulation (True/False, default: False)')
 
-    model = ResNet32_late_blocks((16, 16, 32), num_classes=10, verbose=True)
-    # Model setup
-    model = fuse_conv_bn(model, verbose=True)
+    args = parser.parse_args()
 
-    model_name = "ResNet32_late"
+    # Load model
+    print(f"\n{'='*80}")
+    print(f"Loading model: {args.model}")
+    print(f"{'='*80}\n")
+    model = get_model(args.model, verbose=True)
+    model_name = args.model
     result_file = "./data/mapping_comparison"
 
     # Prepare CSV files
@@ -77,13 +112,13 @@ if __name__ == '__main__':
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
 
-    # Configuration to test
-    configuration = (3, 4, 3)  # (spatial, output, input_split)
+    # Configuration from command line
+    configuration = tuple(args.config)  # (spatial, output, input_split)
 
-    # Mapping strategies to test
-    mapping_strategies = ['row_wise', 'column_wise']
+    # Determine number of runs (for random mapping)
+    num_runs = args.runs if args.mapping == 'random' else 1
 
-    # CSV header
+    # CSV header - always include all fields
     fieldnames = [
         'mapping_strategy',
         'num_partitions',
@@ -91,13 +126,22 @@ if __name__ == '__main__':
         'total_tasks',
         'result_analytical',
         'analytical_time',
-        'partitioner_config'
+        'partitioner_config',
+        'result_booksim',
+        'booksim_time',
+        'percentage_diff',
+        'time_gain'
     ]
 
-    # Write header first
-    with open(csv_filename, 'w', newline='') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+    # Check if CSV exists, if not write header
+    csv_exists = os.path.isfile(csv_filename)
+    if not csv_exists:
+        with open(csv_filename, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+        print(f"Created new CSV file: {csv_filename}\n")
+    else:
+        print(f"Appending to existing CSV file: {csv_filename}\n")
 
     spatial, output, input_split = configuration
     print(f"\n{'='*80}")
@@ -129,30 +173,37 @@ if __name__ == '__main__':
     fast_sim = ssfam.FastAnalyticalSimulatorStub()
     booksim_stub = ss.SimulatorStub()
 
-    # Test each mapping strategy
-    for strategy_idx, mapping_strategy in enumerate(mapping_strategies, 1):
+    # Run simulations (multiple times for random mapping)
+    for run_idx in range(num_runs):
         print(f"\n{'='*80}")
-        print(f"[{strategy_idx}/{len(mapping_strategies)}] Testing Mapping Strategy: {mapping_strategy.upper()}")
+        if args.mapping == 'random':
+            print(f"[{run_idx + 1}/{num_runs}] Testing Mapping Strategy: {args.mapping.upper()} (Run {run_idx + 1})")
+        else:
+            print(f"Testing Mapping Strategy: {args.mapping.upper()}")
         print(f"{'='*80}\n")
 
         try:
             # Generate mapping based on strategy
-            if mapping_strategy == 'row_wise':
+            if args.mapping == 'row_wise':
                 path = row_wise_mapping(task_graph, grid, verbose=False)
-            elif mapping_strategy == 'column_wise':
+            elif args.mapping == 'column_wise':
                 path = column_wise_mapping(task_graph, grid, verbose=False)
-            elif mapping_strategy == 'random':
+            elif args.mapping == 'random':
                 path = random_mapping(task_graph, grid, verbose=False)
             else:
-                raise ValueError(f"Unknown mapping strategy: {mapping_strategy}")
+                raise ValueError(f"Unknown mapping strategy: {args.mapping}")
 
             # Construct mapping
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
                         if task_id != "start" and task_id != "end"}
 
-            print(f"Generated {len(mapping)} task mappings using {mapping_strategy}")
+            print(f"Generated {len(mapping)} task mappings using {args.mapping}")
 
-            config_path_file = f"{result_file}/mapping_{model_name}_{mapping_strategy}_{spatial}_{output}_{input_split}.json"
+            # Create unique filename for each run
+            if args.mapping == 'random':
+                config_path_file = f"{result_file}/mapping_{model_name}_{args.mapping}_{run_idx}_{spatial}_{output}_{input_split}.json"
+            else:
+                config_path_file = f"{result_file}/mapping_{model_name}_{args.mapping}_{spatial}_{output}_{input_split}.json"
 
             config_path_file_mapping = f".{config_path_file}"
             mapper = ma.Mapper()
@@ -187,74 +238,64 @@ if __name__ == '__main__':
             else:
                 print("  ✗ Config file missing 'arch' section. Skipping logger setup.")
 
-            '''
-            # Run Booksim2 simulation
-            print("\nRunning Booksim2 simulation...")
-            start_time = time.time()
-            result_booksim, logger = booksim_stub.run_simulation(config_path_file, dwrap=False)
-            booksim_time = time.time() - start_time
-            print(f"  Result: {result_booksim} cycles")
-            print(f"  Time: {booksim_time:.4f} seconds")
+            # Initialize booksim results variables
+            result_booksim = None
+            booksim_time = None
+            percentage_diff = None
+            time_gain = None
 
-            # Export latency and energy analysis to CSV
-            print("\nExporting latency/energy analysis...")
-            try:
-                csv_df = export_simulation_results_to_csv(
-                    logger=logger,
-                    config_path=config_path_file,
-                    output_path=energy_csv_filename,
-                    append=(strategy_idx > 1),  # Append after first strategy
-                    num_partitions=total_partitions,
-                    parts_per_layer=num_partitions_per_layer[1],
-                    partitioner_config=f"{mapping_strategy}_{str(partitioner_tuples[1])}"
-                )
-                print(f"  ✓ Energy analysis saved to: {energy_csv_filename}")
+            # Run Booksim2 simulation if enabled
+            if args.run_booksim:
+                print("\nRunning Booksim2 simulation...")
+                start_time = time.time()
+                result_booksim, logger = booksim_stub.run_simulation(config_path_file, dwrap=False)
+                booksim_time = time.time() - start_time
+                print(f"  Result: {result_booksim} cycles")
+                print(f"  Time: {booksim_time:.4f} seconds")
 
-                # Print energy summary
-                print(f"\n  Energy Summary:")
-                print(f"    PE Energy: {csv_df['energy_PEs_uJ'].values[0]:.3f} µJ")
-                print(f"    Data Flow Energy: {csv_df['energy_data_flow_uJ'].values[0]:.3f} µJ")
-                print(f"    Total Energy: {csv_df['total_energy_uJ'].values[0]:.3f} µJ")
-            except Exception as e:
-                print(f"  ✗ Failed to export energy analysis: {e}")
+                # Calculate metrics
+                percentage_diff = abs(result_fast_anal - result_booksim) / result_booksim * 100
+                time_gain = booksim_time / fast_analytical_time
 
-            # Calculate metrics
-            percentage_diff = abs(result_fast_anal - result_booksim) / result_booksim * 100
-            time_gain = booksim_time / fast_analytical_time
-
-            print(f"\nComparison:")
-            print(f"  Difference: {abs(result_fast_anal - result_booksim)} cycles ({percentage_diff:.2f}%)")
-            print(f"  Time gain: {time_gain:.4f}x")
-
-            
-            '''
-            # Write to CSV immediately after each mapping strategy
+                print(f"\nComparison:")
+                print(f"  Difference: {abs(result_fast_anal - result_booksim)} cycles ({percentage_diff:.2f}%)")
+                print(f"  Time gain: {time_gain:.4f}x")
+            # Write to CSV immediately after each run
             with open(csv_filename, 'a', newline='') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerow({
-                    'mapping_strategy': mapping_strategy,
+                # For random mapping, include run number in strategy name
+                strategy_name = f"{args.mapping}_run{run_idx}" if args.mapping == 'random' else args.mapping
+
+                # Build row data - always include all fields
+                row_data = {
+                    'mapping_strategy': strategy_name,
                     'num_partitions': total_partitions,
                     'parts_per_layer': num_partitions_per_layer[1],
                     'total_tasks': total_tasks,
                     'result_analytical': result_fast_anal,
                     'analytical_time': f"{fast_analytical_time:.4f}",
-                    'partitioner_config': str(partitioner_tuples[1])
-                })
+                    'partitioner_config': str(partitioner_tuples[1]),
+                    'result_booksim': result_booksim if args.run_booksim else 'NaN',
+                    'booksim_time': f"{booksim_time:.4f}" if args.run_booksim and booksim_time else 'NaN',
+                    'percentage_diff': f"{percentage_diff:.2f}" if args.run_booksim and percentage_diff else 'NaN',
+                    'time_gain': f"{time_gain:.4f}" if args.run_booksim and time_gain else 'NaN'
+                }
 
-            print(f"\n✓ Results for {mapping_strategy} appended to {csv_filename}")
-            
+                writer.writerow(row_data)
+
+            print(f"\n✓ Results for {strategy_name} appended to {csv_filename}")
+
         except Exception as e:
-            print(f"\n✗ Error with mapping strategy {mapping_strategy}: {str(e)}")
+            print(f"\n✗ Error with mapping strategy {args.mapping} (run {run_idx}): {str(e)}")
             import traceback
             traceback.print_exc()
-            print(f"  Skipping to next strategy...\n")
+            print(f"  Skipping to next run...\n")
             continue
 
     print(f"\n{'='*80}")
-    print(f"All mapping strategies tested!")
+    print(f"All runs completed!")
     print(f"Results saved to:")
     print(f"  - {csv_filename}")
-    #print(f"  - {energy_csv_filename}")
     print(f"{'='*80}\n")
         
 

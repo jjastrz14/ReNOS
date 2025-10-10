@@ -321,6 +321,12 @@ class AntColony(BaseOpt):
 
         def single_iteration(i, once_every, rho_step = 0):
             all_paths = self.generate_colony_paths()
+
+            # Debug: Check if all paths are identical in first iteration
+            if i == 0 and self.par.start_row_wise:
+                unique_paths = len(set(tuple(map(tuple, path[1])) for path in all_paths))
+                print(f"[AntColony] First iteration: {len(all_paths)} ants generated {unique_paths} unique path(s)")
+
             self.update_pheromones(all_paths)
             # print(self.tau)
             # plot a heatmap of the pheromonesa at dlevel 0 and save it
@@ -543,15 +549,68 @@ class AntColony(BaseOpt):
             return result, logger
 
 
+    def _permute_path(self, path, permutation_rate=0.25):
+        """
+        Create a perturbed version of a path by randomly changing PE assignments for a percentage of tasks.
+
+        Args:
+            path: Original path as list of (task_id, current_node, next_node) tuples
+            permutation_rate: Fraction of tasks to randomly reassign (default 0.25 = 25%)
+
+        Returns:
+            Perturbed path with same structure
+        """
+        perturbed_path = []
+
+        # Get list of available PEs
+        available_pes = list(range(self.domain.size))
+
+        # Track resources to ensure we don't exceed memory constraints
+        from utils.partitioner_utils import PE
+        resources = [PE() for _ in range(self.domain.size)]
+
+        for task_id, current_node, next_node in path:
+            # Don't modify start and end nodes
+            if task_id in ("start", "end"):
+                perturbed_path.append((task_id, current_node, next_node))
+            else:
+                # Randomly decide whether to permute this task (based on permutation_rate)
+                if np.random.random() < permutation_rate:
+                    # Get task size for memory check
+                    task_size = self.task_graph.get_node(task_id)["size"]
+
+                    # Find valid PEs that have enough memory
+                    valid_pes = [pe for pe in available_pes
+                                if resources[pe].mem_used + task_size <= resources[pe].mem_size]
+
+                    if valid_pes:
+                        # Randomly select a new PE from valid options
+                        new_pe = np.random.choice(valid_pes)
+                        resources[new_pe].mem_used += task_size
+                        perturbed_path.append((task_id, current_node, new_pe))
+                    else:
+                        # If no valid PEs, keep original assignment
+                        resources[next_node].mem_used += task_size
+                        perturbed_path.append((task_id, current_node, next_node))
+                else:
+                    # Keep original assignment
+                    task_size = self.task_graph.get_node(task_id)["size"]
+                    resources[next_node].mem_used += task_size
+                    perturbed_path.append((task_id, current_node, next_node))
+
+        return perturbed_path
+
     def generate_colony_paths(self):
         colony_paths = []
 
-        # If row-wise path available, use it for ALL ants in first iteration
+        # If row-wise path available, use it for ALL ants in first iteration with random perturbations
         if self.row_wise_path is not None:
-            print("Using row-wise path for ALL ants in first iteration")
+            print("Using row-wise path with 25% random perturbations for all ants in first iteration")
             for ant_id in range(self.par.n_ants):
-                path_length = self.path_length(ant_id, self.row_wise_path)
-                colony_paths.append((ant_id, self.row_wise_path, path_length[0]))
+                # Create a perturbed version of the row-wise path for this ant
+                perturbed_path = self._permute_path(self.row_wise_path, permutation_rate=0.25)
+                path_length = self.path_length(ant_id, perturbed_path)
+                colony_paths.append((ant_id, perturbed_path, path_length[0]))
             # Clear it so it's only used once (first iteration only)
             self.row_wise_path = None
         else:
@@ -575,7 +634,7 @@ class AntColony(BaseOpt):
     def update_pheromones(self, colony_paths):
         if self.par.n_best is None:
             self.par.n_best = len(colony_paths)
-        sorted_paths = sorted(colony_paths, key = lambda x : x[1])
+        sorted_paths = sorted(colony_paths, key = lambda x : x[2])
         best_paths = sorted_paths[:self.par.n_best]
         
         for ant_id, path, path_length in best_paths:
@@ -698,6 +757,12 @@ class ParallelAntColony(AntColony):
 
         def single_iteration(i, once_every, rho_step = 0):
             all_paths = self.generate_colony_paths()
+
+            # Debug: Check if all paths are identical in first iteration
+            if i == 0 and self.par.start_row_wise:
+                unique_paths = len(set(tuple(map(tuple, path[1])) for path in all_paths))
+                print(f"[ParallelAntColony] First iteration: {len(all_paths)} ants generated {unique_paths} unique path(s)")
+
             self.update_pheromones(all_paths)
 
             # # plot a heatmap of the pheromonesa at dlevel 0
@@ -798,18 +863,21 @@ class ParallelAntColony(AntColony):
         # Generate colony paths using persistent worker pool
         # Pool is created once in run() and reused across all iterations
 
-        # If row-wise path available, use it for ALL ants in first iteration
+        # If row-wise path available, use it for ALL ants in first iteration with random perturbations
         if self.row_wise_path is not None:
-            print("Using row-wise path for ALL ants in first iteration (parallel)")
+            print("Using row-wise path with 25% random perturbations for all ants in first iteration (parallel)")
 
-            # Since all ants use the same row-wise path, compute path length once
-            ant_0 = self.ants[0]
-            path_length_result = ant_0.path_lenght(self.task_graph, self.domain, self.row_wise_path)
-            # Extract the path length value (it returns tuple: result, logger, json_filename)
-            path_length = path_length_result[0]
-
-            # Create colony paths with same row-wise solution for all ants
-            colony_paths = [(i, self.row_wise_path, path_length) for i in range(self.par.n_ants)]
+            colony_paths = []
+            # Each ant gets a perturbed version of the row-wise path
+            for i, ant in enumerate(self.ants):
+                # Create a perturbed version of the row-wise path for this ant
+                perturbed_path = self._permute_path(self.row_wise_path, permutation_rate=0.25)
+                path_length_result = ant.path_lenght(self.task_graph, self.domain, perturbed_path)
+                # Extract values (it returns tuple: result, logger, json_filename)
+                path_length = path_length_result[0]
+                json_filename = path_length_result[2]
+                # Include json_filename as 4th element for parallel ACO compatibility
+                colony_paths.append((i, perturbed_path, path_length, json_filename))
 
             # Clear row-wise path so it's only used once (first iteration only)
             self.row_wise_path = None

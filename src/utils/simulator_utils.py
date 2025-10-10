@@ -35,11 +35,11 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
         print("Running the NoC simulator on the best path found...\n")
     
     # Run analytical simulator
-    print("Running analytical model...")
-    stub_anal = ssam.FastAnalyticalSimulatorStub()
-    total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
-    print(f"Analytical model result: {total_latency} cycles")
-    results['analytical_latency'] = total_latency
+    #print("Running analytical model...")
+    #stub_anal = ssam.FastAnalyticalSimulatorStub()
+    #total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
+    #print(f"Analytical model result: {total_latency} cycles")
+    #results['analytical_latency'] = total_latency
     
     # Run BookSim2 simulator for comparison
     print("Running BookSim2 simulator for comparison...")
