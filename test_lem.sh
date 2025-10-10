@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_lem
-#SBATCH --time=12:05:00       #time limit HH:MM:SS
+#SBATCH --time=00:10:00       #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128  #number of threads per task
@@ -18,6 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="GA_parallel"
+ALGO_PREFIX="GA"  # The actual directory prefix (without _parallel)
 RESULT_DIR="ACO_ISCAS_AlexNet_run"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
@@ -53,8 +54,8 @@ echo "Simulation completed at $(date)"
 # Copy results back
 echo "Copying results to $RESULT_DIR_HOME"
 
-if ls ./data/"${ALGO}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
-    cp -r "./data/${ALGO}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
+if ls ./data/"${ALGO_PREFIX}_${RESULT_DIR}_"* 1> /dev/null 2>&1; then
+    cp -r "./data/${ALGO_PREFIX}_${RESULT_DIR}_"* "$RESULT_DIR_HOME/" || { echo "Failed to copy results"; exit 1; }
     echo "Results copied successfully at $(date)"
 else
     echo "WARNING: No result files found to copy"

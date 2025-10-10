@@ -94,9 +94,9 @@ if __name__ == "__main__":
     #model = VGG_early_layers((32, 32, 3), verbose=True)
     #model = VGG_late_layers((14, 14, 512), verbose=True)
     
-    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True) [(1, 2, 3)]
+    model = AlexNet((32, 32, 3), num_classes=10, verbose=True) #[(1, 2, 3)]
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True) #[(0, 2, 3)]
-    model = ResNet32_early_blocks((32, 32, 3), verbose=True) #[(0, 2, 4)]
+    #model = ResNet32_early_blocks((32, 32, 3), verbose=True) #[(0, 2, 4)]
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True) #[(0, 2, 5)]
     #model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False) #[(1, 3, 3)]
     #model = VGG_16_early_layers((32, 32, 3), num_classes=10, verbose=True) #[(1, 2, 1)]
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     
     model = fuse_conv_bn(model, verbose=True)
     
-    partitioning_per_layer = [(2, 2, 2)]
+    partitioning_per_layer = [(1, 2, 3)]
 
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
@@ -201,14 +201,14 @@ if __name__ == "__main__":
         
         params = op.GAParameters(
         sol_per_pop = 512, #30,
-        n_parents_mating= 50, #Number of solutions to be selected as parents.
+        n_parents_mating= 100, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 100, #800,
+        n_generations = 1,#1000, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
-        start_row_wise= True, #start from a row-wise mapping
+        start_row_wise= False, #start from a row-wise mapping
         )
         
         n_procs = 128
