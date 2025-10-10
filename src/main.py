@@ -180,13 +180,13 @@ if __name__ == "__main__":
         plot_convergence(get_ACO_DIR(), save_path=get_ACO_DIR() + "/convg_ACO_" + get_timestamp() + ".png")
         
         # Compare simulators and visualize results
-        results = compare_simulators_and_visualize(
-            best_solution_path=get_ACO_DIR() + "/best_solution.json",
-            output_dir=get_ACO_DIR(),
-            algorithm_name="ACO",
-            timestamp=get_timestamp(),
-            verbose=False
-        )
+        #results = compare_simulators_and_visualize(
+        #    best_solution_path=get_ACO_DIR() + "/best_solution.json",
+        #    output_dir=get_ACO_DIR(),
+        #    algorithm_name="ACO",
+        #    timestamp=get_timestamp(),
+        #    verbose=False
+        #)
             
         end = time.time()
         elapsed_time = end - start
@@ -230,13 +230,13 @@ if __name__ == "__main__":
         plot_convergence(str(get_GA_DIR()), save_path=get_GA_DIR() + "/convg_GA_" + get_timestamp() + ".png")
         
         # Compare simulators and visualize results
-        results = compare_simulators_and_visualize(
-            best_solution_path=get_GA_DIR() + "/best_solution.json",
-            output_dir=get_GA_DIR(),
-            algorithm_name="GA",
-            timestamp=get_timestamp(),
-            verbose=False  #always creates timeline visualization
-        )
+        #results = compare_simulators_and_visualize(
+        #    best_solution_path=get_GA_DIR() + "/best_solution.json",
+        #    output_dir=get_GA_DIR(),
+        #    algorithm_name="GA",
+        #    timestamp=get_timestamp(),
+        #    verbose=False  #always creates timeline visualization
+        #)
         
         #opt.plot_summary()
         
