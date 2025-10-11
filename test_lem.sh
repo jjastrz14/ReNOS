@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --partition lem-cpu    
 #SBATCH --job-name=renos_lem
-#SBATCH --time=00:10:00       #time limit HH:MM:SS
+#SBATCH --time=50:10:00       #time limit HH:MM:SS
 #SBATCH --nodes=1             #reserve nodes
 #SBATCH --ntasks-per-node=1              #task per all nodes
 #SBATCH --cpus-per-task=128  #number of threads per task
-#SBATCH --mem=150gb               #memory per node
+#SBATCH --mem=50gb               #memory per node
 #SBATCH --gres=storage:lustre:1
 #SBATCH --mail-user=jakub.jastrzebski99@gmail.com
 #SBATCH --mail-type=ALL
@@ -19,7 +19,7 @@ source ~/renos/bin/activate
 
 ALGO="GA_parallel"
 ALGO_PREFIX="GA"  # The actual directory prefix (without _parallel)
-RESULT_DIR="ACO_ISCAS_AlexNet_run"
+RESULT_DIR="AlexNet_fixed_tuple_run_row_wise"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
