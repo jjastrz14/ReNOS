@@ -18,7 +18,7 @@ source ~/renos/bin/activate
 
 
 ALGO="GA_parallel"
-ALGO_PREFIX="GA"  # The actual directory prefix (without _parallel)
+ALGO_PREFIX="${ALGO%_parallel}"
 RESULT_DIR="AlexNet_fixed_tuple_run_row_wise"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 

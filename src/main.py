@@ -161,7 +161,7 @@ if __name__ == "__main__":
             alpha = 1.,
             beta = 1.2,
             is_analytical = True, #use analytical model instead of cycle-accurate simulator
-            start_row_wise= True, #start from a row-wise mapping
+            start_row_wise= False, #start from a row-wise mapping
         )
         n_procs = 128
         
@@ -204,11 +204,11 @@ if __name__ == "__main__":
         n_parents_mating= 100, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 1000, #800,
+        n_generations = 1, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
-        start_row_wise= True, #start from a row-wise mapping
+        start_row_wise= False, #start from a row-wise mapping
         )
         
         n_procs = 128
