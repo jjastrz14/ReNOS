@@ -1944,7 +1944,7 @@ bool TrafficManager::_SingleSim( )
 
 
 
-int TrafficManager::RunUserDefined(){
+long long TrafficManager::RunUserDefined(){
 
     // Ensure that the traffic pattern is user defined (for all classes)
     bool is_user_defined = true;
@@ -2070,7 +2070,7 @@ int TrafficManager::RunUserDefined(){
 
 
 
-int TrafficManager::Run( )
+long long TrafficManager::Run( )
 {
 
     for ( int sim = 0; sim < _total_sims; ++sim ) {

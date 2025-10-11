@@ -50,7 +50,7 @@ Stats * GetStats(const std::string & name, const SimulationContext* context) {
 
 /////////////////////////////////////////////////////////////////////////////
 
-int Simulate( BookSimConfig const & config, SimulationContext & context, tRoutingParameters & par ) {
+long long Simulate( BookSimConfig const & config, SimulationContext & context, tRoutingParameters & par ) {
   
   vector<Network *> net;
 
@@ -88,7 +88,7 @@ int Simulate( BookSimConfig const & config, SimulationContext & context, tRoutin
   total_time = 0.0;
   gettimeofday(&start_time, NULL);
 
-  int result;
+  long long result;
   if(config.getIntField("user_defined_traffic") > 0){
     result = trafficManager->RunUserDefined();
 
@@ -127,7 +127,7 @@ int Simulate( BookSimConfig const & config, SimulationContext & context, tRoutin
 
 namespace py = pybind11;
 
-std::tuple<int, EventLogger*> SimulateWrapper(const std::string &config_file, const std::string &output_file) {
+std::tuple<long long, EventLogger*> SimulateWrapper(const std::string &config_file, const std::string &output_file) {
 
     // Generate a simulation context
     SimulationContext context;

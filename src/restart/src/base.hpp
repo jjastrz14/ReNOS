@@ -46,11 +46,11 @@ class Clock {
         ~Clock() {};
 
         inline void tick() { _time++; }
-        inline int  time() const { return _time; }
+        inline long long  time() const { return _time; }
         inline void reset() { _time = 0; }
 
     private: //accessed by the friend class TrafficManager
-        int _time;
+        long long _time;
 };
 
 

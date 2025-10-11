@@ -328,8 +328,8 @@ public:
   TrafficManager( const Configuration &config, const vector<Network *> & net, const SimulationContext& context,  const tRoutingParameters& par);
   virtual ~TrafficManager( );
 
-  int Run( );
-  virtual int RunUserDefined( ); 
+  long long Run( );
+  virtual long long RunUserDefined( ); 
 
   virtual void WriteStats( ostream & os = cout ) const ;
   virtual void UpdateStats( ) ;
