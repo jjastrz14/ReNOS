@@ -19,7 +19,7 @@ source ~/renos/bin/activate
 
 ALGO="ACO_parallel"
 ALGO_PREFIX="${ALGO%_parallel}"
-RESULT_DIR="VGG_16_early_fixed_tuple_run_row_wise_false"
+RESULT_DIR="ResNet_late_fixed_tuple_run_row_wise_false"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
