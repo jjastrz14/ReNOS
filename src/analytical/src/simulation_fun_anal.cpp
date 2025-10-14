@@ -28,7 +28,7 @@ public:
     NullStream() : std::ostream(&m_null_buf) {}
 };
 
-std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
+std::tuple<long long, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
                                                      const std::string& output_file) {
     // Static storage for model and logger to ensure they persist
     static std::unique_ptr<AnalyticalModel> static_model;
@@ -65,7 +65,7 @@ std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_
         gettimeofday(&start_time, nullptr);
 
         // Run the simulation
-        int result = static_model->run_simulation();
+        long long result = static_model->run_simulation();
 
         gettimeofday(&end_time, nullptr);
         double execution_time = ((double)(end_time.tv_sec) + (double)(end_time.tv_usec) / 1000000.0) -

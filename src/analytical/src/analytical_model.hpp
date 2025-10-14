@@ -187,7 +187,7 @@ public:
     double get_dependency_completion_time(const std::vector<int>& deps, int node) const;
 
     // Simulation execution
-    int run_simulation();
+    long long run_simulation();
     void process_packets();
     void process_workloads();
     void inject_ready_packets();

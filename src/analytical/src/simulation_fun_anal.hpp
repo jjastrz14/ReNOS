@@ -25,7 +25,7 @@ class AnalyticalModel;
  * @param output_file Path to output file ("-" for stdout, "" for no output)
  * @return Tuple of (simulation_time, logger_pointer)
  */
-std::tuple<int, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
+std::tuple<long long, AnalyticalLogger*> SimulateAnalytical(const std::string& config_file,
                                                     const std::string& output_file = "");
 
 /**

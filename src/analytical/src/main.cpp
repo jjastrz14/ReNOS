@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
         AnalyticalModel model;
         model.configure(config_file);
 
-        int total_cycles = model.run_simulation();
+        long long total_cycles = model.run_simulation();
 
         std::cout << "Simulation completed successfully!" << std::endl;
         std::cout << "Total execution time: " << total_cycles << " cycles" << std::endl;

@@ -432,7 +432,7 @@ void AnalyticalModel::preprocess_packets() {
     //*_output_file << "Preprocessed " << _packets.size() << " packets (converted sizes to flits)" << std::endl;
 }
 
-int AnalyticalModel::run_simulation() {
+long long AnalyticalModel::run_simulation() {
     *_output_file << "Starting analytical simulation..." << std::endl;
 
     // Reserve space for generated packets to prevent vector reallocation and pointer invalidation
