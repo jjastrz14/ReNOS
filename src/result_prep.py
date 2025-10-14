@@ -1,200 +1,99 @@
-from graph import model_to_graph
-from utils.partitioner_utils import search_space_split_factors
-from graph import TaskGraph
-from models import *
-import graph as dg
-from graph import model_to_graph
-import domain as dm
-import mapper as mp
-from utils.partitioner_utils import *
-from utils.plotting_utils import *
-import mapper as ma
-import simulator_stub as ss
-import analytical_simulator_stub as ssam
-from visualizer import plot_timeline
-from utils.ani_utils import visualize_simulation
-from latency_energy_analysis import analyze_logger_events, plot_parallel_execution_comparison
-from latency_energy_analysis import parallel_analysis_to_dataframe
+'''
+==================================================
+File: result_prep.py
+Project: ReNOS
+File Created: Tuesday, 13th October 2025
+Author: Jakub Jastrzebski (jakubandrzej.jastrzebski@polimi.it)
+Under the supervision of: Politecnico di Milano
+==================================================
+'''
+
 import json
 import time
-import os
-import math
+import csv
+import simulator_stub as ss
+import fast_analytical_simulator_stub as ssfam
 
+# ============================================================================
+# SET YOUR PATHS HERE
+# ============================================================================
+data_dir = "./data/mapping_comparison_13October"  # Directory for data files
+best_sol = "ACO_VGG_late_fixed_tuple_run_row_wise_true_2025-10-11_08-35-09"  # Path to your config JSON
+json_path = f"{data_dir}/{best_sol}/best_solution.json"  # Path to your config JSON
+csv_path = f"{data_dir}/mapping_comparison_VGG_16_late.csv"  # Path to your CSV file
+mapping_name = "ACO_row"  # Mapping strategy name
 
-def generate_split_factors(num_partitions, strategy):
-    """
-    Generate split factor tuples for all layers based on number of partitions and strategy.
+# ============================================================================
+# RUN SIMULATIONS
+# ============================================================================
 
-    Parameters:
-    -----------
-    num_partitions : int
-        Desired number of partitions (must be power of 2)
-    strategy : str
-        Partitioning strategy: 'spatial', 'output', or 'input'
+# Initialize simulators
+fast_sim = ssfam.FastAnalyticalSimulatorStub()
+booksim_stub = ss.SimulatorStub()
 
-    Returns:
-    --------
-    dict with split factors for each layer
-    """
+# 1. Run Fast Analytical model
+print("\nRunning Fast Analytical model simulation...")
+start_time = time.time()
+result_fast_anal, logger_fast_anal = fast_sim.run_simulation(json_path, verbose=False)
+fast_analytical_time = time.time() - start_time
+print(f"  Result: {result_fast_anal} cycles")
+print(f"  Time: {fast_analytical_time:.4f} seconds")
 
-    # Calculate the exponent (log base 2 of num_partitions)
-    if num_partitions & (num_partitions - 1) != 0:
-        raise ValueError("num_partitions must be a power of 2")
+# 2. Enable logger and sim_power for Booksim
+print("\nEnabling logger and sim_power in config...")
+with open(json_path, 'r') as f:
+    config = json.load(f)
 
-    exp = int(math.log2(num_partitions))
+if 'arch' in config:
+    config['arch']['logger'] = 1
+    config['arch']['sim_power'] = 1
+    with open(json_path, 'w') as f:
+        json.dump(config, f, indent=2)
+    print("  ✓ Enabled logger and sim_power")
+else:
+    print("  ✗ Warning: Config missing 'arch' section")
 
-    # Define split patterns for each strategy
-    if strategy == "spatial":
-        # Spatial partitioning: split along spatial dimension (first dimension)
-        conv_factors = (exp, 1, 1)
-        dense_factors = (exp, 1, 1)  # Fully connected layers split along output
-    elif strategy == "output":
-        # Output partitioning: split along output channels (second dimension)
-        conv_factors = (0, num_partitions, 1)
-        dense_factors = (exp, 1, 1)  # Fully connected layers split along output
-    elif strategy == "input":
-        # Input partitioning: split along input channels (third dimension)
-        conv_factors = (0, 1, num_partitions)
-        dense_factors = (exp, 1, 1)  # Fully connected layers split along output
-    else:
-        raise ValueError(f"Unknown strategy: {strategy}")
+# 3. Run Booksim2 simulation
+print("\nRunning Booksim2 simulation...")
+start_time = time.time()
+result_booksim, logger_booksim = booksim_stub.run_simulation(json_path, dwrap=False)
+booksim_time = time.time() - start_time
+print(f"  Result: {result_booksim} cycles")
+print(f"  Time: {booksim_time:.4f} seconds")
 
-    # Apply same partitioning to all layers (except input which stays unpartitioned)
-    #early layers resnet
-    return {
-        'input': (0, 1, 1),        # Input layer typically not partitioned
-        'conv2d': conv_factors,
-        'bn': conv_factors,
-        'relu': conv_factors,
-        'conv2d_1': conv_factors,
-        'bn_1': conv_factors,
-        'conv2d_2': conv_factors,
-        'bn_2': conv_factors,
-    }
-    
-    #late layers resnet
-    #return {
-    #    'input': (0, 1, 1),        # Input layer typically not partitioned
-    #    'conv2d': conv_factors,
-    #    'conv2d_3': conv_factors,
-    #    'conv2d_6': conv_factors,
-    #    'batch_normalization': conv_factors,
-    #    'batch_normalization_2': conv_factors,
-    #    'batch_normalization_4': conv_factors,
-    #    'conv2d_1': conv_factors,
-    #    'conv2d_4': conv_factors,
-    #    'conv2d_7': conv_factors,
-    #    'batch_normalization_1': conv_factors,
-    #    'batch_normalization_3': conv_factors,
-    #   'batch_normalization_5': conv_factors,
-    #    'output1': dense_factors,
-    #    'output2': dense_factors,
-    #    'output3': dense_factors,
-    #}
+# 4. Calculate comparison metrics
+percentage_diff = abs(result_fast_anal - result_booksim) / result_booksim * 100
+time_gain = booksim_time / fast_analytical_time
 
-    
+print(f"\nComparison:")
+print(f"  Difference: {abs(result_fast_anal - result_booksim)} cycles ({percentage_diff:.2f}%)")
+print(f"  Time gain: {time_gain:.4f}x")
 
+# 5. Append to CSV
+print(f"\nAppending results to {csv_path}...")
 
-if __name__ == '__main__':
-    #model = single_conv_big((32, 32, 256), num_classes=1, verbose=True)
-    #model = single_conv((10, 10, 3), num_classes=1, verbose=False)
-    #model = ResNet_early_block_test((32, 32, 3), verbose=True)
-    model = ResNet_early_blocks((32,32,3), verbose=True)
-    #model = ResNet_late_blocks(input_shape=(8, 8, 256), verbose=True)
+# Read the header to get fieldnames
+with open(csv_path, 'r') as csvfile:
+    reader = csv.DictReader(csvfile)
+    fieldnames = reader.fieldnames
 
-    all_results = []
-        
-    date = "22Sept_data"
-    path = "./data/22Sept_data"
-    model_name = "model_resnet_early_blocks"
-    
-    x_of_grid = 12
-    source = 0
-    drain = 143
-    grid = dm.Grid()
-    topology = dm.Topology.TORUS
-    grid.init(x_of_grid, 2, topology, source = source, drain = drain)
-    
-    if topology == dm.Topology.MESH:
-        topology_name = "mesh"
-    elif topology == dm.Topology.TORUS: 
-        topology_name = "torus"
-    else:
-        raise ValueError("Unsupported topology")
-    
-    all_strategies = ["spatial", "output", "input"] 
-    partition_counts = [2, 4, 8, 16, 32, 64, 128, 256]  # Or whatever counts you want to test
+# Create row_data with NaN for missing columns
+row_data = {field: 'NaN' for field in fieldnames}  # Initialize all fields with NaN
 
-    for num_partitions in partition_counts:
-        #breakpoint()
-        print(f"\n{'='*60}")
-        print(f"TESTING {num_partitions} PARTITIONS")
-        print(f"{'='*60}")
+# Fill in the data we have
+row_data.update({
+    'mapping_strategy': mapping_name,
+    'result_analytical': result_fast_anal,
+    'analytical_time': f"{fast_analytical_time:.4f}",
+    'result_booksim': result_booksim,
+    'booksim_time': f"{booksim_time:.4f}",
+    'percentage_diff': f"{percentage_diff:.2f}",
+    'time_gain': f"{time_gain:.4f}"
+})
 
-        for strategy in all_strategies:
-            print(f"\nRunning strategy: {strategy} with {num_partitions} partitions")
+# Append the row
+with open(csv_path, 'a', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writerow(row_data)
 
-            # Generate split factors for this configuration
-            split_factors = generate_split_factors(num_partitions, strategy)
-
-            # Define the layer order (must match your model's layer sequence)
-            #resnet early blocks
-            layer_names = ['input', 'conv2d', 'bn', 'relu', 'conv2d_1', 'bn_1', 'conv2d_2', 'bn_2']
-            #resnet late blocks
-            #layer_names = ['input', 'conv2d', 'batch_normalization', 'conv2d_1', 'batch_normalization_1',
-            #                'conv2d_3', 'batch_normalization_2', 'conv2d_4', 'batch_normalization_3',
-            #                'conv2d_6', 'batch_normalization_4', 'conv2d_7', 'batch_normalization_5',
-            #                'output1', 'output2', 'output3']
-            # Automatically create partitioner_tuples from split_factors
-            partitioner_tuples = [split_factors[layer_name] for layer_name in layer_names]
-
-            # Verify partition count using first conv layer
-            first_conv_factors = split_factors['conv2d']
-            calculated_partitions = 2**first_conv_factors[0] * first_conv_factors[1] * first_conv_factors[2]
-            assert calculated_partitions == num_partitions, f"Partition count mismatch: {calculated_partitions} != {num_partitions}"
-            
-            dep_graph = TaskGraph(source = grid.source, drain = grid.drain)
-            #spatial, output, input
-            parts, deps = build_partitions_splitting_input_for_many__tuples(model, grid, partitioning_tuple = partitioner_tuples, grouping = False, verbose = True)
-            
-            #instead of optmisation step, just map following a simple path from source to drain
-            task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
-            path = row_wise_mapping(task_graph, grid, verbose = False)
-            # constuct the mapping form the path
-            mapping = {task_id : int(next_node) for task_id, _, next_node in path if task_id != "start" and task_id != "end"}
-
-            mapper = ma.Mapper()
-            mapper.init(task_graph, grid)
-            mapper.set_mapping(mapping)
-            mapper.mapping_to_json(f"../data/18Sept_data/mapping_{strategy}.json", file_to_append="./config_files/arch.json")
-            
-            with open(f"./data/18Sept_data/mapping_{strategy}.json", "r") as f:
-                data = json.load(f)
-                data["arch"]["logger"] = 1
-            with open(f"./data/18Sept_data/mapping_{strategy}.json", "w") as f:
-                json.dump(data, f, indent = 4)
-            
-            # Measure Booksim2 simulation time
-            print("Booksim2 simulation...")
-            stub = ss.SimulatorStub()
-            start_time = time.time()
-            result, logger = stub.run_simulation(f"./data/18Sept_data/mapping_{strategy}.json", dwrap = False, verbose = False)
-            booksim_time = time.time() - start_time
-            print(f"Booksim2 result: {result}")
-            print(f"Booksim2 simulation time: {booksim_time} seconds")
-            
-            df1, df2, parallel = analyze_logger_events(logger)
-            
-            #save parallel to csv:
-            parallel_df = parallel_analysis_to_dataframe(parallel, strategy_name=strategy)
-            #add column between column 0 and 1 with number of partitions
-            parallel_df.insert(1, 'partitions', num_partitions)
-            #save to csv
-            parallel_df.to_csv(f"./data/18Sept_data/{model_name}_{strategy}_{x_of_grid}x{x_of_grid}_{topology_name}.csv", index=False)
-            
-            all_results.append(parallel_df)
-            
-    # Combine all results
-    combined_df = pd.concat(all_results, ignore_index=True)
-    combined_df.to_csv(f"./data/18Sept_data/{model_name}_{x_of_grid}x{x_of_grid}_{topology_name}_all_strategies_comparison.csv", index=False)
-    
+print(f"✓ Results appended successfully!")
