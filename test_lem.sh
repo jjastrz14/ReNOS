@@ -17,9 +17,9 @@ module load pybind11/2.11.1-GCCcore-12.3.0
 source ~/renos/bin/activate
 
 
-ALGO="ACO_parallel"
+ALGO="GA_parallel"
 ALGO_PREFIX="${ALGO%_parallel}"
-RESULT_DIR="MobileNet_fixed_tuple_run_row_wise_false"
+RESULT_DIR="ResNet_early_fixed_tuple_run_row_wise_false"
 RESULT_DIR_HOME="/home/jjastrz9/tmp/ReNOS/data"
 
 TMPDIR_LUSTRE="/lustre/tmp/slurm/${SLURM_JOB_ID}"
