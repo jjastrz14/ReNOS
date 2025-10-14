@@ -96,15 +96,15 @@ if __name__ == "__main__":
     
     #model = AlexNet((32, 32, 3), num_classes=10, verbose=True) #[(1, 2, 3)]
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True) #[(0, 2, 3)]
-    model = ResNet32_early_blocks((32, 32, 3), verbose=True) #[(0, 2, 4)]
+    #model = ResNet32_early_blocks((32, 32, 3), verbose=True) #[(0, 2, 4)]
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True) #[(0, 2, 5)]
-    #model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False) #[(1, 3, 3)]
+    model = ResNet32_late_blocks(input_shape=(16, 16, 32), num_classes=10, verbose=False) #[(1, 3, 3)]
     #model = VGG_16_early_layers((32, 32, 3), num_classes=10, verbose=True) #[(1, 2, 1)]
     #model = VGG_16_late_layers((4, 4, 256), num_classes=10, verbose=True) #[(0, 1, 3)]
     
     model = fuse_conv_bn(model, verbose=True)
     
-    partitioning_per_layer = [(0, 2, 4)]
+    partitioning_per_layer = [(1, 3, 3)]
 
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
@@ -161,7 +161,7 @@ if __name__ == "__main__":
             alpha = 1.,
             beta = 1.2,
             is_analytical = True, #use analytical model instead of cycle-accurate simulator
-            start_row_wise= False, #start from a row-wise mapping
+            start_row_wise= True, #start from a row-wise mapping
         )
         n_procs = 128
         
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
-        start_row_wise= False, #start from a row-wise mapping
+        start_row_wise= True, #start from a row-wise mapping
         )
         
         n_procs = 128
