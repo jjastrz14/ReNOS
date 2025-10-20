@@ -40,6 +40,12 @@ from typing import Dict, List
 import pandas as pd
 
 
+# Global constants
+# Precision: bytes per parameter
+# 1 = int8, 2 = float16, 4 = float32, 8 = float64
+PRECISION = 2  # Default: float16
+
+
 # Tranformation layers
 
 def _calc_input(layer, input_shape, output_shape):
@@ -514,7 +520,7 @@ def _split_spatial_dims(layer, split_factor, partitions: Union[None, List[Partit
             s_x = 2**split_factor
             s_y = 1
 
-        # Create an arrat of size s_x x s_y to store the output dimensions of the partitions: each object
+        # Create an array of size s_x x s_y to store the output dimensions of the partitions: each object
         # is an array of size 2 (or 1 if the layer is Dense) containing the output dimensions of the partition
         # the array is initialized with zeros : [[0,0], [0,0], ...]
         output_dimensions = np.zeros((s_x, s_y), dtype=object)
@@ -1775,7 +1781,7 @@ def build_partitions_splitting_input_for_many_tuples(model: keras.Model, grid, p
     Args:
     - model: the model to partition
     - partitioning_tuple: either a single tuple (spat, out_ch, in_ch) for all layers,
-                         or a list of tuples with one tuple per layer
+                            or a list of tuples with one tuple per layer
 
     Returns:
     - a dict of partitions: the key is the layer name and the value is a list of PartitionInfo objects
@@ -1891,6 +1897,458 @@ def build_partitions_splitting_input_for_many_tuples(model: keras.Model, grid, p
         partitions, partitions_deps = _build_straight_through_deps(partitions=partitions, partitions_deps=partitions_deps)
 
     return partitions, partitions_deps
+
+
+def get_valid_partition_ranges(layer: keras.layers.Layer) -> Dict:
+    """
+    Determines the valid partition ranges for a given layer based on its dimensions.
+
+    Args:
+    - layer: the Keras layer to analyze
+
+    Returns:
+    - dict with 'spatial_max', 'output_ch_max', 'input_ch_max' indicating maximum split factors
+    """
+
+    # Get layer output shape
+    try:
+        output_shape = layer.output_shape
+        if isinstance(output_shape, list):  # Multiple outputs
+            output_shape = output_shape[0]
+    except:
+        return {'spatial_max': 0, 'output_ch_max': 1, 'input_ch_max': 1, 'error': 'Could not get output shape'}
+
+    # Get layer input shape
+    try:
+        input_shape = layer.input_shape
+        if isinstance(input_shape, list):  # Multiple inputs
+            input_shape = input_shape[0]
+    except:
+        input_shape = None
+
+    ranges = {}
+
+    # Spatial dimensions (H x W for Conv2D, or length for Conv1D)
+    # For split_factor n: creates s_x = 2^((n+1)//2) and s_y = 2^(n//2) partitions
+    # Total partitions = s_x * s_y = 2^n
+    # Each partition is approximately H/s_x by W/s_y
+    if len(output_shape) == 4:  # Conv2D: (batch, H, W, C)
+        H, W = output_shape[1], output_shape[2]
+        if H is not None and W is not None:
+            # Find maximum split_factor where all partitions have enough pixels
+            # The partitioning code distributes H into s_x parts and W into s_y parts
+            # We need each partition to have at least a few pixels to avoid boundary errors
+            # Use integer division to check the minimum partition size
+            spatial_max = 0
+            for sf in range(20):  # Test up to split_factor=20
+                s_x = 2**((sf+1)//2)
+                s_y = 2**(sf//2)
+                # Each partition gets approximately H/s_x by W/s_y pixels
+                # Due to rounding in the partitioning code, some partitions may be smaller
+                # Require at least 4 pixels in each dimension for the smallest partition #important notice
+                min_partition_h = H // s_x
+                min_partition_w = W // s_y
+                if min_partition_h >= 4 and min_partition_w >= 4:
+                    spatial_max = sf
+                else:
+                    break
+            ranges['spatial_max'] = spatial_max
+        else:
+            ranges['spatial_max'] = 0
+
+    elif len(output_shape) == 3:  # Conv1D or Dense: (batch, length, C)
+        length = output_shape[1]
+        if length is not None:
+            # For 1D: s_x = 2^split_factor
+            spatial_max = 0
+            for sf in range(20):
+                s_x = 2**sf
+                if s_x <= length:
+                    spatial_max = sf
+                else:
+                    break
+            ranges['spatial_max'] = spatial_max
+        else:
+            ranges['spatial_max'] = 0
+    else:
+        ranges['spatial_max'] = 0
+
+    # Output channels
+    if len(output_shape) >= 2:
+        output_channels = output_shape[-1]  # Last dimension is channels
+        if output_channels is not None:
+            ranges['output_ch_max'] = output_channels
+        else:
+            ranges['output_ch_max'] = 1
+    else:
+        ranges['output_ch_max'] = 1
+
+    # Input channels
+    if input_shape is not None and len(input_shape) >= 2:
+        input_channels = input_shape[-1]  # Last dimension is channels
+        if input_channels is not None:
+            ranges['input_ch_max'] = input_channels
+        else:
+            ranges['input_ch_max'] = 1
+    else:
+        ranges['input_ch_max'] = 1
+
+    # Add shape information for debugging
+    ranges['output_shape'] = output_shape
+    ranges['input_shape'] = input_shape
+
+    return ranges
+
+
+def _create_virtual_partitions_for_layer_input(current_partitions: List[PartitionInfo]) -> List[PartitionInfo]:
+    """
+    Create virtual partitions representing a hypothetical previous layer.
+    These virtual partitions will have output characteristics matching the current layer's input characteristics,
+    allowing us to count realistic dependency edges.
+
+    Args:
+    - current_partitions: the partitions of the current layer
+
+    Returns:
+    - List of virtual PartitionInfo objects representing the previous layer's partitions
+    """
+    if not current_partitions:
+        return []
+
+    # Create virtual partitions that mimic a previous layer
+    # The output of the virtual layer should match the input of the current layer
+    virtual_partitions = []
+
+    for i, curr_p in enumerate(current_partitions):
+        # Create a virtual partition whose output matches this partition's input
+        virtual_p = PartitionInfo(layer=curr_p.layer)
+        virtual_p.id = f"virtual_prev_{i}"
+
+        # The virtual partition's output bounds match current partition's input bounds
+        virtual_p.out_bounds = curr_p.in_bounds
+        virtual_p.out_ch = curr_p.in_ch
+
+        # Set virtual input bounds (doesn't matter for dependency calculation)
+        virtual_p.in_bounds = curr_p.in_bounds
+        virtual_p.in_ch = curr_p.in_ch
+
+        virtual_partitions.append(virtual_p)
+
+    return virtual_partitions
+
+
+def _create_virtual_partitions_for_layer_output(current_partitions: List[PartitionInfo]) -> List[PartitionInfo]:
+    """
+    Create virtual partitions representing a hypothetical next layer.
+    These virtual partitions will have input characteristics matching the current layer's output characteristics,
+    allowing us to count realistic dependency edges.
+
+    Args:
+    - current_partitions: the partitions of the current layer
+
+    Returns:
+    - List of virtual PartitionInfo objects representing the next layer's partitions
+    """
+    if not current_partitions:
+        return []
+
+    # Create virtual partitions that mimic a next layer
+    # The input of the virtual layer should match the output of the current layer
+    virtual_partitions = []
+
+    for i, curr_p in enumerate(current_partitions):
+        # Create a virtual partition whose input matches this partition's output
+        virtual_p = PartitionInfo(layer=curr_p.layer)
+        virtual_p.id = f"virtual_next_{i}"
+
+        # The virtual partition's input bounds match current partition's output bounds
+        virtual_p.in_bounds = curr_p.out_bounds
+        virtual_p.in_ch = curr_p.out_ch
+
+        # Set virtual output bounds (doesn't matter for dependency calculation)
+        virtual_p.out_bounds = curr_p.out_bounds
+        virtual_p.out_ch = curr_p.out_ch
+
+        virtual_partitions.append(virtual_p)
+
+    return virtual_partitions
+
+
+def build_partitions_single_layer(layer: keras.layers.Layer, partitioning_tuple=(0, 1, 1), verbose: bool = True) -> Tuple[List[PartitionInfo], Dict]:
+    """
+    Creates partitions for a SINGLE layer only, without building inter-layer dependencies.
+    Use this to analyze individual layer characteristics.
+
+    Args:
+    - layer: the Keras layer to partition
+    - partitioning_tuple: a single tuple (spat, out_ch, in_ch) for this layer
+    - verbose: whether to print detailed information
+
+    Returns:
+    - partitions: a list of PartitionInfo objects for this layer
+    - layer_stats: a dict containing statistics about the layer's partitions
+    """
+
+    # Extract partitioning parameters
+    spat, out_ch, in_ch = partitioning_tuple
+
+    # Build partitions for this layer only
+    partitions = _build_partitions_from_layer(layer, spat, out_ch, in_ch)
+
+    # Calculate statistics for this layer
+    layer_stats = {
+        'layer_name': layer.name,
+        'layer_type': layer.__class__.__name__,
+        'num_partitions': len(partitions),
+        'partitioning_strategy': partitioning_tuple,
+    }
+
+    if len(partitions) > 0:
+        # Size statistics
+        sizes = [p.tot_size for p in partitions]
+        layer_stats['mean_partition_size'] = np.mean(sizes)
+        layer_stats['min_partition_size'] = np.min(sizes)
+        layer_stats['max_partition_size'] = np.max(sizes)
+        layer_stats['std_partition_size'] = np.std(sizes)
+        layer_stats['total_size'] = np.sum(sizes)
+
+        # FLOP statistics
+        flops = [p.FLOPs for p in partitions]
+        layer_stats['mean_flops'] = np.mean(flops)
+        layer_stats['min_flops'] = np.min(flops)
+        layer_stats['max_flops'] = np.max(flops)
+        layer_stats['std_flops'] = np.std(flops)
+        layer_stats['total_flops'] = np.sum(flops)
+
+        # MAC statistics
+        macs = [p.MACs for p in partitions]
+        layer_stats['mean_macs'] = np.mean(macs)
+        layer_stats['total_macs'] = np.sum(macs)
+
+        # Weight statistics (if applicable)
+        total_weights = sum([np.prod(w) for p in partitions for w in p.weights_shape])
+        layer_stats['total_weights'] = total_weights
+
+        # BREAKDOWN: Separate statistics for input, output, and weight sizes per partition
+        # These show memory breakdown: input data + output data + weights for each partition
+
+        # Input size per partition (memory needed to store input data)
+        partition_input_sizes = []
+        for p in partitions:
+            if p.in_bounds is not None and len(p.in_bounds) > 0:
+                if len(p.in_bounds[0]) > 1:
+                    input_size = np.prod([p.in_bounds[1][i] - p.in_bounds[0][i] for i in range(len(p.in_bounds[0]))])
+                else:
+                    input_size = p.in_bounds[1][0] - p.in_bounds[0][0]
+                # Multiply by input channels if available
+                if p.in_ch is not None and len(p.in_ch) > 0:
+                    input_size *= (p.in_ch[1] - p.in_ch[0])
+                # Multiply by precision to get actual bytes
+                input_size *= PRECISION
+                partition_input_sizes.append(input_size)
+
+        if partition_input_sizes:
+            layer_stats['mean_partition_size_input'] = np.mean(partition_input_sizes)
+            layer_stats['min_partition_size_input'] = np.min(partition_input_sizes)
+            layer_stats['max_partition_size_input'] = np.max(partition_input_sizes)
+            layer_stats['std_partition_size_input'] = np.std(partition_input_sizes)
+
+        # Output size per partition (memory needed to store output data)
+        partition_output_sizes = []
+        for p in partitions:
+            if p.out_bounds is not None and len(p.out_bounds) > 0:
+                if len(p.out_bounds[0]) > 1:
+                    output_size = np.prod([p.out_bounds[1][i] - p.out_bounds[0][i] for i in range(len(p.out_bounds[0]))])
+                else:
+                    output_size = p.out_bounds[1][0] - p.out_bounds[0][0]
+                # Multiply by output channels if available
+                if p.out_ch is not None and len(p.out_ch) > 0:
+                    output_size *= (p.out_ch[1] - p.out_ch[0])
+                # Multiply by precision to get actual bytes
+                output_size *= PRECISION
+                partition_output_sizes.append(output_size)
+
+        if partition_output_sizes:
+            layer_stats['mean_partition_size_output'] = np.mean(partition_output_sizes)
+            layer_stats['min_partition_size_output'] = np.min(partition_output_sizes)
+            layer_stats['max_partition_size_output'] = np.max(partition_output_sizes)
+            layer_stats['std_partition_size_output'] = np.std(partition_output_sizes)
+
+        # Weight size per partition (memory needed to store weights)
+        partition_weight_sizes = []
+        for p in partitions:
+            if p.weights_shape is not None and len(p.weights_shape) > 0:
+                weight_size = sum([np.prod(w) for w in p.weights_shape])
+                # Multiply by precision to get actual bytes
+                weight_size *= PRECISION
+                partition_weight_sizes.append(weight_size)
+
+        if partition_weight_sizes:
+            layer_stats['mean_partition_size_weights'] = np.mean(partition_weight_sizes)
+            layer_stats['min_partition_size_weights'] = np.min(partition_weight_sizes)
+            layer_stats['max_partition_size_weights'] = np.max(partition_weight_sizes)
+            layer_stats['std_partition_size_weights'] = np.std(partition_weight_sizes)
+
+        # Sanity check: verify that p.tot_size = input + output + weights
+        # Note: All sizes now include PRECISION multiplier (already applied above and in analyze_partition())
+        if partition_input_sizes and partition_output_sizes and partition_weight_sizes:
+            for idx, p in enumerate(partitions):
+                # Sum the already-multiplied sizes
+                calculated_size = partition_input_sizes[idx] + partition_output_sizes[idx] + partition_weight_sizes[idx]
+                tolerance = max(10, p.tot_size * 0.01)  # Allow 1% error or 10 bytes minimum
+                if abs(calculated_size - p.tot_size) > tolerance:
+                    print(f"WARNING: Partition {p.id} size mismatch!")
+                    print(f"  p.tot_size: {p.tot_size} bytes")
+                    print(f"  calculated (input + output + weights): {calculated_size} bytes")
+                    print(f"  Breakdown (in bytes): input={partition_input_sizes[idx]}, output={partition_output_sizes[idx]}, weights={partition_weight_sizes[idx]}")
+                    print(f"  Difference: {abs(calculated_size - p.tot_size)} bytes ({abs(calculated_size - p.tot_size)/p.tot_size*100:.2f}%)")
+
+        # Input/Output tensor sizes (per partition) - EXTENDED STATISTICS
+        if partitions[0].in_bounds is not None and len(partitions[0].in_bounds) > 0:
+            input_sizes = []
+            for p in partitions:
+                if len(p.in_bounds[0]) > 1:
+                    size = np.prod([p.in_bounds[1][i] - p.in_bounds[0][i] for i in range(len(p.in_bounds[0]))])
+                else:
+                    size = p.in_bounds[1][0] - p.in_bounds[0][0]
+                input_sizes.append(size)
+
+            layer_stats['mean_input_tensor_size'] = np.mean(input_sizes)
+            layer_stats['min_input_tensor_size'] = np.min(input_sizes)
+            layer_stats['max_input_tensor_size'] = np.max(input_sizes)
+            layer_stats['std_input_tensor_size'] = np.std(input_sizes)
+            layer_stats['total_input_data'] = np.sum(input_sizes)
+
+            # Count ACTUAL input connections by simulating dependencies with a virtual previous layer
+            # We create virtual "previous layer" partitions with the same partitioning strategy
+            # and count how many dependency edges would be created
+            virtual_prev_partitions = _create_virtual_partitions_for_layer_input(partitions)
+            if virtual_prev_partitions:
+                input_deps = _build_spatial_deps(virtual_prev_partitions, partitions)
+                input_deps = _build_outin_deps(virtual_prev_partitions, partitions, input_deps)
+                # Count the number of dependency edges
+                layer_stats['number_of_input_connections'] = len(input_deps)
+            else:
+                # Fallback to partition count if we can't create virtual partitions
+                layer_stats['number_of_input_connections'] = len(partitions)
+
+        if partitions[0].out_bounds is not None and len(partitions[0].out_bounds) > 0:
+            output_sizes = []
+            for p in partitions:
+                if len(p.out_bounds[0]) > 1:
+                    size = np.prod([p.out_bounds[1][i] - p.out_bounds[0][i] for i in range(len(p.out_bounds[0]))])
+                else:
+                    size = p.out_bounds[1][0] - p.out_bounds[0][0]
+                output_sizes.append(size)
+
+            layer_stats['mean_output_tensor_size'] = np.mean(output_sizes)
+            layer_stats['min_output_tensor_size'] = np.min(output_sizes)
+            layer_stats['max_output_tensor_size'] = np.max(output_sizes)
+            layer_stats['std_output_tensor_size'] = np.std(output_sizes)
+            layer_stats['total_output_data'] = np.sum(output_sizes)
+
+            # Count ACTUAL output connections by simulating dependencies with a virtual next layer
+            # We create virtual "next layer" partitions with the same partitioning strategy
+            # and count how many dependency edges would be created
+            virtual_next_partitions = _create_virtual_partitions_for_layer_output(partitions)
+            if virtual_next_partitions:
+                output_deps = _build_spatial_deps(partitions, virtual_next_partitions)
+                output_deps = _build_outin_deps(partitions, virtual_next_partitions, output_deps)
+                # Count the number of dependency edges
+                layer_stats['number_of_output_connections'] = len(output_deps)
+            else:
+                print(f"WARNING: No virtual next partitions created for {layer.name}.")
+                # Fallback to partition count if we can't create virtual partitions
+                layer_stats['number_of_output_connections'] = len(partitions)
+
+    if verbose:
+        print(f"\n{'='*60}")
+        print(f"Layer: {layer.name} ({layer.__class__.__name__})")
+        print(f"Partitioning: spatial={spat}, out_ch={out_ch}, in_ch={in_ch}")
+        print(f"Number of partitions: {len(partitions)}")
+        if len(partitions) > 0:
+            print(f"Total FLOPs: {layer_stats['total_flops']:,}")
+            print(f"Mean FLOPs per partition: {layer_stats['mean_flops']:,.0f}")
+            print(f"Total size: {layer_stats['total_size']:,} bytes")
+            print(f"Mean size per partition: {layer_stats['mean_partition_size']:,.0f} bytes")
+        print(f"{'='*60}\n")
+
+    return partitions, layer_stats
+
+
+def analyze_model_partitions_per_layer(model: keras.Model, partitioning_tuple, verbose: bool = False) -> List[Dict]:
+    """
+    Analyzes each layer in the model individually and collects statistics.
+
+    Args:
+    - model: the Keras model to analyze
+    - partitioning_tuple: either a single tuple (spat, out_ch, in_ch) for all layers,
+                         or a list of tuples with one tuple per layer
+    - verbose: whether to print detailed information
+
+    Returns:
+    - layer_statistics: a list of dictionaries, one per layer, containing partition statistics
+    """
+
+    # Handle different input types for partitioning_tuple
+    if partitioning_tuple is None:
+        # Default partitioning if none provided
+        partitioning_tuple = [(0, 1, 1)] * len(model.layers)
+    elif isinstance(partitioning_tuple, tuple) and len(partitioning_tuple) == 3:
+        # Single tuple provided - use for all layers
+        partitioning_tuple = [partitioning_tuple] * len(model.layers)
+    elif isinstance(partitioning_tuple, list):
+        # List provided - check if it matches the number of layers
+        if len(partitioning_tuple) != len(model.layers):
+            print(f"Warning: partitioning list length ({len(partitioning_tuple)}) doesn't match number of layers ({len(model.layers)})")
+            # Extend or truncate as needed
+            if len(partitioning_tuple) < len(model.layers):
+                partitioning_tuple = partitioning_tuple + [(0, 1, 1)] * (len(model.layers) - len(partitioning_tuple))
+            else:
+                partitioning_tuple = partitioning_tuple[:len(model.layers)]
+
+    layer_statistics = []
+
+    # Skip layers that don't need partitioning
+    layers_skip = (layers.Flatten, layers.Reshape, layers.Add, layers.Identity,
+                   layers.Activation, layers.ReLU, layers.BatchNormalization,
+                   layers.MaxPooling2D, layers.AveragePooling2D, layers.GlobalAveragePooling2D)
+
+    for idx, layer in enumerate(model.layers):
+        # Skip non-computational layers
+        if isinstance(layer, layers_skip):
+            if verbose:
+                print(f"Skipping layer {layer.name} ({layer.__class__.__name__})")
+            continue
+
+        try:
+            # Get partitioning for this specific layer
+            spat, out_ch, in_ch = partitioning_tuple[idx]
+
+            # Analyze this layer
+            _, stats = build_partitions_single_layer(
+                layer,
+                partitioning_tuple=(spat, out_ch, in_ch),
+                verbose=verbose
+            )
+
+            # Add layer index for ordering
+            stats['layer_index'] = idx
+
+            layer_statistics.append(stats)
+
+        except Exception as e:
+            print(f"Error analyzing layer {layer.name}: {str(e)}")
+            # Add error entry
+            layer_statistics.append({
+                'layer_index': idx,
+                'layer_name': layer.name,
+                'layer_type': layer.__class__.__name__,
+                'error': str(e)
+            })
+
+    return layer_statistics
+
 
 def row_wise_mapping(task_graph, domain, verbose = False):
         """
@@ -2411,7 +2869,6 @@ def analyze_partition(partition):
     FLOPs = 0
     MACs = 0
     tot_par_size = 0
-    precision = 2 # bytes per parameter (assuming float16) 1 is 1 byte (int8), float32 is 4 bytes, float64 is 8 bytes
 
     if isinstance(partition.layer, (layers.InputLayer, layers.Reshape, layers.ZeroPadding1D, layers.ZeroPadding2D, layers.Identity, layers.Flatten)):
         return MACs, FLOPs, tot_par_size
@@ -2420,12 +2877,12 @@ def analyze_partition(partition):
     layer = partition.layer
     inputs_bounds = partition.in_bounds
     inputs_shape =[inputs_bounds[1][i] - inputs_bounds[0][i] for i in range(len(inputs_bounds[0]))] if len(inputs_bounds[0]) > 1 else [inputs_bounds[1][0] - inputs_bounds[0][0]]
-    tot_par_size += np.prod(inputs_shape) * ((partition.in_ch[1] - partition.in_ch[0]) if partition.in_ch is not None else 1) * precision
+    tot_par_size += np.prod(inputs_shape) * ((partition.in_ch[1] - partition.in_ch[0]) if partition.in_ch is not None else 1) * PRECISION
     # prepend a 0 to the input shape to make it compatible to the hooks
     inputs_shape = [0] + inputs_shape + ([partition.in_ch[1] - partition.in_ch[0]] if partition.in_ch is not None else [1])
     outputs_bounds = partition.out_bounds
     outputs_shape = [outputs_bounds[1][i] - outputs_bounds[0][i] for i in range(len(outputs_bounds[0]))] if len(outputs_bounds[0]) > 1 else [outputs_bounds[1][0] - outputs_bounds[0][0]]
-    tot_par_size += np.prod(outputs_shape) * ((partition.out_ch[1] - partition.out_ch[0]) if partition.out_ch is not None else 1) * precision
+    tot_par_size += np.prod(outputs_shape) * ((partition.out_ch[1] - partition.out_ch[0]) if partition.out_ch is not None else 1) * PRECISION
     # prepend a 0 to the output shape also
     outputs_shape = [0] + outputs_shape + ([partition.out_ch[1] - partition.out_ch[0]] if partition.out_ch is not None else [1])
     # Compute the FLOPs (and MACs) using the hook
@@ -2439,7 +2896,7 @@ def analyze_partition(partition):
             FLOPs += FLOPs_act
 
     for weight in partition.weights_shape:
-        tot_par_size += np.prod(weight) * precision
+        tot_par_size += np.prod(weight) * PRECISION
 
     return FLOPs, MACs, tot_par_size
 

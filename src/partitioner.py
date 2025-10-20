@@ -41,7 +41,7 @@ if __name__ == '__main__':
     #model = double_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = triple_conv((10, 10, 4), num_classes=1, verbose=True)
     #model = ResNet_early_blocks((16, 16, 3), verbose=True)
-    model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
+    #model = AlexNet((32, 32, 3), num_classes=10, verbose=True)
     
     #model = VGG_16_early_layers(input_shape=(32, 32, 3), num_classes=10, verbose=True)
     #model = VGG_16_late_layers(input_shape=(4, 4, 256), num_classes=10, verbose=True)
@@ -49,13 +49,15 @@ if __name__ == '__main__':
     #model = ResNet32_early_blocks((32, 32, 3), verbose=True)
     #model = ResNet32_mid_blocks((32, 32, 16), num_classes=10, verbose=True)
     #model = ResNet32_late_blocks((16, 16, 64), num_classes=10, verbose=True)
-    
+    model = ResNet_block(input_shape=(56, 56, 256), num_classes=10, verbose=True)
+
     #model = MobileNetv1((32, 32, 3), num_classes=10, verbose=True)
-    number_of_parts = 4
-    model_name = 'AlexNet'
+    number_of_parts = 3
+    model_name = 'ResNet_small'
+    grouping = False
     
     model = fuse_conv_bn(model, verbose=True)
-
+    
     x_of_grid = 12
     source = 0
     drain = 143
@@ -67,8 +69,9 @@ if __name__ == '__main__':
     combinations = [(i, j, k) for i in range(0, number_of_parts) for j in range(1, number_of_parts) for k in range(1, number_of_parts)]
     #combinations = [(0,2,2)]
     # Prepare CSV file
-    csv_filename = f"./data/partitioner_data/partition_statistics_{model_name}.csv"
-    os.makedirs("./data/partitioner_data", exist_ok=True)
+    data_path = "./data/partitioner_data15Oct"
+    csv_filename = f"{data_path}/group_test_partition_statistics_{model_name}.csv"
+    os.makedirs(data_path, exist_ok=True)
 
     # Create CSV and write header
     with open(csv_filename, 'w', newline='') as csvfile:
@@ -97,7 +100,7 @@ if __name__ == '__main__':
 
         try:
             # Build partitioner tuples: first layer gets (0,1,1), rest get (i,j,k)
-            partitioner_tuples = [(0, 1, 1)] + [(i, j, k)] * (len(model.layers))
+            partitioner_tuples = [(0, 1, 1)] + [(i, j, k)] * (len(model.layers) - 1)
 
             # Calculate number of partitions per layer
             num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in partitioner_tuples]
@@ -111,7 +114,7 @@ if __name__ == '__main__':
             parts, deps = build_partitions_splitting_input_for_many_tuples(
                 model, grid,
                 partitioning_tuple = partitioner_tuples,
-                grouping = False,
+                grouping = grouping,
                 verbose = False
             )
 
@@ -127,13 +130,13 @@ if __name__ == '__main__':
             mapper = ma.Mapper()
             mapper.init(task_graph, grid)
             mapper.set_mapping(mapping)
-            mapper.mapping_to_json(f"../data/partitioner_data/mapping_{model_name}.json",
+            mapper.mapping_to_json(f".{data_path}/mapping_{model_name}.json",
                                     file_to_append="./config_files/arch.json")
 
             # Run fast analytical simulation
             start_time = time.time()
             result_fast_anal, logger_fast_anal = fast_sim.run_simulation(
-                f"./data/partitioner_data/mapping_{model_name}.json",
+                f"{data_path}/mapping_{model_name}.json",
                 verbose=False
             )
             simulation_time = time.time() - start_time

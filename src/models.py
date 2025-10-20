@@ -5,6 +5,80 @@ from tensorflow.keras.utils import plot_model
 import larq
 
 
+def ResNet_block_smaller(input_shape=(56, 56, 32), num_classes=10, verbose=False):
+
+    inputs = layers.Input(shape=input_shape)
+    
+    # Save the input for the skip connection
+    shortcut = inputs  # ✓ START the skip from the input
+    
+    # Main path: two convolutions with BN
+    x = layers.Conv2D(16, kernel_size=(1,1), strides=(1,1), padding='same', use_bias=False)(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(16, kernel_size=(3,3), strides=(1,1), padding='same', use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+
+    # Skip connection with projection if needed
+    # Projection shortcut to match dimensions
+    x = layers.Conv2D(32, kernel_size=(1, 1), strides=(1,1), padding='same', use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+
+    # Add skip connection
+    out = layers.Add()([shortcut, x])
+    out = layers.ReLU()(out)
+    
+    model = keras.Model(inputs=inputs, outputs=out)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape: {out.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+    
+    return model
+
+
+def ResNet_block(input_shape=(56, 56, 64), num_classes=10, verbose=False):
+
+    inputs = layers.Input(shape=input_shape)
+    
+    # Save the input for the skip connection
+    shortcut = inputs  # ✓ START the skip from the input
+    
+    # Main path: two convolutions with BN
+    x = layers.Conv2D(64, kernel_size=(1,1), strides=(1,1), padding='same', use_bias=False)(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+    x = layers.Conv2D(64, kernel_size=(3,3), strides=(1,1), padding='same', use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+
+    # Skip connection with projection if needed
+    # Projection shortcut to match dimensions
+    x = layers.Conv2D(256, kernel_size=(1, 1), strides=(1,1), padding='same', use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+
+    # Add skip connection
+    out = layers.Add()([shortcut, x])
+    out = layers.ReLU()(out)
+    
+    model = keras.Model(inputs=inputs, outputs=out)
+
+    if verbose:
+        model.summary()
+        print(f'Output shape: {out.shape}')
+        try:
+            larq.models.summary(model, print_fn=None, include_macs=True)
+        except Exception as e:
+            print(f"Could not generate larq summary: {e}")
+    
+    return model
+
+
 def AlexNet(input_shape=(32, 32, 3), num_classes=10, verbose=False):
     """
     Lightweight AlexNet adapted for CIFAR-10 (32x32 images).
