@@ -1151,7 +1151,8 @@ def export_simulation_results_to_csv(
     append: bool = False,
     num_partitions: int = None,
     parts_per_layer: int = None,
-    partitioner_config: str = None
+    partitioner_config: str = None,
+    connection_metrics: Dict = None
 ) -> pd.DataFrame:
     """
     Handy function to export latency and energy results from a simulation.
@@ -1208,7 +1209,8 @@ def export_simulation_results_to_csv(
         config_data=config_data,
         num_partitions=num_partitions,
         parts_per_layer=parts_per_layer,
-        partitioner_config=partitioner_config
+        partitioner_config=partitioner_config,
+        connection_metrics=connection_metrics
     )
 
     # Handle file writing with proper append logic
@@ -1237,7 +1239,8 @@ def export_latency_energy_details_to_csv(
     config_data: Dict = None,
     num_partitions: int = None,
     parts_per_layer: int = None,
-    partitioner_config: str = None
+    partitioner_config: str = None,
+    connection_metrics: Dict = None
 ) -> pd.DataFrame:
     """
     Export comprehensive latency and energy details to CSV file.
@@ -1449,6 +1452,27 @@ def export_latency_energy_details_to_csv(
         for comm_type in ['WRITE', 'WRITE_REQ', 'REPLY', 'READ', 'READ_REQ']:
             data[f'{comm_type}_energy_per_byte_pJ'] = noc_energy_result.get(f'{comm_type}_energy_per_byte_pJ', 0)
             data[f'{comm_type}_packet_count'] = noc_energy_result.get(f'{comm_type}_packet_count', 0)
+
+    # Add connection metrics if available (aggregated across all layers)
+    if connection_metrics:
+        total_input_connections = sum(m['input_connections'] for m in connection_metrics.values())
+        total_output_connections = sum(m['output_connections'] for m in connection_metrics.values())
+        total_layer_partitions = sum(m['num_partitions'] for m in connection_metrics.values())
+
+        avg_input_fan_in = total_input_connections / total_layer_partitions if total_layer_partitions > 0 else 0
+        avg_output_fan_out = total_output_connections / total_layer_partitions if total_layer_partitions > 0 else 0
+
+        data['total_input_connections'] = total_input_connections
+        data['total_output_connections'] = total_output_connections
+        data['avg_input_fan_in'] = avg_input_fan_in
+        data['avg_output_fan_out'] = avg_output_fan_out
+        data['num_layers_with_connections'] = len(connection_metrics)
+    else:
+        data['total_input_connections'] = 0
+        data['total_output_connections'] = 0
+        data['avg_input_fan_in'] = 0.0
+        data['avg_output_fan_out'] = 0.0
+        data['num_layers_with_connections'] = 0
 
     # Create DataFrame
     df = pd.DataFrame([data])

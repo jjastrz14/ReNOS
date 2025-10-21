@@ -36,7 +36,6 @@ if __name__ == '__main__':
     data_path = "./data/partitioner_data15Oct"
     os.makedirs(data_path, exist_ok=True)
 
-    breakpoint()
     # CSV fieldnames for statistics
     # Note: All size fields are in BYTES (already multiplied by PRECISION=2 for float16)
     fieldnames = [
@@ -103,7 +102,7 @@ if __name__ == '__main__':
         print(f"{'='*80}")
 
         # Get valid partition ranges for this layer
-        ranges = get_valid_partition_ranges(layer)
+        ranges = get_valid_partition_ranges(layer, min_partition_size = 4)
         print(f"  Layer shapes: input={ranges.get('input_shape')}, output={ranges.get('output_shape')}")
         print(f"  Max partitions: spatial={ranges['spatial_max']} (2^n splits), "
                 f"output_ch={ranges['output_ch_max']}, input_ch={ranges['input_ch_max']}")
@@ -121,9 +120,7 @@ if __name__ == '__main__':
         ]
 
         print(f"  Total combinations to test: {len(combinations)}\n")
-        
-        breakpoint()
-        
+                
         # Create separate CSV file for this layer
         layer_csv = f"{data_path}/layer_{layer_idx}_{layer.name}.csv"
 

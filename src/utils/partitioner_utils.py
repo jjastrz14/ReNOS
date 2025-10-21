@@ -1217,9 +1217,10 @@ def _build_outin_deps(partitions_layer1: List[PartitionInfo], partitions_layer2:
                     if overlap >0:
                         if deps.get((p1.id, p2.id)) is not None:
                             deps[(p1.id, p2.id)] *= overlap
-                        # else:
-                        #     deps[(p1.id, p2.id)] = overlap
-                
+                        else:
+                            #deps[(p1.id, p2.id)] = overlap
+                            #No spatial dependency but channels overlap
+                            pass
 
     return deps
 
@@ -1899,7 +1900,7 @@ def build_partitions_splitting_input_for_many_tuples(model: keras.Model, grid, p
     return partitions, partitions_deps
 
 
-def get_valid_partition_ranges(layer: keras.layers.Layer) -> Dict:
+def get_valid_partition_ranges(layer: keras.layers.Layer, min_partition_size: int) -> Dict:
     """
     Determines the valid partition ranges for a given layer based on its dimensions.
 
@@ -1945,10 +1946,10 @@ def get_valid_partition_ranges(layer: keras.layers.Layer) -> Dict:
                 s_y = 2**(sf//2)
                 # Each partition gets approximately H/s_x by W/s_y pixels
                 # Due to rounding in the partitioning code, some partitions may be smaller
-                # Require at least 4 pixels in each dimension for the smallest partition #important notice
+                # Require at least min_partition_size pixels in each dimension for the smallest partition #important notice
                 min_partition_h = H // s_x
                 min_partition_w = W // s_y
-                if min_partition_h >= 4 and min_partition_w >= 4:
+                if min_partition_h >= min_partition_size and min_partition_w >= min_partition_size:
                     spatial_max = sf
                 else:
                     break
@@ -2000,78 +2001,251 @@ def get_valid_partition_ranges(layer: keras.layers.Layer) -> Dict:
     return ranges
 
 
-def _create_virtual_partitions_for_layer_input(current_partitions: List[PartitionInfo]) -> List[PartitionInfo]:
+def compute_layer_connection_metrics(parts: Dict, deps: Dict, verbose: bool = False) -> Dict:
     """
-    Create virtual partitions representing a hypothetical previous layer.
-    These virtual partitions will have output characteristics matching the current layer's input characteristics,
-    allowing us to count realistic dependency edges.
+    Post-processing function to compute input/output connection counts for each layer
+    based on the actual dependency graph.
+
+    This should be called AFTER the full model has been partitioned and dependencies built.
 
     Args:
-    - current_partitions: the partitions of the current layer
+    - parts: Dict mapping layer_name -> List[PartitionInfo]
+    - deps: Dict with keys like (layer1_name, layer2_name) -> {(p1_id, p2_id): weight, ...}
+    - verbose: If True, print detailed connection information
 
     Returns:
-    - List of virtual PartitionInfo objects representing the previous layer's partitions
+    - connection_metrics: Dict mapping layer_name -> {
+        'input_connections': int,      # Number of incoming edges from previous layer(s)
+        'output_connections': int,     # Number of outgoing edges to next layer(s)
+        'input_fan_in': float,         # Average inputs per partition
+        'output_fan_out': float,       # Average outputs per partition
+        'num_partitions': int          # Number of partitions in this layer
+      }
     """
-    if not current_partitions:
-        return []
 
-    # Create virtual partitions that mimic a previous layer
-    # The output of the virtual layer should match the input of the current layer
-    virtual_partitions = []
+    connection_metrics = {}
 
-    for i, curr_p in enumerate(current_partitions):
-        # Create a virtual partition whose output matches this partition's input
-        virtual_p = PartitionInfo(layer=curr_p.layer)
-        virtual_p.id = f"virtual_prev_{i}"
+    for layer_name, partitions in parts.items():
+        num_partitions = len(partitions) if partitions else 0
 
-        # The virtual partition's output bounds match current partition's input bounds
-        virtual_p.out_bounds = curr_p.in_bounds
-        virtual_p.out_ch = curr_p.in_ch
+        metrics = {
+            'input_connections': 0,
+            'output_connections': 0,
+            'input_fan_in': 0.0,
+            'output_fan_out': 0.0,
+            'num_partitions': num_partitions
+        }
 
-        # Set virtual input bounds (doesn't matter for dependency calculation)
-        virtual_p.in_bounds = curr_p.in_bounds
-        virtual_p.in_ch = curr_p.in_ch
+        # Count input connections (edges FROM previous layer(s) TO this layer)
+        for (layer1, layer2), dep_edges in deps.items():
+            if layer2 == layer_name:  # This layer receives from layer1
+                metrics['input_connections'] += len(dep_edges)  # Number of edges
 
-        virtual_partitions.append(virtual_p)
+        # Count output connections (edges FROM this layer TO next layer(s))
+        for (layer1, layer2), dep_edges in deps.items():
+            if layer1 == layer_name:  # This layer sends to layer2
+                metrics['output_connections'] += len(dep_edges)  # Number of edges
 
-    return virtual_partitions
+        # Calculate fan-in and fan-out
+        if num_partitions > 0:
+            metrics['input_fan_in'] = metrics['input_connections'] / num_partitions
+            metrics['output_fan_out'] = metrics['output_connections'] / num_partitions
+
+        connection_metrics[layer_name] = metrics
+
+        if verbose:
+            print(f"\nLayer: {layer_name}")
+            print(f"  Partitions: {num_partitions}")
+            print(f"  Input connections: {metrics['input_connections']} (avg {metrics['input_fan_in']:.2f} per partition)")
+            print(f"  Output connections: {metrics['output_connections']} (avg {metrics['output_fan_out']:.2f} per partition)")
+
+    return connection_metrics
 
 
-def _create_virtual_partitions_for_layer_output(current_partitions: List[PartitionInfo]) -> List[PartitionInfo]:
+def compute_layer_traffic_density_metrics(parts: Dict, deps: Dict, partitioning_configs: Dict = None, verbose: bool = False) -> List[Dict]:
     """
-    Create virtual partitions representing a hypothetical next layer.
-    These virtual partitions will have input characteristics matching the current layer's output characteristics,
-    allowing us to count realistic dependency edges.
+    Compute per-layer traffic density metrics analyzing data volume per connection.
+
+    Traffic density = (partition data size) / (number of connections to/from that partition)
+
+    This measures how much data flows through each connection on average.
 
     Args:
-    - current_partitions: the partitions of the current layer
+    - parts: Dict mapping layer_name -> List[PartitionInfo]
+    - deps: Dict with keys like (layer1_name, layer2_name) -> {(p1_id, p2_id): weight, ...}
+    - partitioning_configs: Optional Dict mapping layer_name -> (spatial, out_ch, in_ch) tuple
+    - verbose: If True, print detailed information
 
     Returns:
-    - List of virtual PartitionInfo objects representing the next layer's partitions
+    - List of dicts, one per layer, containing:
+        - layer_name, layer_type, partitioning_strategy, num_partitions
+        - Mean-in traffic density (bytes/connection) - mean, max, min, std
+        - Mean-out traffic density (bytes/connection) - mean, max, min, std
+        - Connection counts and data volumes
     """
-    if not current_partitions:
-        return []
 
-    # Create virtual partitions that mimic a next layer
-    # The input of the virtual layer should match the output of the current layer
-    virtual_partitions = []
+    layer_metrics = []
 
-    for i, curr_p in enumerate(current_partitions):
-        # Create a virtual partition whose input matches this partition's output
-        virtual_p = PartitionInfo(layer=curr_p.layer)
-        virtual_p.id = f"virtual_next_{i}"
+    for layer_name, partitions in parts.items():
+        if not partitions:
+            continue
 
-        # The virtual partition's input bounds match current partition's output bounds
-        virtual_p.in_bounds = curr_p.out_bounds
-        virtual_p.in_ch = curr_p.out_ch
+        num_partitions = len(partitions)
+        layer_type = partitions[0].layer.__class__.__name__
 
-        # Set virtual output bounds (doesn't matter for dependency calculation)
-        virtual_p.out_bounds = curr_p.out_bounds
-        virtual_p.out_ch = curr_p.out_ch
+        # Get partitioning strategy if provided
+        if partitioning_configs and layer_name in partitioning_configs:
+            partitioning_strategy = str(partitioning_configs[layer_name])
+        else:
+            partitioning_strategy = "unknown"
 
-        virtual_partitions.append(virtual_p)
+        # Lists to collect per-partition metrics
+        partition_in_traffic_densities = []
+        partition_out_traffic_densities = []
+        partition_input_conn_counts = []
+        partition_output_conn_counts = []
+        partition_input_data_sizes = []
+        partition_output_data_sizes = []
 
-    return virtual_partitions
+        # Analyze each partition
+        for partition in partitions:
+            p_id = partition.id
+
+            # Calculate partition input data size (in elements, not bytes yet)
+            if partition.in_bounds is not None and len(partition.in_bounds) > 0:
+                if len(partition.in_bounds[0]) > 1:
+                    # 2D spatial dimensions
+                    in_spatial_size = np.prod([partition.in_bounds[1][i] - partition.in_bounds[0][i]
+                                                for i in range(len(partition.in_bounds[0]))])
+                else:
+                    # 1D
+                    in_spatial_size = partition.in_bounds[1][0] - partition.in_bounds[0][0]
+
+                # Multiply by input channel range
+                if partition.in_ch is not None:
+                    in_ch_range = partition.in_ch[1] - partition.in_ch[0]
+                    partition_input_size = in_spatial_size * in_ch_range
+                else:
+                    partition_input_size = in_spatial_size
+
+                # Convert to bytes (assume 4 bytes per float32 element)
+                partition_input_bytes = partition_input_size * 4
+            else:
+                partition_input_bytes = 0
+
+            # Calculate partition output data size
+            if partition.out_bounds is not None and len(partition.out_bounds) > 0:
+                if len(partition.out_bounds[0]) > 1:
+                    # 2D spatial dimensions
+                    out_spatial_size = np.prod([partition.out_bounds[1][i] - partition.out_bounds[0][i]
+                                                for i in range(len(partition.out_bounds[0]))])
+                else:
+                    # 1D
+                    out_spatial_size = partition.out_bounds[1][0] - partition.out_bounds[0][0]
+
+                # Multiply by output channel range
+                if partition.out_ch is not None:
+                    out_ch_range = partition.out_ch[1] - partition.out_ch[0]
+                    partition_output_size = out_spatial_size * out_ch_range
+                else:
+                    partition_output_size = out_spatial_size
+
+                # Convert to bytes
+                partition_output_bytes = partition_output_size * 4
+            else:
+                partition_output_bytes = 0
+
+            # Count input connections TO this partition
+            num_input_connections = 0
+            for (layer1, layer2), dep_edges in deps.items():
+                if layer2 == layer_name:
+                    for (src_p_id, dst_p_id), weight in dep_edges.items():
+                        if dst_p_id == p_id:
+                            num_input_connections += 1
+
+            # Count output connections FROM this partition
+            num_output_connections = 0
+            for (layer1, layer2), dep_edges in deps.items():
+                if layer1 == layer_name:
+                    for (src_p_id, dst_p_id), weight in dep_edges.items():
+                        if src_p_id == p_id:
+                            num_output_connections += 1
+
+            # Calculate traffic densities for this partition
+            if num_input_connections > 0:
+                in_traffic_density = partition_input_bytes / num_input_connections
+            else:
+                in_traffic_density = 0
+
+            if num_output_connections > 0:
+                out_traffic_density = partition_output_bytes / num_output_connections
+            else:
+                out_traffic_density = 0
+
+            # Store per-partition metrics
+            partition_in_traffic_densities.append(in_traffic_density)
+            partition_out_traffic_densities.append(out_traffic_density)
+            partition_input_conn_counts.append(num_input_connections)
+            partition_output_conn_counts.append(num_output_connections)
+            partition_input_data_sizes.append(partition_input_bytes)
+            partition_output_data_sizes.append(partition_output_bytes)
+
+        # Aggregate statistics across all partitions in the layer
+        metrics = {
+            # Layer identification
+            'layer_name': layer_name,
+            'layer_type': layer_type,
+            'partitioning_strategy': partitioning_strategy,
+            'num_partitions': num_partitions,
+
+            # INPUT TRAFFIC DENSITY METRICS (MAIN METRIC)
+            'mean_in_traffic_density_bytes': float(np.mean(partition_in_traffic_densities)) if partition_in_traffic_densities else 0,
+            'max_in_traffic_density_bytes': float(np.max(partition_in_traffic_densities)) if partition_in_traffic_densities else 0,
+            'min_in_traffic_density_bytes': float(np.min(partition_in_traffic_densities)) if partition_in_traffic_densities else 0,
+            'std_in_traffic_density_bytes': float(np.std(partition_in_traffic_densities)) if partition_in_traffic_densities else 0,
+
+            # OUTPUT TRAFFIC DENSITY METRICS (MAIN METRIC)
+            'mean_out_traffic_density_bytes': float(np.mean(partition_out_traffic_densities)) if partition_out_traffic_densities else 0,
+            'max_out_traffic_density_bytes': float(np.max(partition_out_traffic_densities)) if partition_out_traffic_densities else 0,
+            'min_out_traffic_density_bytes': float(np.min(partition_out_traffic_densities)) if partition_out_traffic_densities else 0,
+            'std_out_traffic_density_bytes': float(np.std(partition_out_traffic_densities)) if partition_out_traffic_densities else 0,
+
+            # Input connection statistics
+            'mean_input_connections_per_partition': float(np.mean(partition_input_conn_counts)) if partition_input_conn_counts else 0,
+            'max_input_connections_per_partition': int(np.max(partition_input_conn_counts)) if partition_input_conn_counts else 0,
+            'min_input_connections_per_partition': int(np.min(partition_input_conn_counts)) if partition_input_conn_counts else 0,
+            'std_input_connections_per_partition': float(np.std(partition_input_conn_counts)) if partition_input_conn_counts else 0,
+            'total_input_connections': int(sum(partition_input_conn_counts)),
+
+            # Output connection statistics
+            'mean_output_connections_per_partition': float(np.mean(partition_output_conn_counts)) if partition_output_conn_counts else 0,
+            'max_output_connections_per_partition': int(np.max(partition_output_conn_counts)) if partition_output_conn_counts else 0,
+            'min_output_connections_per_partition': int(np.min(partition_output_conn_counts)) if partition_output_conn_counts else 0,
+            'std_output_connections_per_partition': float(np.std(partition_output_conn_counts)) if partition_output_conn_counts else 0,
+            'total_output_connections': int(sum(partition_output_conn_counts)),
+
+            # Data volume statistics
+            'mean_input_data_per_partition_bytes': float(np.mean(partition_input_data_sizes)) if partition_input_data_sizes else 0,
+            'max_input_data_per_partition_bytes': int(np.max(partition_input_data_sizes)) if partition_input_data_sizes else 0,
+            'min_input_data_per_partition_bytes': int(np.min(partition_input_data_sizes)) if partition_input_data_sizes else 0,
+            'std_input_data_per_partition_bytes': float(np.std(partition_input_data_sizes)) if partition_input_data_sizes else 0,
+            'total_input_data_bytes': int(sum(partition_input_data_sizes)),
+
+            'mean_output_data_per_partition_bytes': float(np.mean(partition_output_data_sizes)) if partition_output_data_sizes else 0,
+            'max_output_data_per_partition_bytes': int(np.max(partition_output_data_sizes)) if partition_output_data_sizes else 0,
+            'min_output_data_per_partition_bytes': int(np.min(partition_output_data_sizes)) if partition_output_data_sizes else 0,
+            'std_output_data_per_partition_bytes': float(np.std(partition_output_data_sizes)) if partition_output_data_sizes else 0,
+            'total_output_data_bytes': int(sum(partition_output_data_sizes)),
+        }
+
+        layer_metrics.append(metrics)
+
+        if verbose:
+            print(f"\n{layer_name} ({layer_type}) - {num_partitions} partitions:")
+            print(f"  Mean-IN traffic density:  {metrics['mean_in_traffic_density_bytes']} bytes/connection")
+            print(f"  Mean-OUT traffic density: {metrics['mean_out_traffic_density_bytes']} bytes/connection")
+
+    return layer_metrics
 
 
 def build_partitions_single_layer(layer: keras.layers.Layer, partitioning_tuple=(0, 1, 1), verbose: bool = True) -> Tuple[List[PartitionInfo], Dict]:
@@ -2219,18 +2393,9 @@ def build_partitions_single_layer(layer: keras.layers.Layer, partitioning_tuple=
             layer_stats['std_input_tensor_size'] = np.std(input_sizes)
             layer_stats['total_input_data'] = np.sum(input_sizes)
 
-            # Count ACTUAL input connections by simulating dependencies with a virtual previous layer
-            # We create virtual "previous layer" partitions with the same partitioning strategy
-            # and count how many dependency edges would be created
-            virtual_prev_partitions = _create_virtual_partitions_for_layer_input(partitions)
-            if virtual_prev_partitions:
-                input_deps = _build_spatial_deps(virtual_prev_partitions, partitions)
-                input_deps = _build_outin_deps(virtual_prev_partitions, partitions, input_deps)
-                # Count the number of dependency edges
-                layer_stats['number_of_input_connections'] = len(input_deps)
-            else:
-                # Fallback to partition count if we can't create virtual partitions
-                layer_stats['number_of_input_connections'] = len(partitions)
+            # TODO: Implement proper input connection counting based on actual layer dependencies
+            # For now, use partition count as placeholder
+            layer_stats['number_of_input_connections'] = len(partitions)
 
         if partitions[0].out_bounds is not None and len(partitions[0].out_bounds) > 0:
             output_sizes = []
@@ -2247,19 +2412,9 @@ def build_partitions_single_layer(layer: keras.layers.Layer, partitioning_tuple=
             layer_stats['std_output_tensor_size'] = np.std(output_sizes)
             layer_stats['total_output_data'] = np.sum(output_sizes)
 
-            # Count ACTUAL output connections by simulating dependencies with a virtual next layer
-            # We create virtual "next layer" partitions with the same partitioning strategy
-            # and count how many dependency edges would be created
-            virtual_next_partitions = _create_virtual_partitions_for_layer_output(partitions)
-            if virtual_next_partitions:
-                output_deps = _build_spatial_deps(partitions, virtual_next_partitions)
-                output_deps = _build_outin_deps(partitions, virtual_next_partitions, output_deps)
-                # Count the number of dependency edges
-                layer_stats['number_of_output_connections'] = len(output_deps)
-            else:
-                print(f"WARNING: No virtual next partitions created for {layer.name}.")
-                # Fallback to partition count if we can't create virtual partitions
-                layer_stats['number_of_output_connections'] = len(partitions)
+            # TODO: Implement proper output connection counting based on actual layer dependencies
+            # For now, use partition count as placeholder
+            layer_stats['number_of_output_connections'] = len(partitions)
 
     if verbose:
         print(f"\n{'='*60}")
@@ -2283,7 +2438,7 @@ def analyze_model_partitions_per_layer(model: keras.Model, partitioning_tuple, v
     Args:
     - model: the Keras model to analyze
     - partitioning_tuple: either a single tuple (spat, out_ch, in_ch) for all layers,
-                         or a list of tuples with one tuple per layer
+                        or a list of tuples with one tuple per layer
     - verbose: whether to print detailed information
 
     Returns:

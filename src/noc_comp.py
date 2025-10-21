@@ -34,6 +34,7 @@ import time
 import csv
 import os
 import json
+import pandas as pd
 
 
 def count_operational_layers(model):
@@ -47,21 +48,22 @@ def count_operational_layers(model):
 
 if __name__ == '__main__':
     # Model setup
-    model = ResNet32_early_blocks((32, 32, 3), verbose=True)
+    model = ResNet_block_smaller((52, 52, 32), verbose=True)
     model = fuse_conv_bn(model, verbose=True)
-    
-    model_name = "ResNet32_early_blocks"
-    result_file = "./data/light_noc_comp"
+
+    model_name = "ResNet_block_smaller"
+    result_file = "./data/partitioner_data15Oct"
     
     # Prepare CSV files
-    csv_filename = f"{result_file}/p3_noc_comparison_results_{model_name}.csv"
-    energy_csv_filename = f"{result_file}/p3_latency_energy_results_{model_name}.csv"
+    csv_filename = f"{result_file}/noc_comparison_results_{model_name}.csv"
+    energy_csv_filename = f"{result_file}/latency_energy_results_{model_name}.csv"
+    traffic_density_csv_filename = f"{result_file}/layer_traffic_density_{model_name}.csv"
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
 
     # Grid setup
-    x_of_grid = 8
+    x_of_grid = 12
     source = 0
-    drain = 63
+    drain = 143
     grid = dm.Grid()
     grid.init(x_of_grid, 2, dm.Topology.TORUS, source=source, drain=drain)
 
@@ -115,10 +117,11 @@ if __name__ == '__main__':
     #                    (1, 4, 6), (1, 5, 1), (1, 5, 2), (1, 5, 3), (1, 5, 4), (1, 5, 5), (1, 5, 6),
     #                    (1, 6, 1), (1, 6, 2), (1, 6, 3), (1, 6, 4), (1, 6, 5), (1, 6, 6)]
     #configuration p3
-    configurations = [ (2, 1, 4), (2, 1, 5), (2, 1, 6), (2, 2, 4), (2, 2, 5), (2, 2, 6), (2, 3, 4), (2, 3, 5), (2, 3, 6),
-                        (2, 4, 1),(2, 4, 2), (2, 4, 3), (2, 4, 4), (2, 4, 5), (2, 4, 6), (2, 5, 1), (2, 5, 2), (2, 5, 3),
-                        (2, 5, 4), (2, 5, 5), (2, 5, 6), (2, 6, 1), (2, 6, 2), (2, 6, 3), (2, 6, 4), (2, 6, 5), (2, 6, 6)]
+    #configurations = [ (2, 1, 4), (2, 1, 5), (2, 1, 6), (2, 2, 4), (2, 2, 5), (2, 2, 6), (2, 3, 4), (2, 3, 5), (2, 3, 6),
+    #                    (2, 4, 1),(2, 4, 2), (2, 4, 3), (2, 4, 4), (2, 4, 5), (2, 4, 6), (2, 5, 1), (2, 5, 2), (2, 5, 3),
+    #                    (2, 5, 4), (2, 5, 5), (2, 5, 6), (2, 6, 1), (2, 6, 2), (2, 6, 3), (2, 6, 4), (2, 6, 5), (2, 6, 6)]
 
+    configurations = [(2,2,2)]
     print(f"Generated {len(configurations)} configurations to test\n")
     # Iterate over configurations    
     iteration = 0
@@ -146,6 +149,43 @@ if __name__ == '__main__':
                 model, grid, partitioning_tuple=partitioner_tuples,
                 grouping=False, verbose=False
             )
+
+            # Compute layer connection metrics from actual dependencies
+            connection_metrics = compute_layer_connection_metrics(parts, deps, verbose=False)
+            print("\nConnection Metrics per Layer:")
+            for layer_name, metrics in connection_metrics.items():
+                print(f"  {layer_name}: "
+                    f"in={metrics['input_connections']}, "
+                    f"out={metrics['output_connections']}, "
+                    f"partitions={metrics['num_partitions']}")
+
+            # Compute per-layer traffic density metrics
+            # Build partitioning config dict for better reporting
+            partitioning_configs = {}
+            for layer_idx, layer in enumerate(model.layers):
+                if layer_idx < len(partitioner_tuples):
+                    partitioning_configs[layer.name] = partitioner_tuples[layer_idx]
+
+            traffic_density_metrics = compute_layer_traffic_density_metrics(
+                parts, deps,
+                partitioning_configs=partitioning_configs,
+                verbose=True
+            )
+
+            # Export traffic density to CSV
+            traffic_df = pd.DataFrame(traffic_density_metrics)
+
+            # Add configuration info to each row
+            traffic_df['model_config'] = str(partitioner_tuples[1]) if len(partitioner_tuples) > 1 else str(partitioner_tuples[0])
+            traffic_df['total_partitions'] = total_partitions
+
+            # Write or append to CSV
+            if iteration == 1:
+                traffic_df.to_csv(traffic_density_csv_filename, index=False)
+                print(f"✓ Created traffic density CSV: {traffic_density_csv_filename}")
+            else:
+                traffic_df.to_csv(traffic_density_csv_filename, mode='a', header=False, index=False)
+                print(f"✓ Appended to traffic density CSV")
 
             task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
             path = row_wise_mapping(task_graph, grid, verbose=False)
@@ -209,7 +249,8 @@ if __name__ == '__main__':
                     append=(iteration > 1),  # Append after first iteration
                     num_partitions=total_partitions,
                     parts_per_layer=num_partitions_per_layer[1],
-                    partitioner_config = str(partitioner_tuples[1])
+                    partitioner_config=str(partitioner_tuples[1]),
+                    connection_metrics=connection_metrics
                 )
                 print(f"  ✓ Energy analysis saved to: {energy_csv_filename}")
 
