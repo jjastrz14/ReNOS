@@ -288,7 +288,7 @@ if __name__ == '__main__':
         strategies = selector.select_by_flops_per_partition(
             target_flops_per_partition=target,
             tolerance=0.3,  # ±30%
-            max_candidates=5
+            max_candidates=10
         )
 
         # Export best configuration
@@ -307,7 +307,7 @@ if __name__ == '__main__':
         strategies = selector.select_by_size_per_partition(
             target_size_per_partition=target,
             tolerance=0.3,  # ±30%
-            max_candidates=5
+            max_candidates=10
         )
 
         # Export best configuration
