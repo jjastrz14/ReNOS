@@ -35,6 +35,7 @@ import csv
 import os
 import json
 import pandas as pd
+import argparse
 
 
 def count_operational_layers(model):
@@ -46,14 +47,59 @@ def count_operational_layers(model):
     return count
 
 
+def load_partitioner_tuples_from_json(json_path, num_layers):
+    """
+    Load per-layer partitioning configuration from JSON file.
+
+    Args:
+        json_path: Path to JSON file with format: {"1": [spatial, output, input], "2": [...], ...}
+        num_layers: Total number of operational layers (excluding InputLayer)
+
+    Returns:
+        List of tuples starting with (0,1,1) for input layer, then per-layer configs
+    """
+    with open(json_path, 'r') as f:
+        layer_configs = json.load(f)
+
+    # Start with input layer tuple
+    partitioner_tuples = [(0, 1, 1)]
+
+    # Get all layer IDs from JSON and sort them
+    layer_ids = sorted([int(k) for k in layer_configs.keys()])
+
+    print(f"  Found layer IDs in config: {layer_ids}")
+
+    # Validate that we have the right number of layers
+    if len(layer_ids) != num_layers:
+        print(f"  WARNING: Config has {len(layer_ids)} layers but model has {num_layers} operational layers")
+        print(f"  Will use config values for specified layers only")
+
+    # Add configuration for each layer ID in the JSON
+    for layer_id in layer_ids:
+        layer_key = str(layer_id)
+        config = layer_configs[layer_key]
+        if len(config) == 3:
+            partitioner_tuples.append(tuple(config))
+        else:
+            raise ValueError(f"Layer {layer_id} config must have 3 values [spatial, output, input_split], got {config}")
+
+    return partitioner_tuples
+
+
 if __name__ == '__main__':
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='NoC comparison with per-layer partitioning configurations')
+    parser.add_argument('--config-files', nargs='+', default=None,
+                        help='One or more JSON files with per-layer partitioning configurations')
+    args = parser.parse_args()
+
     # Model setup
     model = ResNet_block_smaller((52, 52, 32), verbose=True)
     model = fuse_conv_bn(model, verbose=True)
 
     model_name = "ResNet_block_smaller"
     result_file = "./data/partitioner_data15Oct"
-    
+
     # Prepare CSV files
     csv_filename = f"{result_file}/noc_comparison_results_{model_name}.csv"
     energy_csv_filename = f"{result_file}/latency_energy_results_{model_name}.csv"
@@ -81,7 +127,8 @@ if __name__ == '__main__':
         'analytical_time',
         'booksim_time',
         'time_gain',
-        'partitioner_config'
+        'partitioner_config',
+        'config_file'
     ]
 
     # Write header first
@@ -89,51 +136,34 @@ if __name__ == '__main__':
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-    # Generate all partition configurations incrementally
-    # Pattern: (1,1,1), (2,1,1), (2,2,1), (2,2,2), (3,2,2), (3,3,2), (3,3,3), etc.
-    #configurations = []
-    #for spatial in range(1, 3):
-    #    for output in range(1, spatial + 1):
-    #        for input_split in range(1, output + 1):
-    #            configurations.append((spatial, output, input_split))
+    # Load configurations from JSON files or use default
+    configurations_list = []
+    if args.config_files:
+        print(f"Loading configurations from {len(args.config_files)} JSON file(s)...\n")
+        for config_file in args.config_files:
+            try:
+                partitioner_tuples = load_partitioner_tuples_from_json(config_file, num_layers)
+                configurations_list.append((config_file, partitioner_tuples))
+                print(f"✓ Loaded {config_file}: {partitioner_tuples[1:]}")
+            except Exception as e:
+                print(f"✗ Error loading {config_file}: {e}")
+                continue
+    else:
+        # Default configuration - use same tuple for all layers
+        print("No config files provided. Using default configuration: (2,2,2) for all layers\n")
+        partitioner_tuples = [(0, 1, 1)] + [(2, 2, 2)] * num_layers
+        configurations_list.append(("default", partitioner_tuples))
 
-    
-    #another option is to manually define a few configurations
-    #configuration p1
-    #configurations= [
-    #(1, 1, 1), (1, 1, 2), (1, 1, 3),
-    #(1, 2, 1), (1, 2, 2), (1, 2, 3),
-    #(1, 3, 1), (1, 3, 2), (1, 3, 3),
-    #(2, 1, 1), (2, 1, 2), (2, 1, 3),
-    #(2, 2, 1), (2, 2, 2), (2, 2, 3),
-    #(2, 3, 1), (2, 3, 2), (2, 3, 3),
-    #(3, 1, 1), (3, 1, 2), (3, 1, 3),
-    #(3, 2, 1), (3, 2, 2), (3, 2, 3),
-    #(3, 3, 1), (3, 3, 2), (3, 3, 3)
-    #]
-    #configuration p2
-    #configurations = [ (1, 1, 4), (1, 1, 5), (1, 1, 6), (1, 2, 4), (1, 2, 5), (1, 2, 6),(1, 3, 4),
-    #                    (1, 3, 5), (1, 3, 6),(1, 4, 1), (1, 4, 2), (1, 4, 3), (1, 4, 4), (1, 4, 5),
-    #                    (1, 4, 6), (1, 5, 1), (1, 5, 2), (1, 5, 3), (1, 5, 4), (1, 5, 5), (1, 5, 6),
-    #                    (1, 6, 1), (1, 6, 2), (1, 6, 3), (1, 6, 4), (1, 6, 5), (1, 6, 6)]
-    #configuration p3
-    #configurations = [ (2, 1, 4), (2, 1, 5), (2, 1, 6), (2, 2, 4), (2, 2, 5), (2, 2, 6), (2, 3, 4), (2, 3, 5), (2, 3, 6),
-    #                    (2, 4, 1),(2, 4, 2), (2, 4, 3), (2, 4, 4), (2, 4, 5), (2, 4, 6), (2, 5, 1), (2, 5, 2), (2, 5, 3),
-    #                    (2, 5, 4), (2, 5, 5), (2, 5, 6), (2, 6, 1), (2, 6, 2), (2, 6, 3), (2, 6, 4), (2, 6, 5), (2, 6, 6)]
+    print(f"\nRunning {len(configurations_list)} configuration(s)\n")
 
-    configurations = [(2,2,2)]
-    print(f"Generated {len(configurations)} configurations to test\n")
-    # Iterate over configurations    
+    # Iterate over configurations
     iteration = 0
-    for config in configurations:
+    for config_name, partitioner_tuples in configurations_list:
         iteration += 1
-        spatial, output, input_split = config
         print(f"\n{'='*80}")
-        print(f"Iteration {iteration}/{len(configurations)}: Config (spatial={spatial}, output={output}, input={input_split})")
+        print(f"Iteration {iteration}/{len(configurations_list)}: {config_name}")
+        print(f"Partitioner tuples: {partitioner_tuples}")
         print(f"{'='*80}\n")
-
-        # Build partitioner tuples: first tuple is (0,1,1), rest are (spatial, output, input_split)
-        partitioner_tuples = [(0, 1, 1)] + [(spatial, output, input_split)] * (num_layers)
 
         try:
             # Calculate number of partitions
@@ -193,8 +223,10 @@ if __name__ == '__main__':
             # Construct mapping
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
                         if task_id != "start" and task_id != "end"}
-            
-            config_path_file = result_file + f"/mapping_{spatial}_{output}_{input_split}.json"
+
+            # Generate unique config filename based on iteration or config name
+            config_basename = os.path.basename(config_name).replace('.json', '') if config_name != "default" else "default"
+            config_path_file = result_file + f"/mapping_{config_basename}_iter{iteration}.json"
             
             mapper_config = "." + config_path_file
             mapper = ma.Mapper()
@@ -275,20 +307,20 @@ if __name__ == '__main__':
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writerow({
                     'num_partitions': total_partitions,
-                    'parts_per_layer': num_partitions_per_layer[1],
                     'result_analytical': result_fast_anal,
                     'result_booksim': result_booksim,
                     'percentage_diff': f"{percentage_diff:.2f}",
                     'analytical_time': f"{fast_analytical_time:.4f}",
                     'booksim_time': f"{booksim_time:.4f}",
                     'time_gain': f"{time_gain:.4f}",
-                    'partitioner_config': str(partitioner_tuples[1])
+                    'partitioner_config': str(partitioner_tuples[1:]),
+                    'config_file': config_name
                 })
 
             print(f"✓ Results appended to {csv_filename}")
 
         except Exception as e:
-            print(f"\n✗ Error with config {config}: {str(e)}")
+            print(f"\n✗ Error with config {config_name}: {str(e)}")
             print(f"  Skipping to next iteration...\n")
             continue
 
