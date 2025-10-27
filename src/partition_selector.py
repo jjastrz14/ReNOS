@@ -86,7 +86,7 @@ class PartitionSelector:
             layer_type = df['layer_type'].iloc[0]
 
             print(f"\n{'='*80}")
-            print(f"Layer {layer_idx}: {layer_name} ({layer_type})")
+            print(f"Layer {layer_idx}: {layer_name} ({layer_type}) Range: [{df['mean_flops'].min():.2e}, {df['mean_flops'].max():.2e}] FLOPs/partition")
             print(f"{'='*80}")
 
             # Calculate target range
@@ -169,7 +169,7 @@ class PartitionSelector:
             layer_type = df['layer_type'].iloc[0]
 
             print(f"\n{'='*80}")
-            print(f"Layer {layer_idx}: {layer_name} ({layer_type})")
+            print(f"Layer {layer_idx}: {layer_name} ({layer_type}) Range: [{df['mean_partition_size'].min():,.0f}, {df['mean_partition_size'].max():,.0f}] bytes")
             print(f"{'='*80}")
 
             # Calculate target range
