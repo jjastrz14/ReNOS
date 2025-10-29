@@ -1152,7 +1152,9 @@ def export_simulation_results_to_csv(
     num_partitions: int = None,
     parts_per_layer: int = None,
     partitioner_config: str = None,
-    connection_metrics: Dict = None
+    connection_metrics: Dict = None,
+    mean_in_traffic_density: float = None,
+    mean_out_traffic_density: float = None
 ) -> pd.DataFrame:
     """
     Handy function to export latency and energy results from a simulation.
@@ -1210,7 +1212,9 @@ def export_simulation_results_to_csv(
         num_partitions=num_partitions,
         parts_per_layer=parts_per_layer,
         partitioner_config=partitioner_config,
-        connection_metrics=connection_metrics
+        connection_metrics=connection_metrics,
+        mean_in_traffic_density=mean_in_traffic_density,
+        mean_out_traffic_density=mean_out_traffic_density
     )
 
     # Handle file writing with proper append logic
@@ -1240,7 +1244,9 @@ def export_latency_energy_details_to_csv(
     num_partitions: int = None,
     parts_per_layer: int = None,
     partitioner_config: str = None,
-    connection_metrics: Dict = None
+    connection_metrics: Dict = None,
+    mean_in_traffic_density: float = None,
+    mean_out_traffic_density: float = None
 ) -> pd.DataFrame:
     """
     Export comprehensive latency and energy details to CSV file.
@@ -1473,6 +1479,10 @@ def export_latency_energy_details_to_csv(
         data['avg_input_fan_in'] = 0.0
         data['avg_output_fan_out'] = 0.0
         data['num_layers_with_connections'] = 0
+
+    # Add traffic density metrics (mean across all layers)
+    data['mean_in_traffic_density_bytes'] = mean_in_traffic_density if mean_in_traffic_density is not None else 0.0
+    data['mean_out_traffic_density_bytes'] = mean_out_traffic_density if mean_out_traffic_density is not None else 0.0
 
     # Create DataFrame
     df = pd.DataFrame([data])

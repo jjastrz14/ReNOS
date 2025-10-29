@@ -266,6 +266,7 @@ if __name__ == '__main__':
 
     # Example usage
     data_path = "./data/partitioner_data15Oct"
+    save_path = "./data/noc_comp_flops_sizes_29Oct"
     selector = PartitionSelector(data_path)
 
     # Parse command line arguments
@@ -294,7 +295,7 @@ if __name__ == '__main__':
         # Export best configuration
         config = selector.export_configuration(
             strategies,
-            output_file=f"{data_path}/config_flops_{int(target)}.json",
+            output_file=f"{save_path}/config_flops_{int(target)}.json",
             strategy_index=0
         )
 
@@ -313,7 +314,7 @@ if __name__ == '__main__':
         # Export best configuration
         config = selector.export_configuration(
             strategies,
-            output_file=f"{data_path}/config_size_{int(target)}.json",
+            output_file=f"{save_path}/config_sizes_{int(target)}.json",
             strategy_index=0
         )
 

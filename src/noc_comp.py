@@ -13,6 +13,7 @@ NoC comparison script: compares fast analytical model with Booksim2 simulator
 across different partitioning configurations.
 """
 
+from tabnanny import verbose
 from graph import model_to_graph
 from utils.partitioner_utils import search_space_split_factors
 from graph import TaskGraph
@@ -47,7 +48,7 @@ def count_operational_layers(model):
     return count
 
 
-def build_partitioner_tuples_for_model(model, layer_configs_dict):
+def build_partitioner_tuples_for_model(model, layer_configs_dict, verbose=False):
     """
     Build complete partitioner tuples list for model, automatically handling
     InputLayer and Add layers with (0,1,1).
@@ -69,12 +70,14 @@ def build_partitioner_tuples_for_model(model, layer_configs_dict):
         if layer_type == 'InputLayer':
             # Always use (0,1,1) for InputLayer
             partitioner_tuples.append((0, 1, 1))
-            print(f"  Layer {layer_idx} ({layer.name}): InputLayer -> (0, 1, 1)")
+            if verbose:
+                print(f"  Layer {layer_idx} ({layer.name}): InputLayer -> (0, 1, 1)")
 
         elif layer_type == 'Add':
             # Automatically use (0,1,1) for Add layers
             partitioner_tuples.append((0, 1, 1))
-            print(f"  Layer {layer_idx} ({layer.name}): Add -> (0, 1, 1) [auto]")
+            if verbose:
+                print(f"  Layer {layer_idx} ({layer.name}): Add -> (0, 1, 1) [auto]")
             operational_layer_idx += 1
 
         else:
@@ -86,7 +89,8 @@ def build_partitioner_tuples_for_model(model, layer_configs_dict):
                 config = layer_configs_dict[layer_key]
                 if len(config) == 3:
                     partitioner_tuples.append(tuple(config))
-                    print(f"  Layer {layer_idx} ({layer.name}): {layer_type} -> {tuple(config)}")
+                    if verbose:
+                        print(f"  Layer {layer_idx} ({layer.name}): {layer_type} -> {tuple(config)}")
                 else:
                     raise ValueError(f"Layer {operational_layer_idx} config must have 3 values, got {config}")
             else:
@@ -102,7 +106,7 @@ def load_partitioner_tuples_from_json(json_path, model):
 
     Args:
         json_path: Path to JSON file with format: {"1": [spatial, output, input], "2": [...], ...}
-                  Layer IDs correspond to operational layers (excluding InputLayer)
+                    Layer IDs correspond to operational layers (excluding InputLayer)
         model: Keras model to build tuples for
 
     Returns:
@@ -118,11 +122,36 @@ def load_partitioner_tuples_from_json(json_path, model):
 
 
 if __name__ == '__main__':
+    # Start timing
+    script_start_time = time.time()
+
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='NoC comparison with per-layer partitioning configurations')
     parser.add_argument('--config-files', nargs='+', default=None,
                         help='One or more JSON files with per-layer partitioning configurations')
+    parser.add_argument('--max-num-partitions-for-fixed-per-layer', type=int, default=None,
+                        help='Maximum number of partitions per layer for generating fixed configurations (integer).')
+    parser.add_argument('--combinations-to-test', type=int, default=None,
+                        help='Number of combinations to test for fixed per-layer configurations (integer).')
+    parser.add_argument('--batch', type=str, default=None,
+                        help='Run in batch mode. Format: "X/N" where X is batch number (1-indexed) and N is total batches. Example: --batch 2/4')
     args = parser.parse_args()
+
+    # Parse batch argument
+    batch_num = None
+    total_batches = None
+    if args.batch:
+        try:
+            batch_parts = args.batch.split('/')
+            batch_num = int(batch_parts[0])
+            total_batches = int(batch_parts[1])
+            if batch_num < 1 or batch_num > total_batches:
+                raise ValueError(f"Batch number must be between 1 and {total_batches}")
+            print(f"Running in batch mode: batch {batch_num} of {total_batches}\n")
+        except (ValueError, IndexError) as e:
+            print(f"Error: Invalid --batch format. Use 'X/N' (e.g., --batch 2/4)")
+            print(f"Details: {e}")
+            exit(1)
 
     # Model setup
     model = ResNet_block_smaller((52, 52, 32), verbose=True)
@@ -131,11 +160,38 @@ if __name__ == '__main__':
     model_name = "ResNet_block_smaller"
     result_file = "./data/noc_comp_flops_sizes_29Oct"
 
-    # Prepare CSV files
-    csv_filename = f"{result_file}/noc_comparison_results_{model_name}.csv"
-    energy_csv_filename = f"{result_file}/latency_energy_results_{model_name}.csv"
-    traffic_density_csv_filename = f"{result_file}/layer_traffic_density_{model_name}.csv"
-    os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
+    # Determine suffix based on mode
+    if args.config_files:
+        # Detect suffix from config filename pattern
+        first_config = args.config_files[0]
+        if 'config_flops' in first_config:
+            suffix = "flops"
+        elif 'config_sizes' in first_config:
+            suffix = "sizes"
+        else:
+            suffix = "custom"
+    elif args.max_num_partitions_for_fixed_per_layer:
+        suffix = "fixed_partitions"
+    else:
+        suffix = "default"
+
+    print(f"Running in mode: {suffix}\n")
+
+    # Prepare directories
+    os.makedirs(result_file, exist_ok=True)
+    jsons_dir = os.path.join(result_file, "jsons")
+    os.makedirs(jsons_dir, exist_ok=True)
+    layer_traffic_dir = os.path.join(result_file, "layer_traffic")
+    os.makedirs(layer_traffic_dir, exist_ok=True)
+
+    # Prepare CSV files with suffix and batch prefix
+    if args.batch:
+        batch_prefix = f"batch{batch_num}_"
+    else:
+        batch_prefix = ""
+
+    csv_filename = f"{result_file}/{batch_prefix}{suffix}_noc_comparison_{model_name}.csv"
+    energy_csv_filename = f"{result_file}/{batch_prefix}{suffix}_latency_energy_{model_name}.csv"
 
     # Grid setup
     x_of_grid = 12
@@ -179,6 +235,86 @@ if __name__ == '__main__':
             except Exception as e:
                 print(f"✗ Error loading {config_file}: {e}")
                 continue
+
+        # Apply batch filtering if in batch mode
+        if args.batch:
+            total_configs = len(configurations_list)
+            configs_per_batch = total_configs // total_batches
+            remainder = total_configs % total_batches
+
+            # Calculate start and end indices for this batch
+            # Distribute remainder across first batches
+            if batch_num <= remainder:
+                start_idx = (batch_num - 1) * (configs_per_batch + 1)
+                end_idx = start_idx + configs_per_batch + 1
+            else:
+                start_idx = remainder * (configs_per_batch + 1) + (batch_num - remainder - 1) * configs_per_batch
+                end_idx = start_idx + configs_per_batch
+
+            configurations_list = configurations_list[start_idx:end_idx]
+            print(f"Batch {batch_num}/{total_batches}: Running configs {start_idx+1} to {end_idx} (out of {total_configs} total)\n")
+            
+    elif args.max_num_partitions_for_fixed_per_layer:
+
+        combination_int = args.combinations_to_test if args.combinations_to_test else 3
+        max_number_of_parts = args.max_num_partitions_for_fixed_per_layer
+        print(f"Generating fixed per-layer configurations with max {max_number_of_parts} partitions...\n")
+
+        # Generate configurations with fixed per-layer partitions
+        fixed_configs = [(i, j, k) for i in range(0, combination_int)
+                        for j in range(1, combination_int)
+                        for k in range(1, combination_int)]
+        num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in fixed_configs]
+        
+        print(f"Generated {len(fixed_configs)} configurations\n")
+
+        # Filter combination to not exceed max partitions
+        fixed_configs = [cfg for cfg, num_parts in zip(fixed_configs, num_partitions_per_layer)
+                        if num_parts <= max_number_of_parts]
+
+        print(f"After filtering: {len(fixed_configs)} configurations\n")
+
+        # Apply batch filtering if in batch mode
+        batch_start_idx = 0  # Track the global starting index for this batch
+        if args.batch:
+            total_configs = len(fixed_configs)
+            configs_per_batch = total_configs // total_batches
+            remainder = total_configs % total_batches
+
+            # Calculate start and end indices for this batch
+            if batch_num <= remainder:
+                start_idx = (batch_num - 1) * (configs_per_batch + 1)
+                end_idx = start_idx + configs_per_batch + 1
+            else:
+                start_idx = remainder * (configs_per_batch + 1) + (batch_num - remainder - 1) * configs_per_batch
+                end_idx = start_idx + configs_per_batch
+
+            batch_start_idx = start_idx  # Remember where this batch starts globally
+            fixed_configs = fixed_configs[start_idx:end_idx]
+            print(f"Batch {batch_num}/{total_batches}: Running configs {start_idx+1} to {end_idx} (out of {total_configs} total)\n")
+
+        print(" These are the configurations to be tested:")
+        print( '--------------------------------------------')
+        print(fixed_configs)
+        print( '--------------------------------------------')
+
+        # Build partitioner tuples for each configuration
+        for idx, config in enumerate(fixed_configs):
+            # Create config dict where all layers use the same tuple
+            config_dict = {str(i): list(config) for i in range(1, num_layers + 1)}
+
+            # Build tuples (handles Add layers automatically)
+            partitioner_tuples = build_partitioner_tuples_for_model(model, config_dict)
+
+            # Use global index for config naming (batch_start_idx + idx + 1)
+            global_config_num = batch_start_idx + idx + 1
+
+            verbose = False
+            if verbose:
+                print(f"Configuration {global_config_num}: {config} ({2**config[0] * config[1] * config[2]} parts/layer)")
+
+            configurations_list.append((f"fixed_config_{global_config_num}", partitioner_tuples))
+            
     else:
         # Default configuration - build with (2,2,2) for regular layers, (0,1,1) for Add
         print("No config files provided. Using default configuration: (2,2,2) for operational layers\n")
@@ -191,8 +327,13 @@ if __name__ == '__main__':
         partitioner_tuples = build_partitioner_tuples_for_model(model, default_config)
         configurations_list.append(("default", partitioner_tuples))
 
+    ##############################################################################
+    # Run simulations for each configuration
+    ##############################################################################
+    
+    
     print(f"\nRunning {len(configurations_list)} configuration(s)\n")
-
+    
     breakpoint()
     
     # Iterate over configurations
@@ -241,20 +382,27 @@ if __name__ == '__main__':
                 verbose=True
             )
 
-            # Export traffic density to CSV
+            # Export traffic density to separate CSV per configuration
             traffic_df = pd.DataFrame(traffic_density_metrics)
 
             # Add configuration info to each row
             traffic_df['model_config'] = str(partitioner_tuples[1]) if len(partitioner_tuples) > 1 else str(partitioner_tuples[0])
             traffic_df['total_partitions'] = total_partitions
 
-            # Write or append to CSV
-            if iteration == 1:
-                traffic_df.to_csv(traffic_density_csv_filename, index=False)
-                print(f"✓ Created traffic density CSV: {traffic_density_csv_filename}")
+            # Extract config basename (filename without path and .json extension)
+            if config_name == "default" or config_name.startswith("fixed_config_"):
+                config_basename = config_name
             else:
-                traffic_df.to_csv(traffic_density_csv_filename, mode='a', header=False, index=False)
-                print(f"✓ Appended to traffic density CSV")
+                config_basename = os.path.basename(config_name).replace('.json', '')
+
+            # Save to separate file per configuration
+            per_config_traffic_csv = os.path.join(layer_traffic_dir, f"{config_basename}_layer_traffic_density_{model_name}.csv")
+            traffic_df.to_csv(per_config_traffic_csv, index=False)
+            print(f"✓ Saved layer traffic density to: {per_config_traffic_csv}")
+
+            # Calculate mean traffic density across all layers for energy CSV
+            mean_in_traffic_density = traffic_df['mean_in_traffic_density_bytes'].mean()
+            mean_out_traffic_density = traffic_df['mean_out_traffic_density_bytes'].mean()
 
             task_graph = model_to_graph(model, grid, dep_graph, parts, deps, verbose=False)
             path = row_wise_mapping(task_graph, grid, verbose=False)
@@ -263,9 +411,9 @@ if __name__ == '__main__':
             mapping = {task_id: int(next_node) for task_id, _, next_node in path
                         if task_id != "start" and task_id != "end"}
 
-            # Generate unique config filename based on iteration or config name
+            # Generate unique config filename in jsons/ directory
             config_basename = os.path.basename(config_name).replace('.json', '') if config_name != "default" else "default"
-            config_path_file = result_file + f"/mapping_{config_basename}_iter{iteration}.json"
+            config_path_file = os.path.join(jsons_dir, f"mapping_{config_basename}_iter{iteration}.json")
             
             mapper_config = "." + config_path_file
             mapper = ma.Mapper()
@@ -313,15 +461,21 @@ if __name__ == '__main__':
             # Export latency and energy analysis to CSV
             print("\nExporting latency/energy analysis...")
             try:
+                # In batch mode, always append within this batch's CSV
+                # Non-batch mode: append after first iteration
+                should_append = (iteration > 1)
+
                 csv_df = export_simulation_results_to_csv(
                     logger=logger,
                     config_path=config_path_file,
                     output_path=energy_csv_filename,
-                    append=(iteration > 1),  # Append after first iteration
+                    append=should_append,
                     num_partitions=total_partitions,
                     parts_per_layer=num_partitions_per_layer[1],
                     partitioner_config=str(partitioner_tuples[1]),
-                    connection_metrics=connection_metrics
+                    connection_metrics=connection_metrics,
+                    mean_in_traffic_density=mean_in_traffic_density,
+                    mean_out_traffic_density=mean_out_traffic_density
                 )
                 print(f"  ✓ Energy analysis saved to: {energy_csv_filename}")
 
@@ -346,6 +500,7 @@ if __name__ == '__main__':
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writerow({
                     'num_partitions': total_partitions,
+                    'parts_per_layer': num_partitions_per_layer[1],
                     'result_analytical': result_fast_anal,
                     'result_booksim': result_booksim,
                     'percentage_diff': f"{percentage_diff:.2f}",
@@ -353,7 +508,7 @@ if __name__ == '__main__':
                     'booksim_time': f"{booksim_time:.4f}",
                     'time_gain': f"{time_gain:.4f}",
                     'partitioner_config': str(partitioner_tuples[1:]),
-                    'config_file': config_name
+                    'config_file': config_basename
                 })
 
             print(f"✓ Results appended to {csv_filename}")
@@ -363,8 +518,29 @@ if __name__ == '__main__':
             print(f"  Skipping to next iteration...\n")
             continue
 
+    # Calculate total execution time
+    script_end_time = time.time()
+    total_execution_time = script_end_time - script_start_time
+
+    # Convert to human-readable format
+    hours = int(total_execution_time // 3600)
+    minutes = int((total_execution_time % 3600) // 60)
+    seconds = total_execution_time % 60
+
     print(f"\n{'='*80}")
-    print(f"Results saved to: {csv_filename}")
+    if args.batch:
+        print(f"BATCH {batch_num}/{total_batches} COMPLETE")
+    else:
+        print(f"SIMULATION COMPLETE")
+    print(f"{'='*80}")
+    print(f"Results saved to:")
+    print(f"  - {csv_filename}")
+    print(f"  - {energy_csv_filename}")
+    print(f"  - {layer_traffic_dir}/ (per-config traffic density)")
+    print(f"\nConfigurations tested in this {'batch' if args.batch else 'run'}: {len(configurations_list)}")
+    print(f"Total execution time: {hours}h {minutes}m {seconds:.2f}s")
+    if args.batch:
+        print(f"\nNote: This is batch {batch_num} of {total_batches}. Run other batches separately.")
     print(f"{'='*80}\n")
         
 
