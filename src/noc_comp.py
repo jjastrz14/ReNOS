@@ -47,43 +47,74 @@ def count_operational_layers(model):
     return count
 
 
-def load_partitioner_tuples_from_json(json_path, num_layers):
+def build_partitioner_tuples_for_model(model, layer_configs_dict):
+    """
+    Build complete partitioner tuples list for model, automatically handling
+    InputLayer and Add layers with (0,1,1).
+
+    Args:
+        model: Keras model
+        layer_configs_dict: Dict mapping layer_id -> [spatial, output, input_split]
+                          Layer IDs correspond to operational layers (excluding InputLayer)
+
+    Returns:
+        List of tuples for each layer in the model
+    """
+    partitioner_tuples = []
+    operational_layer_idx = 0  # Counter for operational layers (for JSON mapping)
+
+    for layer_idx, layer in enumerate(model.layers):
+        layer_type = layer.__class__.__name__
+
+        if layer_type == 'InputLayer':
+            # Always use (0,1,1) for InputLayer
+            partitioner_tuples.append((0, 1, 1))
+            print(f"  Layer {layer_idx} ({layer.name}): InputLayer -> (0, 1, 1)")
+
+        elif layer_type == 'Add':
+            # Automatically use (0,1,1) for Add layers
+            partitioner_tuples.append((0, 1, 1))
+            print(f"  Layer {layer_idx} ({layer.name}): Add -> (0, 1, 1) [auto]")
+            operational_layer_idx += 1
+
+        else:
+            # Regular operational layer - get from config
+            operational_layer_idx += 1
+            layer_key = str(operational_layer_idx)
+
+            if layer_key in layer_configs_dict:
+                config = layer_configs_dict[layer_key]
+                if len(config) == 3:
+                    partitioner_tuples.append(tuple(config))
+                    print(f"  Layer {layer_idx} ({layer.name}): {layer_type} -> {tuple(config)}")
+                else:
+                    raise ValueError(f"Layer {operational_layer_idx} config must have 3 values, got {config}")
+            else:
+                raise ValueError(f"Missing config for operational layer {operational_layer_idx} ({layer.name})")
+
+    return partitioner_tuples
+
+
+def load_partitioner_tuples_from_json(json_path, model):
     """
     Load per-layer partitioning configuration from JSON file.
+    Automatically handles InputLayer and Add layers with (0,1,1).
 
     Args:
         json_path: Path to JSON file with format: {"1": [spatial, output, input], "2": [...], ...}
-        num_layers: Total number of operational layers (excluding InputLayer)
+                  Layer IDs correspond to operational layers (excluding InputLayer)
+        model: Keras model to build tuples for
 
     Returns:
-        List of tuples starting with (0,1,1) for input layer, then per-layer configs
+        List of tuples for each layer in the model
     """
     with open(json_path, 'r') as f:
         layer_configs = json.load(f)
 
-    # Start with input layer tuple
-    partitioner_tuples = [(0, 1, 1)]
+    print(f"  Found layer IDs in config: {sorted([int(k) for k in layer_configs.keys()])}")
+    print(f"  Building partitioner tuples (Add layers auto-set to (0,1,1)):")
 
-    # Get all layer IDs from JSON and sort them
-    layer_ids = sorted([int(k) for k in layer_configs.keys()])
-
-    print(f"  Found layer IDs in config: {layer_ids}")
-
-    # Validate that we have the right number of layers
-    if len(layer_ids) != num_layers:
-        print(f"  WARNING: Config has {len(layer_ids)} layers but model has {num_layers} operational layers")
-        print(f"  Will use config values for specified layers only")
-
-    # Add configuration for each layer ID in the JSON
-    for layer_id in layer_ids:
-        layer_key = str(layer_id)
-        config = layer_configs[layer_key]
-        if len(config) == 3:
-            partitioner_tuples.append(tuple(config))
-        else:
-            raise ValueError(f"Layer {layer_id} config must have 3 values [spatial, output, input_split], got {config}")
-
-    return partitioner_tuples
+    return build_partitioner_tuples_for_model(model, layer_configs)
 
 
 if __name__ == '__main__':
@@ -98,7 +129,7 @@ if __name__ == '__main__':
     model = fuse_conv_bn(model, verbose=True)
 
     model_name = "ResNet_block_smaller"
-    result_file = "./data/partitioner_data15Oct"
+    result_file = "./data/noc_comp_flops_sizes_29Oct"
 
     # Prepare CSV files
     csv_filename = f"{result_file}/noc_comparison_results_{model_name}.csv"
@@ -130,7 +161,7 @@ if __name__ == '__main__':
         'partitioner_config',
         'config_file'
     ]
-
+    
     # Write header first
     with open(csv_filename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -142,20 +173,28 @@ if __name__ == '__main__':
         print(f"Loading configurations from {len(args.config_files)} JSON file(s)...\n")
         for config_file in args.config_files:
             try:
-                partitioner_tuples = load_partitioner_tuples_from_json(config_file, num_layers)
+                partitioner_tuples = load_partitioner_tuples_from_json(config_file, model)
                 configurations_list.append((config_file, partitioner_tuples))
-                print(f"✓ Loaded {config_file}: {partitioner_tuples[1:]}")
+                print(f"✓ Loaded {config_file}\n")
             except Exception as e:
                 print(f"✗ Error loading {config_file}: {e}")
                 continue
     else:
-        # Default configuration - use same tuple for all layers
-        print("No config files provided. Using default configuration: (2,2,2) for all layers\n")
-        partitioner_tuples = [(0, 1, 1)] + [(2, 2, 2)] * num_layers
+        # Default configuration - build with (2,2,2) for regular layers, (0,1,1) for Add
+        print("No config files provided. Using default configuration: (2,2,2) for operational layers\n")
+
+        # Create default config dict with (2,2,2) for all operational layers
+        default_config = {}
+        for i in range(1, num_layers + 1):
+            default_config[str(i)] = [2, 2, 2]
+
+        partitioner_tuples = build_partitioner_tuples_for_model(model, default_config)
         configurations_list.append(("default", partitioner_tuples))
 
     print(f"\nRunning {len(configurations_list)} configuration(s)\n")
 
+    breakpoint()
+    
     # Iterate over configurations
     iteration = 0
     for config_name, partitioner_tuples in configurations_list:
