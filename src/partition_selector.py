@@ -63,7 +63,8 @@ class PartitionSelector:
         self,
         target_flops_per_partition: float,
         tolerance: float = 0.2,
-        max_candidates: int = 5
+        max_candidates: int = 5,
+        max_partitions_per_layer: int = None
     ) -> Dict[int, List[Tuple[int, int, int]]]:
         """
         Select partitioning strategies that achieve target FLOPs per partition.
@@ -75,6 +76,7 @@ class PartitionSelector:
             target_flops_per_partition: Target FLOPs per partition (e.g., 1e6)
             tolerance: Acceptable deviation from target (e.g., 0.2 = ±20%)
             max_candidates: Maximum candidates to return per layer
+            max_partitions_per_layer: Maximum allowed partitions per layer (None = no limit)
 
         Returns:
             Dict mapping layer_idx -> list of (spatial, out_ch, in_ch) tuples
@@ -85,8 +87,15 @@ class PartitionSelector:
             layer_name = df['layer_name'].iloc[0]
             layer_type = df['layer_type'].iloc[0]
 
+            # Apply max partitions constraint first to show accurate range
+            df_constrained = df.copy()
+            if max_partitions_per_layer is not None:
+                df_constrained = df_constrained[df_constrained['num_partitions'] <= max_partitions_per_layer].copy()
+
             print(f"\n{'='*80}")
-            print(f"Layer {layer_idx}: {layer_name} ({layer_type}) Range: [{df['mean_flops'].min():.2e}, {df['mean_flops'].max():.2e}] FLOPs/partition")
+            print(f"Layer {layer_idx}: {layer_name} ({layer_type})")
+            print(f"  Range (with max_partitions<={max_partitions_per_layer}): [{df_constrained['mean_flops'].min():.2e}, {df_constrained['mean_flops'].max():.2e}] FLOPs/partition")
+            print(f"  Range: [{df_constrained['mean_flops'].min():.2e}, {df_constrained['mean_flops'].max():.2e}] FLOPs/partition")
             print(f"{'='*80}")
 
             # Calculate target range
@@ -94,17 +103,26 @@ class PartitionSelector:
             max_flops = target_flops_per_partition * (1 + tolerance)
 
             # Filter by target FLOPs per partition
-            df_filtered = df[
-                (df['mean_flops'] >= min_flops) &
-                (df['mean_flops'] <= max_flops)
+            df_filtered = df_constrained[
+                (df_constrained['mean_flops'] >= min_flops) &
+                (df_constrained['mean_flops'] <= max_flops)
             ].copy()
 
             if len(df_filtered) == 0:
+                # Check if this is a ReLU or activation layer
+                if 'relu' in layer_type.lower() or 'activation' in layer_type.lower():
+                    print(f"  INFO: No strategies found for {layer_type} layer in range [{min_flops:.2e}, {max_flops:.2e}]. Using default {DEFAULT_RELU}.")
+                    results[layer_idx] = [DEFAULT_RELU]
+                    continue
+
+                # For non-ReLU layers, select closest option
                 print(f"  WARNING: No strategies found in range [{min_flops:.2e}, {max_flops:.2e}]")
-                print(f"  Available range: [{df['mean_flops'].min():.2e}, {df['mean_flops'].max():.2e}]")
-                # Select closest option
-                df['flops_distance'] = abs(df['mean_flops'] - target_flops_per_partition)
-                closest = df.nsmallest(1, 'flops_distance').iloc[0]
+                print(f"  Available range (constrained): [{df_constrained['mean_flops'].min():.2e}, {df_constrained['mean_flops'].max():.2e}]")
+
+                # Select closest option from constrained dataframe
+                df_constrained_copy = df_constrained.copy()
+                df_constrained_copy['flops_distance'] = abs(df_constrained_copy['mean_flops'] - target_flops_per_partition)
+                closest = df_constrained_copy.nsmallest(1, 'flops_distance').iloc[0]
                 print(f"  Using closest: ({closest['spatial']}, {closest['out_ch']}, {closest['in_ch']}) "
                       f"with {closest['mean_flops']:.2e} FLOPs/partition, "
                       f"size_per_partition={closest['mean_partition_size']:,.0f} bytes")
@@ -127,7 +145,7 @@ class PartitionSelector:
             print(f"  Top {len(candidates)} candidates:")
 
             selected = []
-            for idx, row in candidates.iterrows():
+            for _, row in candidates.iterrows():
                 config = (int(row['spatial']), int(row['out_ch']), int(row['in_ch']))
                 selected.append(config)
 
@@ -146,7 +164,8 @@ class PartitionSelector:
         self,
         target_size_per_partition: float,
         tolerance: float = 0.2,
-        max_candidates: int = 5
+        max_candidates: int = 5,
+        max_partitions_per_layer: int = None
     ) -> Dict[int, List[Tuple[int, int, int]]]:
         """
         Select partitioning strategies that achieve target size per partition.
@@ -158,6 +177,7 @@ class PartitionSelector:
             target_size_per_partition: Target size per partition in bytes (e.g., 50000)
             tolerance: Acceptable deviation from target (e.g., 0.2 = ±20%)
             max_candidates: Maximum candidates to return per layer
+            max_partitions_per_layer: Maximum allowed partitions per layer (None = no limit)
 
         Returns:
             Dict mapping layer_idx -> list of (spatial, out_ch, in_ch) tuples
@@ -168,8 +188,15 @@ class PartitionSelector:
             layer_name = df['layer_name'].iloc[0]
             layer_type = df['layer_type'].iloc[0]
 
+            # Apply max partitions constraint first to show accurate range
+            df_constrained = df.copy()
+            if max_partitions_per_layer is not None:
+                df_constrained = df_constrained[df_constrained['num_partitions'] <= max_partitions_per_layer].copy()
+
             print(f"\n{'='*80}")
-            print(f"Layer {layer_idx}: {layer_name} ({layer_type}) Range: [{df['mean_partition_size'].min():,.0f}, {df['mean_partition_size'].max():,.0f}] bytes")
+            print(f"Layer {layer_idx}: {layer_name} ({layer_type})")
+            print(f"  Range (with max_partitions<={max_partitions_per_layer}): [{df_constrained['mean_partition_size'].min():,.0f}, {df_constrained['mean_partition_size'].max():,.0f}] bytes")
+            print(f"  Range: [{df_constrained['mean_partition_size'].min():,.0f}, {df_constrained['mean_partition_size'].max():,.0f}] bytes")
             print(f"{'='*80}")
 
             # Calculate target range
@@ -177,17 +204,26 @@ class PartitionSelector:
             max_size = target_size_per_partition * (1 + tolerance)
 
             # Filter by target size per partition
-            df_filtered = df[
-                (df['mean_partition_size'] >= min_size) &
-                (df['mean_partition_size'] <= max_size)
+            df_filtered = df_constrained[
+                (df_constrained['mean_partition_size'] >= min_size) &
+                (df_constrained['mean_partition_size'] <= max_size)
             ].copy()
 
             if len(df_filtered) == 0:
+                # Check if this is a ReLU or activation layer
+                if 'relu' in layer_type.lower() or 'activation' in layer_type.lower():
+                    print(f"  INFO: No strategies found for {layer_type} layer in range [{min_size:,.0f}, {max_size:,.0f}] bytes. Using default {DEFAULT_RELU}.")
+                    results[layer_idx] = [DEFAULT_RELU]
+                    continue
+
+                # For non-ReLU layers, select closest option
                 print(f"  WARNING: No strategies found in range [{min_size:,.0f}, {max_size:,.0f}] bytes")
-                print(f"  Available range: [{df['mean_partition_size'].min():,.0f}, {df['mean_partition_size'].max():,.0f}] bytes")
-                # Select closest option
-                df['size_distance'] = abs(df['mean_partition_size'] - target_size_per_partition)
-                closest = df.nsmallest(1, 'size_distance').iloc[0]
+                print(f"  Available range (constrained): [{df_constrained['mean_partition_size'].min():,.0f}, {df_constrained['mean_partition_size'].max():,.0f}] bytes")
+
+                # Select closest option from constrained dataframe
+                df_constrained_copy = df_constrained.copy()
+                df_constrained_copy['size_distance'] = abs(df_constrained_copy['mean_partition_size'] - target_size_per_partition)
+                closest = df_constrained_copy.nsmallest(1, 'size_distance').iloc[0]
                 print(f"  Using closest: ({closest['spatial']}, {closest['out_ch']}, {closest['in_ch']}) "
                     f"with size_per_partition={closest['mean_partition_size']:,.0f} bytes, "
                     f"mean_flops={closest['mean_flops']:.2e}")
@@ -210,7 +246,7 @@ class PartitionSelector:
             print(f"  Top {len(candidates)} candidates:")
 
             selected = []
-            for idx, row in candidates.iterrows():
+            for _, row in candidates.iterrows():
                 config = (int(row['spatial']), int(row['out_ch']), int(row['in_ch']))
                 selected.append(config)
 
@@ -260,64 +296,323 @@ class PartitionSelector:
 
         return {int(k): v for k, v in config.items()}
 
+    def _remove_duplicate_configurations(self, configurations: List[Dict]) -> List[Dict]:
+        """
+        Remove duplicate configurations based on the actual layer partitioning strategies.
+
+        Two configurations are considered duplicates if they have the same partitioning
+        strategy for all layers, regardless of their target values or other metadata.
+
+        Args:
+            configurations: List of configuration dictionaries
+
+        Returns:
+            List of unique configurations (keeps first occurrence)
+        """
+        seen_configs = []
+        unique_configurations = []
+
+        for config in configurations:
+            # Convert configuration to a hashable representation (sorted tuple of items)
+            config_tuple = tuple(sorted(config['configuration'].items()))
+
+            if config_tuple not in seen_configs:
+                seen_configs.append(config_tuple)
+                unique_configurations.append(config)
+
+        return unique_configurations
+
+    def generate_sweep_configurations(
+        self,
+        metric: str,
+        start_value: float,
+        end_value: float,
+        step: float,
+        tolerance: float = 0.3,
+        max_partitions_per_layer: int = None,
+        max_candidates: int = 5
+    ) -> List[Dict]:
+        """
+        Generate multiple configurations by sweeping through a range of target values.
+
+        Args:
+            metric: Either 'flops' or 'size'
+            start_value: Start of the range (inclusive)
+            end_value: End of the range (inclusive)
+            step: Step size for the sweep
+            tolerance: Acceptable deviation from target (e.g., 0.3 = ±30%)
+            max_partitions_per_layer: Maximum allowed partitions per layer (None = no limit)
+            max_candidates: Maximum candidates to consider per layer
+
+        Returns:
+            List of configuration dictionaries with metadata
+        """
+        configurations = []
+        current_value = start_value
+
+        while current_value <= end_value:
+            print(f"\n{'#'*80}")
+            print(f"Generating configuration for {metric} = {current_value:.2e}")
+            print(f"{'#'*80}")
+
+            if metric.lower() == 'flops':
+                strategies = self.select_by_flops_per_partition(
+                    target_flops_per_partition=current_value,
+                    tolerance=tolerance,
+                    max_candidates=max_candidates,
+                    max_partitions_per_layer=max_partitions_per_layer
+                )
+            elif metric.lower() == 'size':
+                strategies = self.select_by_size_per_partition(
+                    target_size_per_partition=current_value,
+                    tolerance=tolerance,
+                    max_candidates=max_candidates,
+                    max_partitions_per_layer=max_partitions_per_layer
+                )
+            else:
+                raise ValueError(f"Unknown metric '{metric}'. Use 'flops' or 'size'")
+
+            # Extract best strategy (index 0) for each layer
+            config = {}
+            total_flops = 0.0
+            total_size = 0.0
+            num_layers = 0
+            num_layers_no_relu = 0
+
+            total_flops_no_relu = 0.0
+            total_size_no_relu = 0.0
+
+            for layer_idx, candidates in strategies.items():
+                if len(candidates) > 0:
+                    best_strategy = candidates[0]
+                    config[str(layer_idx)] = best_strategy
+
+                    # Get the statistics for this configuration
+                    df = self.layer_data[layer_idx]
+                    matching_row = df[
+                        (df['spatial'] == best_strategy[0]) &
+                        (df['out_ch'] == best_strategy[1]) &
+                        (df['in_ch'] == best_strategy[2])
+                    ]
+
+                    if len(matching_row) > 0:
+                        row = matching_row.iloc[0]
+                        layer_type = row['layer_type'].lower()
+
+                        # Add to total statistics
+                        total_flops += row['mean_flops']
+                        total_size += row['mean_partition_size']
+                        num_layers += 1
+
+                        # Add to non-ReLU statistics if not a ReLU layer
+                        if 'relu' not in layer_type and 'activation' not in layer_type:
+                            total_flops_no_relu += row['mean_flops']
+                            total_size_no_relu += row['mean_partition_size']
+                            num_layers_no_relu += 1
+
+            # Calculate averages
+            avg_flops = total_flops / num_layers if num_layers > 0 else 0
+            avg_size = total_size / num_layers if num_layers > 0 else 0
+
+            avg_flops_no_relu = total_flops_no_relu / (num_layers - num_layers_no_relu) if num_layers > 0 else 0
+            avg_size_no_relu = total_size_no_relu / (num_layers - num_layers_no_relu) if num_layers > 0 else 0
+
+            # Add metadata
+            config_with_metadata = {
+                "metric": metric,
+                "target_value": current_value,
+                "tolerance": tolerance,
+                "max_partitions_per_layer": max_partitions_per_layer,
+                "avg_flops": avg_flops,
+                "avg_size": avg_size,
+                "avg_flops_no_relu": avg_flops_no_relu,
+                "avg_size_no_relu": avg_size_no_relu,
+                "configuration": config
+            }
+
+            configurations.append(config_with_metadata)
+            current_value += step
+
+        # Remove duplicate configurations
+        unique_configurations = self._remove_duplicate_configurations(configurations)
+
+        if len(unique_configurations) < len(configurations):
+            print(f"\n{'='*80}")
+            print(f"Removed {len(configurations) - len(unique_configurations)} duplicate configurations")
+            print(f"Unique configurations: {len(unique_configurations)}")
+            print(f"{'='*80}")
+
+        return unique_configurations
+
+    def export_sweep_configurations(
+        self,
+        configurations: List[Dict],
+        output_file: str
+    ):
+        """
+        Export multiple sweep configurations to a JSON file.
+
+        Args:
+            configurations: List of config dictionaries from generate_sweep_configurations
+            output_file: Path to output JSON file
+        """
+        output_data = {
+            "sweep_metadata": {
+                "num_configurations": len(configurations),
+                "metric": configurations[0]["metric"] if configurations else None,
+                "start_value": configurations[0]["target_value"] if configurations else None,
+                "end_value": configurations[-1]["target_value"] if configurations else None,
+            },
+            "configurations": configurations
+        }
+
+        with open(output_file, 'w') as f:
+            json.dump(output_data, f, indent=2)
+
+        print(f"\n{'='*80}")
+        print(f"Sweep configurations exported to: {output_file}")
+        print(f"Total configurations: {len(configurations)}")
+        print(f"{'='*80}")
+
+        for i, cfg in enumerate(configurations):
+            print(f"\nConfiguration {i}: {cfg['metric']} = {cfg['target_value']:.2e}")
+            print(f"  avg_flops = {cfg['avg_flops']:.2e}, avg_size = {cfg['avg_size']:,.0f} bytes")
+            print(f"  avg_flops_no_relu = {cfg['avg_flops_no_relu']:.2e}, avg_size_no_relu = {cfg['avg_size_no_relu']:,.0f} bytes")
+            for layer_idx, strategy in cfg['configuration'].items():
+                print(f"  Layer {layer_idx}: {strategy}")
+
 
 if __name__ == '__main__':
     import sys
 
-    # Example usage
+    # =============================================================================
+    # CONFIGURATION PARAMETERS - Edit these as needed
+    # =============================================================================
     data_path = "./data/partitioner_data15Oct"
     save_path = "./data/noc_comp_flops_sizes_29Oct"
+
+    # Sweep configuration
+    TOLERANCE = 0.3  # ±30% around target value
+    MAX_PARTITIONS_PER_LAYER = 144  # Maximum allowed partitions per layer (None = no limit)
+    MAX_CANDIDATES = 10  # Number of candidates to consider per layer
+
+    # Sweep ranges
+    FLOPS_START = 10000      # 10K FLOPs
+    FLOPS_END = 1000000       # 1M FLOPs
+    FLOPS_STEP = 20000       # 20K step
+
+    SIZE_START = 5000        # 5KB
+    SIZE_END = 200000         # 200KB
+    SIZE_STEP = 5000         # 5KB step
+    
+    DEFAULT_RELU = (3, 3, 1)  # Default partitioning for ReLU layers
+    # =============================================================================
+
     selector = PartitionSelector(data_path)
 
     # Parse command line arguments
-    if len(sys.argv) < 3:
-        print("Usage: python partition_selector.py [flops|size] <target_value>")
-        print("Examples:")
-        print("  python partition_selector.py flops 500000      # 500K FLOPs per partition")
-        print("  python partition_selector.py size 100000       # 100KB per partition")
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  python partition_selector.py flops <target>    # Single config by FLOPs")
+        print("  python partition_selector.py size <target>     # Single config by size")
+        print("  python partition_selector.py sweep flops       # Sweep FLOPs range")
+        print("  python partition_selector.py sweep size        # Sweep size range")
         sys.exit(1)
 
     mode = sys.argv[1].lower()
-    target = float(sys.argv[2])
 
-    if mode == 'flops':
+    if mode == 'sweep':
+        # Sweep mode
+        if len(sys.argv) < 3:
+            print("ERROR: sweep mode requires metric (flops or size)")
+            print("Usage: python partition_selector.py sweep [flops|size]")
+            sys.exit(1)
+
+        metric = sys.argv[2].lower()
+
+        if metric == 'flops':
+            print("\n" + "="*80)
+            print("PARTITION STRATEGY SWEEP: FLOPS")
+            print(f"Range: [{FLOPS_START:.2e}, {FLOPS_END:.2e}], Step: {FLOPS_STEP:.2e}")
+            print(f"Max partitions per layer: {MAX_PARTITIONS_PER_LAYER if MAX_PARTITIONS_PER_LAYER else 'unlimited'}")
+            print("="*80)
+
+            configurations = selector.generate_sweep_configurations(
+                metric='flops',
+                start_value=FLOPS_START,
+                end_value=FLOPS_END,
+                step=FLOPS_STEP,
+                tolerance=TOLERANCE,
+                max_partitions_per_layer=MAX_PARTITIONS_PER_LAYER,
+                max_candidates=MAX_CANDIDATES
+            )
+
+            selector.export_sweep_configurations(
+                configurations,
+                output_file=f"{save_path}/config_flops_sweep.json"
+            )
+
+        elif metric == 'size':
+            print("\n" + "="*80)
+            print("PARTITION STRATEGY SWEEP: SIZE")
+            print(f"Range: [{SIZE_START:.2e}, {SIZE_END:.2e}], Step: {SIZE_STEP:.2e}")
+            print(f"Max partitions per layer: {MAX_PARTITIONS_PER_LAYER if MAX_PARTITIONS_PER_LAYER else 'unlimited'}")
+            print("="*80)
+
+            configurations = selector.generate_sweep_configurations(
+                metric='size',
+                start_value=SIZE_START,
+                end_value=SIZE_END,
+                step=SIZE_STEP,
+                tolerance=TOLERANCE,
+                max_partitions_per_layer=MAX_PARTITIONS_PER_LAYER,
+                max_candidates=MAX_CANDIDATES
+            )
+
+            selector.export_sweep_configurations(
+                configurations,
+                output_file=f"{save_path}/config_size_sweep.json"
+            )
+
+        else:
+            print(f"ERROR: Unknown metric '{metric}'. Use 'flops' or 'size'")
+            sys.exit(1)
+
+    elif mode == 'flops' or mode == 'size':
+        # Single configuration mode
+        if len(sys.argv) < 3:
+            print(f"ERROR: {mode} mode requires a target value")
+            sys.exit(1)
+
+        target = float(sys.argv[2])
+
         print("\n" + "="*80)
-        print("PARTITION STRATEGY SELECTION BY FLOPS PER PARTITION")
+        print(f"PARTITION STRATEGY SELECTION BY {mode.upper()} PER PARTITION")
+        print(f"Target: {target:.2e}, Max partitions: {MAX_PARTITIONS_PER_LAYER if MAX_PARTITIONS_PER_LAYER else 'unlimited'}")
         print("="*80)
 
-        # Select by target FLOPs per partition
-        strategies = selector.select_by_flops_per_partition(
-            target_flops_per_partition=target,
-            tolerance=0.3,  # ±30%
-            max_candidates=10
-        )
+        if mode == 'flops':
+            strategies = selector.select_by_flops_per_partition(
+                target_flops_per_partition=target,
+                tolerance=TOLERANCE,
+                max_candidates=MAX_CANDIDATES,
+                max_partitions_per_layer=MAX_PARTITIONS_PER_LAYER
+            )
+        else:  # size
+            strategies = selector.select_by_size_per_partition(
+                target_size_per_partition=target,
+                tolerance=TOLERANCE,
+                max_candidates=MAX_CANDIDATES,
+                max_partitions_per_layer=MAX_PARTITIONS_PER_LAYER
+            )
 
         # Export best configuration
         config = selector.export_configuration(
             strategies,
-            output_file=f"{save_path}/config_flops_{int(target)}.json",
-            strategy_index=0
-        )
-
-    elif mode == 'size':
-        print("\n" + "="*80)
-        print("PARTITION STRATEGY SELECTION BY SIZE PER PARTITION")
-        print("="*80)
-
-        # Select by target size per partition
-        strategies = selector.select_by_size_per_partition(
-            target_size_per_partition=target,
-            tolerance=0.3,  # ±30%
-            max_candidates=10
-        )
-
-        # Export best configuration
-        config = selector.export_configuration(
-            strategies,
-            output_file=f"{save_path}/config_sizes_{int(target)}.json",
+            output_file=f"{save_path}/config_{mode}_{int(target)}.json",
             strategy_index=0
         )
 
     else:
-        print(f"ERROR: Unknown mode '{mode}'. Use 'flops' or 'size'")
+        print(f"ERROR: Unknown mode '{mode}'. Use 'flops', 'size', or 'sweep'")
         sys.exit(1)

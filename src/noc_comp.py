@@ -121,6 +121,71 @@ def load_partitioner_tuples_from_json(json_path, model):
     return build_partitioner_tuples_for_model(model, layer_configs)
 
 
+def load_sweep_configurations(sweep_json_path, model):
+    """
+    Load multiple configurations from a sweep JSON file.
+
+    Args:
+        sweep_json_path: Path to sweep JSON file with format:
+                        {
+                          "sweep_metadata": {...},
+                          "configurations": [
+                            {
+                              "metric": "flops",
+                              "target_value": 100000,
+                              "avg_flops": ...,
+                              "configuration": {"1": [s, o, i], ...}
+                            },
+                            ...
+                          ]
+                        }
+        model: Keras model to build tuples for
+
+    Returns:
+        List of tuples: [(config_name, partitioner_tuples, metadata), ...]
+    """
+    with open(sweep_json_path, 'r') as f:
+        sweep_data = json.load(f)
+
+    if 'configurations' not in sweep_data:
+        raise ValueError(f"Invalid sweep file format. Expected 'configurations' key in {sweep_json_path}")
+
+    configurations = sweep_data['configurations']
+    sweep_metadata = sweep_data.get('sweep_metadata', {})
+
+    print(f"Loading sweep file: {sweep_json_path}")
+    print(f"  Metric: {sweep_metadata.get('metric', 'unknown')}")
+    print(f"  Total configurations in file: {len(configurations)}")
+
+    result = []
+    for idx, config in enumerate(configurations):
+        layer_configs = config['configuration']
+        partitioner_tuples = build_partitioner_tuples_for_model(model, layer_configs, verbose=False)
+
+        # Create descriptive name with metadata
+        metric = config.get('metric', 'unknown')
+        target = config.get('target_value', 0)
+        avg_flops = config.get('avg_flops', 0)
+        avg_size = config.get('avg_size', 0)
+
+        config_name = f"sweep_{metric}_{int(target)}"
+        metadata = {
+            'sweep_file': sweep_json_path,
+            'config_index': idx,
+            'metric': metric,
+            'target_value': target,
+            'avg_flops': avg_flops,
+            'avg_size': avg_size,
+            'avg_flops_no_relu': config.get('avg_flops_no_relu', 0),
+            'avg_size_no_relu': config.get('avg_size_no_relu', 0)
+        }
+
+        result.append((config_name, partitioner_tuples, metadata))
+
+    print(f"  Loaded {len(result)} configurations\n")
+    return result
+
+
 if __name__ == '__main__':
     # Start timing
     script_start_time = time.time()
@@ -164,9 +229,9 @@ if __name__ == '__main__':
     if args.config_files:
         # Detect suffix from config filename pattern
         first_config = args.config_files[0]
-        if 'config_flops' in first_config:
+        if 'config_flops' in first_config or 'config_flop' in first_config:
             suffix = "flops"
-        elif 'config_sizes' in first_config:
+        elif 'config_size' in first_config:  # Matches both 'config_size' and 'config_sizes'
             suffix = "sizes"
         else:
             suffix = "custom"
@@ -215,7 +280,13 @@ if __name__ == '__main__':
         'booksim_time',
         'time_gain',
         'partitioner_config',
-        'config_file'
+        'config_file',
+        'metric',
+        'target_value',
+        'avg_flops',
+        'avg_size',
+        'avg_flops_no_relu',
+        'avg_size_no_relu'
     ]
     
     # Write header first
@@ -229,11 +300,33 @@ if __name__ == '__main__':
         print(f"Loading configurations from {len(args.config_files)} JSON file(s)...\n")
         for config_file in args.config_files:
             try:
-                partitioner_tuples = load_partitioner_tuples_from_json(config_file, model)
-                configurations_list.append((config_file, partitioner_tuples))
-                print(f"✓ Loaded {config_file}\n")
+                # Try to detect if this is a sweep file or single config file
+                with open(config_file, 'r') as f:
+                    data = json.load(f)
+
+                # Check if it's a sweep file (has 'configurations' key)
+                if 'configurations' in data:
+                    print(f"Detected sweep file: {config_file}")
+                    sweep_configs = load_sweep_configurations(config_file, model)
+
+                    # Convert to format compatible with existing code
+                    for config_name, partitioner_tuples, metadata in sweep_configs:
+                        # Store metadata in a tuple with the config
+                        configurations_list.append((config_name, partitioner_tuples, metadata))
+
+                    print(f"✓ Loaded {len(sweep_configs)} configurations from sweep file\n")
+                else:
+                    # Single configuration file
+                    print(f"Detected single config file: {config_file}")
+                    partitioner_tuples = load_partitioner_tuples_from_json(config_file, model)
+                    # Add empty metadata dict for compatibility
+                    configurations_list.append((config_file, partitioner_tuples, {}))
+                    print(f"✓ Loaded {config_file}\n")
+
             except Exception as e:
                 print(f"✗ Error loading {config_file}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
 
         # Apply batch filtering if in batch mode
@@ -313,7 +406,7 @@ if __name__ == '__main__':
             if verbose:
                 print(f"Configuration {global_config_num}: {config} ({2**config[0] * config[1] * config[2]} parts/layer)")
 
-            configurations_list.append((f"fixed_config_{global_config_num}", partitioner_tuples))
+            configurations_list.append((f"fixed_config_{global_config_num}", partitioner_tuples, {}))
             
     else:
         # Default configuration - build with (2,2,2) for regular layers, (0,1,1) for Add
@@ -325,23 +418,30 @@ if __name__ == '__main__':
             default_config[str(i)] = [2, 2, 2]
 
         partitioner_tuples = build_partitioner_tuples_for_model(model, default_config)
-        configurations_list.append(("default", partitioner_tuples))
+        configurations_list.append(("default", partitioner_tuples, {}))
 
     ##############################################################################
     # Run simulations for each configuration
     ##############################################################################
     
-    
     print(f"\nRunning {len(configurations_list)} configuration(s)\n")
-    
-    breakpoint()
-    
+            
     # Iterate over configurations
     iteration = 0
-    for config_name, partitioner_tuples in configurations_list:
+    for config_data in configurations_list:
+        # Unpack configuration data (handle both 2-tuple and 3-tuple formats)
+        if len(config_data) == 3:
+            config_name, partitioner_tuples, metadata = config_data
+        else:
+            config_name, partitioner_tuples = config_data
+            metadata = {}
+
         iteration += 1
         print(f"\n{'='*80}")
         print(f"Iteration {iteration}/{len(configurations_list)}: {config_name}")
+        if metadata:
+            print(f"Metadata: metric={metadata.get('metric')}, target={metadata.get('target_value'):.2e}, "
+                  f"avg_flops={metadata.get('avg_flops', 0):.2e}, avg_size={metadata.get('avg_size', 0):,.0f}")
         print(f"Partitioner tuples: {partitioner_tuples}")
         print(f"{'='*80}\n")
 
@@ -349,9 +449,8 @@ if __name__ == '__main__':
             # Calculate number of partitions
             num_partitions_per_layer = [2**x[0] * x[1] * x[2] for x in partitioner_tuples]
             total_partitions = sum(num_partitions_per_layer)
-            print(f"Used partitioner tuples: {partitioner_tuples[2]}")
+            print(f"Used partitioner tuples: {partitioner_tuples}")
             print(f"Total partitions: {total_partitions}")
-            print(f"Partitions per layer: {num_partitions_per_layer}\n")
 
             # Build task graph
             dep_graph = TaskGraph(source=grid.source, drain=grid.drain)
@@ -508,7 +607,13 @@ if __name__ == '__main__':
                     'booksim_time': f"{booksim_time:.4f}",
                     'time_gain': f"{time_gain:.4f}",
                     'partitioner_config': str(partitioner_tuples[1:]),
-                    'config_file': config_basename
+                    'config_file': config_basename,
+                    'metric': metadata.get('metric', ''),
+                    'target_value': metadata.get('target_value', ''),
+                    'avg_flops': f"{metadata.get('avg_flops', 0):.2e}" if metadata.get('avg_flops') else '',
+                    'avg_size': f"{metadata.get('avg_size', 0):.0f}" if metadata.get('avg_size') else '',
+                    'avg_flops_no_relu': f"{metadata.get('avg_flops_no_relu', 0):.2e}" if metadata.get('avg_flops_no_relu') else '',
+                    'avg_size_no_relu': f"{metadata.get('avg_size_no_relu', 0):.0f}" if metadata.get('avg_size_no_relu') else ''
                 })
 
             print(f"✓ Results appended to {csv_filename}")
