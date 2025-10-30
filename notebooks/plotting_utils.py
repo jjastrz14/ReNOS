@@ -70,7 +70,7 @@ def plot_latency_breakdown_new_3_bars(
         'font.size': 8,
         'axes.labelsize': 9,
         'axes.titlesize': 9,
-        'xtick.labelsize': 8,
+        'xtick.labelsize': 7,
         'ytick.labelsize': 8,
         'legend.fontsize': 7,
         'figure.titlesize': 10,
@@ -190,7 +190,7 @@ def plot_latency_breakdown_new_3_bars(
             color=color_dataflow,
             edgecolor='black',
             linewidth=0.5,
-            label='Comm Flow',
+            label='Data Flow',
             zorder=3,
             alpha=1)
 
@@ -260,7 +260,8 @@ def plot_latency_breakdown_with_error(
         x_descending=False,
         show_legend=True,
         y_scientific=False,
-        y_max=None):
+        y_max=None,
+        max_error=None):
     """
     IEEE-style bar plot of latency breakdown (from csv_path1)
     + scatter overlay of analytical error (%) from csv_path2.
@@ -303,6 +304,8 @@ def plot_latency_breakdown_with_error(
         If True, use scientific notation for y-axis (e.g., 1e6) (default: False)
     y_max : float, optional
         Set maximum value for y-axis. If None, uses automatic scaling
+    max_error : float, optional
+        Set maximum value for error y-axis (y2). If None, uses automatic scaling
 
     Returns:
     --------
@@ -317,7 +320,7 @@ def plot_latency_breakdown_with_error(
         'font.size': 8,
         'axes.labelsize': 9,
         'axes.titlesize': 9,
-        'xtick.labelsize': 8,
+        'xtick.labelsize': 7,
         'ytick.labelsize': 8,
         'legend.fontsize': 7,
         'figure.titlesize': 10,
@@ -468,7 +471,7 @@ def plot_latency_breakdown_with_error(
     # Data-flow bar
     ax1.bar([p + right_off for p in x_pos], df_sorted['data_flow_cycles'],
             width=inner_w, color=col_comm, edgecolor='black', linewidth=0.5,
-            label='Comm Flow', zorder=3)
+            label='Data Flow', zorder=3)
 
     # Outer outline bar
     ax1.bar(x_pos, df_sorted['overall_latency_cycles'],
@@ -496,6 +499,10 @@ def plot_latency_breakdown_with_error(
     # Set y-axis limits
     if y_max is not None:
         ax1.set_ylim(0, y_max)
+
+    # Set error y-axis limits
+    if max_error is not None:
+        ax2.set_ylim(0, max_error)
 
     # Scientific notation for y-axis
     if y_scientific:
@@ -605,7 +612,7 @@ def plot_latency_breakdown_with_trend(
         'font.size': 8,
         'axes.labelsize': 9,
         'axes.titlesize': 9,
-        'xtick.labelsize': 8,
+        'xtick.labelsize': 7,
         'ytick.labelsize': 8,
         'legend.fontsize': 7,
         'figure.titlesize': 10,
@@ -756,7 +763,7 @@ def plot_latency_breakdown_with_trend(
     # Data-flow bar
     ax1.bar([p + right_off for p in x_pos], df_sorted['data_flow_cycles'],
             width=inner_w, color=col_comm, edgecolor='black', linewidth=0.5,
-            label='Comm Flow', zorder=3)
+            label='Data Flow', zorder=3)
 
     # Outer outline bar
     ax1.bar(x_pos, df_sorted['overall_latency_cycles'],
@@ -766,8 +773,8 @@ def plot_latency_breakdown_with_trend(
     # ------------------------------------------------------------------ #
     # 11. Scatter: Error (%) from csv_path2
     # ------------------------------------------------------------------ #
-    flops_color = "#26073B"  # green
-    size_color = "#600D13"   # teal
+    flops_color = "#28073E"  # green
+    size_color = "#44090D"   # teal
     
     if x_sizes:
         ax2.plot(x_pos, df_sorted['avg_flops'],
@@ -854,7 +861,7 @@ def plot_latency_breakdown_with_error_from_two_files_with_broken_axis(
         'font.size': 8,
         'axes.labelsize': 9,
         'axes.titlesize': 9,
-        'xtick.labelsize': 8,
+        'xtick.labelsize': 7,
         'ytick.labelsize': 8,
         'legend.fontsize': 7,
         'figure.titlesize': 10,
