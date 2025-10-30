@@ -63,4 +63,12 @@ else
     ls -la
 fi
 
+# Clean up folders in TMPDIR_LUSTRE
+echo "Changing back to original directory before cleanup"
+cd "$SLURM_SUBMIT_DIR" || cd "$HOME" || cd /tmp
+
+# Clean up folders in TMPDIR_LUSTRE
+echo "Cleaning up temporary files in $TMPDIR_LUSTRE"
+rm -rf "$TMPDIR_LUSTRE" && echo "LUSTRE directory $TMPDIR_LUSTRE cleaned up successfully" || { echo "Failed to clean up temporary files"; exit 1; }
+
 echo "Job completed: $(date)"
