@@ -3380,3 +3380,54 @@ def print_partitions_table_adaptive(partitions: Dict[str, List[PartitionInfo]], 
     else:
         print(f"Unknown mode: {mode}. Using auto mode.")
         print_partitions_table(partitions, partitions_deps)
+
+
+def build_partitioner_tuples_for_model(model, layer_configs_dict, verbose=False):
+    """
+    Build complete partitioner tuples list for model, automatically handling
+    InputLayer and Add layers with (0,1,1).
+
+    Args:
+        model: Keras model
+        layer_configs_dict: Dict mapping layer_id -> [spatial, output, input_split]
+                          Layer IDs correspond to operational layers (excluding InputLayer)
+
+    Returns:
+        List of tuples for each layer in the model
+    """
+    partitioner_tuples = []
+    operational_layer_idx = 0  # Counter for operational layers (for JSON mapping)
+
+    for layer_idx, layer in enumerate(model.layers):
+        layer_type = layer.__class__.__name__
+
+        if layer_type == 'InputLayer':
+            # Always use (0,1,1) for InputLayer
+            partitioner_tuples.append((0, 1, 1))
+            if verbose:
+                print(f"  Layer {layer_idx} ({layer.name}): InputLayer -> (0, 1, 1)")
+
+        elif layer_type == 'Add':
+            # Automatically use (0,1,1) for Add layers
+            partitioner_tuples.append((0, 1, 1))
+            if verbose:
+                print(f"  Layer {layer_idx} ({layer.name}): Add -> (0, 1, 1) [auto]")
+            operational_layer_idx += 1
+
+        else:
+            # Regular operational layer - get from config
+            operational_layer_idx += 1
+            layer_key = str(operational_layer_idx)
+
+            if layer_key in layer_configs_dict:
+                config = layer_configs_dict[layer_key]
+                if len(config) == 3:
+                    partitioner_tuples.append(tuple(config))
+                    if verbose:
+                        print(f"  Layer {layer_idx} ({layer.name}): {layer_type} -> {tuple(config)}")
+                else:
+                    raise ValueError(f"Layer {operational_layer_idx} config must have 3 values, got {config}")
+            else:
+                raise ValueError(f"Missing config for operational layer {operational_layer_idx} ({layer.name})")
+
+    return partitioner_tuples

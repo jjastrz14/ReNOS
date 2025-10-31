@@ -68,6 +68,8 @@ class ACOParameters:
             - starting_rho : float
             - start_row_wise : bool
                 If True, use row-wise mapping for initialization instead of random
+            - early_stop : int
+                Number of consecutive iterations without improvement in iteration best before stopping (0 = disabled)
     """
     alpha : float = 1.0
     beta : float = 1.0
@@ -79,6 +81,7 @@ class ACOParameters:
     rho_end : Union[float, None] = None
     is_analytical : bool = False
     start_row_wise : bool = False
+    early_stop : int = 0
 
 
 class BaseOpt :
@@ -373,11 +376,19 @@ class AntColony(BaseOpt):
         if show_traces:
             all_time_shortest_path = self.run_and_show_traces(single_iteration, once_every = once_every, n_iterations = self.par.n_iterations, rho_step = rho_step)
         else:
+            # Early stopping variables
+            no_improvement_count = 0
+            last_iteration_best = np.inf
+
             for i in range(self.par.n_iterations):
                 shortest_path = single_iteration(i, once_every, rho_step)
+
+                # Track iteration best for early stopping
+                current_iteration_best = shortest_path[2]
+
                 if shortest_path[2] < all_time_shortest_path[2]:
-                    all_time_shortest_path = shortest_path 
-                    
+                    all_time_shortest_path = shortest_path
+
                     ant_int = str(shortest_path[0])
                     #check if globals are initialized
                     if not self.CONFIG_DUMP_DIR or not self.ACO_DIR:
@@ -386,7 +397,7 @@ class AntColony(BaseOpt):
                     dump_file = os.path.join(self.CONFIG_DUMP_DIR, f"dump{ant_int}.json")
                     #dump_file = CONFIG_DUMP_DIR + "/dump" + ant_int + ".json"
                     print(f"Saving the best solution found by ant {ant_int} in" + self.ACO_DIR + "/best_solution.json")
-                    
+
                     #save the corresponding dump file into data
                     os.system(f"cp {dump_file} {self.ACO_DIR}")
                     #save the dump of the best solution in data
@@ -395,7 +406,23 @@ class AntColony(BaseOpt):
                 np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
                 print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
                 print("-" * 50 + "\n")
-                    
+
+                # Early stopping logic
+                if self.par.early_stop > 0:
+                    if current_iteration_best == last_iteration_best:
+                        no_improvement_count += 1
+                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations")
+
+                        if no_improvement_count >= self.par.early_stop:
+                            print(f"\n[Early Stop] Stopping early at iteration {i+1}/{self.par.n_iterations}")
+                            print(f"[Early Stop] No improvement in iteration best for {self.par.early_stop} consecutive iterations")
+                            print(f"[Early Stop] Best latency: {all_time_shortest_path[2]}")
+                            break
+                    else:
+                        no_improvement_count = 0
+
+                    last_iteration_best = current_iteration_best
+
             # Finalize the simulation: save the data
             np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
             print("Saving Final Results in: " + self.ACO_DIR)
@@ -809,8 +836,16 @@ class ParallelAntColony(AntColony):
         if show_traces:
             all_time_shortest_path = self.run_and_show_traces(single_iteration, once_every = once_every, n_iterations = self.par.n_iterations, rho_step = rho_step)
         else:
+            # Early stopping variables
+            no_improvement_count = 0
+            last_iteration_best = np.inf
+
             for i in range(self.par.n_iterations):
                 shortest_path = single_iteration(i, once_every, rho_step)
+
+                # Track iteration best for early stopping
+                current_iteration_best = shortest_path[2]
+
                 if shortest_path[2] < all_time_shortest_path[2]:
                     all_time_shortest_path = shortest_path
                     # save the dump of the best solution in data
@@ -831,11 +866,27 @@ class ParallelAntColony(AntColony):
                     print("Saving the best solution found by ant", ant_id, "in " + self.ACO_DIR + "/best_solution.json")
                     #save the corresponding dump file into data
                     os.system(f"cp {dump_file} {self.ACO_DIR}/best_solution.json")
-                
+
                 np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
                 print(f"Iteration {i} done. Saving statistics in: " + self.ACO_DIR)
                 print("-" * 50 + "\n")
-                    
+
+                # Early stopping logic
+                if self.par.early_stop > 0:
+                    if current_iteration_best == last_iteration_best:
+                        no_improvement_count += 1
+                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations")
+
+                        if no_improvement_count >= self.par.early_stop:
+                            print(f"\n[Early Stop] Stopping early at iteration {i+1}/{self.par.n_iterations}")
+                            print(f"[Early Stop] No improvement in iteration best for {self.par.early_stop} consecutive iterations")
+                            print(f"[Early Stop] Best latency: {all_time_shortest_path[2]}")
+                            break
+                    else:
+                        no_improvement_count = 0
+
+                    last_iteration_best = current_iteration_best
+
             # Finalize the simulation: save the data
             np.save(self.ACO_DIR + "/statistics.npy", self.statistics)
             print("Saving Final Results in: " + self.ACO_DIR)
@@ -963,6 +1014,8 @@ class GAParameters:
                 The probability of crossover
             - start_row_wise : bool
                 If True, use row-wise mapping for initialization instead of random
+            - early_stop : int
+                Number of consecutive generations without improvement in generation best before stopping (0 = disabled)
 
     """
 
@@ -980,6 +1033,7 @@ class GAParameters:
     k_tournament : int = 3
     is_analytical : bool = False
     start_row_wise : bool = False
+    early_stop : int = 0
 
 
 class GeneticAlgorithm(BaseOpt):

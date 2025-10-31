@@ -106,11 +106,11 @@ class OperatorPool:
         # IDEA BEHIND IT:
         # the parameter is used to monitor the optimal solution:
         # if the optimal solution is not updated after a certain threshold, the
-        # IRC (isomorpic replacement crossover) is added to the pool, in order to 
+        # IRC (isomorpic replacement crossover) is added to the pool, in order to
         # increse the diversity of the population.
         #
         # APPLIED TO OUR CASE:
-        # the isomorphich replacement crossover cannot be applied with guarantee of 
+        # the isomorphich replacement crossover cannot be applied with guarantee of
         # substituting invalid crossovers with isomorphic solutions (producing the same fitness):
         # therefore, it won't produce the same results as the original paper.
 
@@ -130,10 +130,14 @@ class OperatorPool:
         self.statistics["std"] = []
         self.statistics["best"] = []
         self.statistics["absolute_best"] = []
-        self.absolute_best_value = np.inf # used to keep track of the best solution found so far 
-        
+        self.absolute_best_value = np.inf # used to keep track of the best solution found so far
+
         self.GA_DIR = get_GA_DIR()
         self.CONFIG_DUMP_DIR = get_CONFIG_DUMP_DIR()
+
+        # Early stopping variables
+        self.no_improvement_count = 0
+        self.last_generation_best = np.inf
 
 
     def add_operator(self, operator, operator_type):
@@ -243,16 +247,35 @@ class OperatorPool:
         self.pick_operator(ga_instance.generations_completed)
         # print("the current crossover operator is: ", self.cur_cross)
         # print("the current mutation operator is: ", self.cur_mut)
-        
+
         # udpate the fitness of the previous population
         self.prev_pop_fit = pop_fit
-        
+
         # update the statistics and results
         self.update_stat_results(ga_instance, pop_fit)
-            
+
+        # Get current generation best latency
+        current_generation_best = min(self.latencies)
+
         print("=" * 60)
-        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, min(self.latencies), np.argmax(pop_fit)))
+        print("The best latency of the generation n. {} is: {} of population {}".format(ga_instance.generations_completed, current_generation_best, np.argmax(pop_fit)))
         print("The mean latency of the generation n. {} is: {}".format(ga_instance.generations_completed, np.mean(self.latencies)))
+
+        # Early stopping logic
+        if self.optimizer.par.early_stop > 0:
+            if current_generation_best == self.last_generation_best:
+                self.no_improvement_count += 1
+                print(f"[Early Stop] No improvement for {self.no_improvement_count}/{self.optimizer.par.early_stop} generations")
+
+                if self.no_improvement_count >= self.optimizer.par.early_stop:
+                    print(f"\n[Early Stop] Stopping early at generation {ga_instance.generations_completed}/{ga_instance.num_generations}")
+                    print(f"[Early Stop] No improvement in generation best for {self.optimizer.par.early_stop} consecutive generations")
+                    print(f"[Early Stop] Best latency: {self.absolute_best_value}")
+                    return "stop"  # This signals PyGAD to stop
+            else:
+                self.no_improvement_count = 0
+
+            self.last_generation_best = current_generation_best
         
     def on_stop(self, ga_instance, last_generation_fitness):
         
