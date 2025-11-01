@@ -1263,7 +1263,7 @@ class NoCTimelinePlotter(NoCPlotter):
             print(f"Reconfiguration events and duration: {events['recon']}")
             print()
 
-    def plot_timeline(self, filename, legend=True, hihlight_xticks=True):
+    def plot_timeline(self, filename, legend=True, highlight_xticks=True, horizontal_lines=True, threshold_for_y_axis=50):
         """Draw horizontal bars for events."""
         
         # Create event_types from global configuration
@@ -1309,8 +1309,15 @@ class NoCTimelinePlotter(NoCPlotter):
             if not has_events:
                 print(f"No events found for node {node}")
         
-        # Set y-ticks to node IDs
-        self.ax2d.set_yticks(range(len(self.points[1])))
+        # Set y-ticks to node IDs (with adaptive spacing for large graphs)
+        num_nodes = len(self.points[1])
+        threshold = threshold_for_y_axis
+        if num_nodes > threshold:
+            # Show every 10th node to avoid clutter
+            tick_positions = range(0, num_nodes, 10)
+            self.ax2d.set_yticks(tick_positions)
+        else:
+            self.ax2d.set_yticks(range(num_nodes))
         #for debug purposes, only show first 2 nodes
         #self.ax2d.set_yticks(range(2))
         
@@ -1322,14 +1329,22 @@ class NoCTimelinePlotter(NoCPlotter):
         self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
         
         # Add vertical lines at each major x-tick
-        if hihlight_xticks:
+        if highlight_xticks:
             for tick in self.ax2d.xaxis.get_major_locator().tick_values(self.ax2d.get_xlim()[0], self.ax2d.get_xlim()[1]):
                 self.ax2d.axvline(x=tick, color='grey', linestyle='-', linewidth=0.5, zorder = 0)
 
-        # Add horizontal lines at the corners of the x nodes
-        for node in range(len(self.points[1])):
-            self.ax2d.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
-            self.ax2d.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
+        if horizontal_lines:
+            # Add horizontal lines at y-tick positions
+            if num_nodes > threshold:
+                # For large graphs, draw lines only at displayed ticks (every 10th node)
+                for node in range(0, num_nodes, 10):
+                    self.ax2d.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
+                    self.ax2d.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
+            else:
+                # For smaller graphs, draw lines at all nodes
+                for node in range(num_nodes):
+                    self.ax2d.axhline(y=node - 0.4, color='grey', linestyle='--', linewidth=0.5)
+                    self.ax2d.axhline(y=node + 0.4, color='grey', linestyle='--', linewidth=0.5)
 
         if legend:
             self.ax2d.legend(
@@ -1440,8 +1455,15 @@ class NoCTimelinePlotter(NoCPlotter):
             if not has_events:
                 print(f"No events found for node {node}")
         
-        # Set y-ticks to node IDs
-        self.ax2d.set_yticks(range(len(self.points[1])))
+        # Set y-ticks to node IDs (with adaptive spacing for large graphs)
+        num_nodes = len(self.points[1])
+        threshold = 50
+        if num_nodes > threshold:
+            # Show every 10th node to avoid clutter
+            tick_positions = range(0, num_nodes, 10)
+            self.ax2d.set_yticks(tick_positions)
+        else:
+            self.ax2d.set_yticks(range(num_nodes))
         #for debug purposes, only show first 2 nodes
         #self.ax2d.set_yticks(range(2))
         
@@ -1616,8 +1638,17 @@ class NoCTimelinePlotter(NoCPlotter):
             
             if not has_events:
                 print(f"No events found for node {node}")
-        
-        self.ax2d.set_yticks(range(len(self.points[1])))
+
+        # Set y-ticks to node IDs (with adaptive spacing for large graphs)
+        num_nodes = len(self.points[1])
+        threshold = 50
+        if num_nodes > threshold:
+            # Show every 10th node to avoid clutter
+            tick_positions = range(0, num_nodes, 10)
+            self.ax2d.set_yticks(tick_positions)
+        else:
+            self.ax2d.set_yticks(range(num_nodes))
+
         self.ax2d.set_xlim(0, max_cycle)
         self.ax2d.xaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
         self.ax2d.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))

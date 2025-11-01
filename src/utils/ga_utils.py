@@ -263,9 +263,9 @@ class OperatorPool:
 
         # Early stopping logic
         if self.optimizer.par.early_stop > 0:
-            if current_generation_best == self.last_generation_best:
+            if current_generation_best >= self.last_generation_best:
                 self.no_improvement_count += 1
-                print(f"[Early Stop] No improvement for {self.no_improvement_count}/{self.optimizer.par.early_stop} generations")
+                print(f"[Early Stop] No improvement for {self.no_improvement_count}/{self.optimizer.par.early_stop} generations (current: {current_generation_best:.2f}, previous: {self.last_generation_best:.2f})")
 
                 if self.no_improvement_count >= self.optimizer.par.early_stop:
                     print(f"\n[Early Stop] Stopping early at generation {ga_instance.generations_completed}/{ga_instance.num_generations}")
@@ -273,6 +273,8 @@ class OperatorPool:
                     print(f"[Early Stop] Best latency: {self.absolute_best_value}")
                     return "stop"  # This signals PyGAD to stop
             else:
+                if self.no_improvement_count > 0:
+                    print(f"[Early Stop] Improvement detected! Counter reset from {self.no_improvement_count} to 0 (improvement: {self.last_generation_best:.2f} -> {current_generation_best:.2f})")
                 self.no_improvement_count = 0
 
             self.last_generation_best = current_generation_best

@@ -6,7 +6,7 @@ Utility functions for simulator comparison and analysis
 """
 
 def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, algorithm_name: str, 
-                                    timestamp: str, verbose: bool = True):
+                                    timestamp: str, visualise: bool = True):
     """
     Compare analytical model vs BookSim2 simulator and create visualizations
     
@@ -26,20 +26,18 @@ def compare_simulators_and_visualize(best_solution_path: str, output_dir: str, a
     analytical_timeline_path = f"{output_dir}/analytical_timeline_{algorithm_name}_{timestamp}.png"
     utilization_path = f"{output_dir}/utilization_{algorithm_name}_{timestamp}.png"
 
-    if verbose:
+    if visualise:
         print("Visualizing the best path...\n")
         # Visualize the best path
-        plot_timeline(best_solution_path, timeline_path=timeline_path, verbose=False)
-    else: 
-        #run just NoC complex simulator and get the latency
-        print("Running the NoC simulator on the best path found...\n")
-    
+        plot_timeline(best_solution_path, timeline_path=timeline_path, verbose=False,
+                    legend=True, highlight_xticks=True, horizontal_lines=True, threshold_for_y_axis=50)
+
     # Run analytical simulator
-    #print("Running analytical model...")
-    #stub_anal = ssam.FastAnalyticalSimulatorStub()
-    #total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
-    #print(f"Analytical model result: {total_latency} cycles")
-    #results['analytical_latency'] = total_latency
+    print("Running analytical model...")
+    stub_anal = ssam.FastAnalyticalSimulatorStub()
+    total_latency, logger_anal = stub_anal.run_simulation(best_solution_path, dwrap=False)
+    print(f"Analytical model result: {total_latency} cycles")
+    results['analytical_latency'] = total_latency
     
     # Run BookSim2 simulator for comparison
     print("Running BookSim2 simulator for comparison...")

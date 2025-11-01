@@ -112,6 +112,7 @@ if __name__ == "__main__":
     num_layers = count_operational_layers(model)
     print(f"\nModel has {num_layers} operational layers requiring tuples\n")
     
+    breakpoint()
     if args.partitioner_config:
         print(f"Loading configuration from {args.partitioner_config} JSON file...\n")
 
@@ -252,12 +253,12 @@ if __name__ == "__main__":
             n_ants = 50, #512,
             rho = 0.05, #evaporation rate
             n_best = 25,
-            n_iterations = 1000,
+            n_iterations = 1,
             alpha = 1.,
             beta = 1.2,
             is_analytical = True, #use analytical model instead of cycle-accurate simulator
             start_row_wise= False, #start from a row-wise mapping
-            early_stop = 10
+            early_stop = 10 #set to 0 to disable early stopping
         )
         n_procs = 5
         
@@ -276,14 +277,14 @@ if __name__ == "__main__":
         plot_convergence(get_ACO_DIR(), save_path=get_ACO_DIR() + "/convg_ACO_" + get_timestamp() + ".png")
         
         # Compare simulators and visualize results
-        #results = compare_simulators_and_visualize(
-        #    best_solution_path=get_ACO_DIR() + "/best_solution.json",
-        #    output_dir=get_ACO_DIR(),
-        #    algorithm_name="ACO",
-        #    timestamp=get_timestamp(),
-        #    verbose=False
-        #)
-            
+        results = compare_simulators_and_visualize(
+            best_solution_path=get_ACO_DIR() + "/best_solution.json",
+            output_dir=get_ACO_DIR(),
+            algorithm_name="ACO",
+            timestamp=get_timestamp(),
+            visualise=True
+        )
+
         end = time.time()
         elapsed_time = end - start
         hours, remainder = divmod(elapsed_time, 3600)
@@ -315,12 +316,12 @@ if __name__ == "__main__":
         n_parents_mating= 25, #Number of solutions to be selected as parents.
         keep_parents= -1 , #10, # -1 keep all parents, 0 means do not keep parents, 10 means 10 best parents etc
         parent_selection_type= "sss", # The parent selection type. Supported types are sss (for steady-state selection), rws (for roulette wheel selection), sus (for stochastic universal selection), rank (for rank selection), random (for random selection), and tournament (for tournament selection). k = 3 for tournament, can be changed
-        n_generations = 1000, #800,
+        n_generations = 1, #800,
         mutation_probability = .4, #some exploration, so don’t kill mutation completely.
         crossover_probability = .9, #outlier genes to propagate = crossover must dominate.
         is_analytical = True, #use analytical model instead of cycle-accurate simulator
         start_row_wise= False, #start from a row-wise mapping
-        early_stop = 150
+        early_stop = 150 #set to 0 to disable early stopping
         )
         
         n_procs = 5
@@ -342,14 +343,14 @@ if __name__ == "__main__":
         plot_convergence(str(get_GA_DIR()), save_path=get_GA_DIR() + "/convg_GA_" + get_timestamp() + ".png")
         
         # Compare simulators and visualize results
-        #results = compare_simulators_and_visualize(
-        #    best_solution_path=get_GA_DIR() + "/best_solution.json",
-        #    output_dir=get_GA_DIR(),
-        #    algorithm_name="GA",
-        #    timestamp=get_timestamp(),
-        #    verbose=False  #always creates timeline visualization
-        #)
-        
+        results = compare_simulators_and_visualize(
+            best_solution_path=get_GA_DIR() + "/best_solution.json",
+            output_dir=get_GA_DIR(),
+            algorithm_name="GA",
+            timestamp=get_timestamp(),
+            visualise=True
+        )
+
         #opt.plot_summary()
         
         end = time.time()

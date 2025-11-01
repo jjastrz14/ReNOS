@@ -409,9 +409,9 @@ class AntColony(BaseOpt):
 
                 # Early stopping logic
                 if self.par.early_stop > 0:
-                    if current_iteration_best == last_iteration_best:
+                    if current_iteration_best >= last_iteration_best:
                         no_improvement_count += 1
-                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations")
+                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations (current: {current_iteration_best:.2f}, previous: {last_iteration_best:.2f})")
 
                         if no_improvement_count >= self.par.early_stop:
                             print(f"\n[Early Stop] Stopping early at iteration {i+1}/{self.par.n_iterations}")
@@ -419,6 +419,8 @@ class AntColony(BaseOpt):
                             print(f"[Early Stop] Best latency: {all_time_shortest_path[2]}")
                             break
                     else:
+                        if no_improvement_count > 0:
+                            print(f"[Early Stop] Improvement detected! Counter reset from {no_improvement_count} to 0 (improvement: {last_iteration_best:.2f} -> {current_iteration_best:.2f})")
                         no_improvement_count = 0
 
                     last_iteration_best = current_iteration_best
@@ -873,9 +875,9 @@ class ParallelAntColony(AntColony):
 
                 # Early stopping logic
                 if self.par.early_stop > 0:
-                    if current_iteration_best == last_iteration_best:
+                    if current_iteration_best >= last_iteration_best:
                         no_improvement_count += 1
-                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations")
+                        print(f"[Early Stop] No improvement for {no_improvement_count}/{self.par.early_stop} iterations (current: {current_iteration_best:.2f}, previous: {last_iteration_best:.2f})")
 
                         if no_improvement_count >= self.par.early_stop:
                             print(f"\n[Early Stop] Stopping early at iteration {i+1}/{self.par.n_iterations}")
@@ -883,6 +885,8 @@ class ParallelAntColony(AntColony):
                             print(f"[Early Stop] Best latency: {all_time_shortest_path[2]}")
                             break
                     else:
+                        if no_improvement_count > 0:
+                            print(f"[Early Stop] Improvement detected! Counter reset from {no_improvement_count} to 0 (improvement: {last_iteration_best:.2f} -> {current_iteration_best:.2f})")
                         no_improvement_count = 0
 
                     last_iteration_best = current_iteration_best
